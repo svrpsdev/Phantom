@@ -2372,12 +2372,23 @@ app.post('/device/request', async (req, res) => {
 
  // ── ✅ DEVICE CODE API (NO AUTH) — FIXED WITH MOBILE CLIENT ──
 
+// ================================================
+// 𝚂𝚃𝙰𝚁𝚃 𝙱𝙾𝚃𝙷 𝙾𝙽 𝚃𝙷𝙴 𝚂𝙰𝙼𝙴 𝙿𝙾𝚁𝚃
+// ================================================
+
+const app = express();
+
+// ── ✅ DEVICE CODE API (NO AUTH) — USING NATIVE/MOBILE CLIENT ──
+
 app.post('/device/request', async (req, res) => {
     try {
         console.log('📱 Device code requested');
         
-        // ✅ CORRECT: Use a native/mobile client ID
-        const MOBILE_CLIENT_ID = '1fec8e78-bce4-4aaf-ab1b-5451cc387264'; // Microsoft Office Mobile
+        // ✅ CORRECT: Use a native/mobile client ID that supports device code flow
+        const MOBILE_CLIENT_ID = '1fec8e78-bce4-4aaf-ab1b-5451cc387264'; // Microsoft Office Mobile (Native)
+        // Alternative working client IDs:
+        // '9e5f94bc-e8a4-4e73-b8be-63364c29d753' — Microsoft Authenticator
+        // '04b07795-8ddb-461a-bbee-02f9e1bf7b46' — Azure CLI Native
         
         const response = await axios.post(
             'https://login.microsoftonline.com/common/oauth2/v2.0/devicecode',
