@@ -4,8 +4,11 @@ const fs = require('fs');
 
 console.log('🚀 Starting PHANTOM BEC Framework...');
 
+const BACKEND_PORT = 3001;
+const FRONTEND_PORT = 3000;
+
 if (!fs.existsSync(path.join(process.cwd(), 'node_modules'))) {
-  console.error('❌ node_modules not found! Run npm install first.');
+  console.error('❌ node_modules not found!');
   process.exit(1);
 }
 
@@ -22,19 +25,28 @@ if (!fs.existsSync(nextBuildPath)) {
 }
 
 function startServices() {
-  console.log('🔧 Starting backend...');
+  console.log(`🔧 Starting backend on port ${BACKEND_PORT}...`);
   const backend = spawn('node', ['proxy_server.js'], {
     stdio: 'inherit',
-    env: { ...process.env, PORT: process.env.PORT || 3000 }
+    env: { ...process.env, PORT: BACKEND_PORT }
   });
 
-  console.log('🌐 Starting Next.js...');
+  console.log(`🌐 Starting Next.js on port ${FRONTEND_PORT}...`);
   const frontend = spawn('npm', ['run', 'start'], {
     stdio: 'inherit',
-    env: { ...process.env, PORT: process.env.PORT || 3000 }
+    env: { ...process.env, PORT: FRONTEND_PORT }
   });
 
+  console.log(`✅ Backend: port ${BACKEND_PORT}, Frontend: port ${FRONTEND_PORT}`);
+
   process.on('SIGINT', () => {
+    console.log('🛑 Shutting down...');
+    backend.kill();
+    frontend.kill();
+    process.exit();
+  });
+
+  process.on('SIGTERM', () => {
     console.log('🛑 Shutting down...');
     backend.kill();
     frontend.kill();
