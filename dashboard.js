@@ -9,7 +9,7 @@ const AdmZip = require('adm-zip');
 const app = express();
 const PORT = process.env.PORT || 3001;
 const LOG_DIR = path.join(__dirname, 'phishing_logs');
-const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || 'HyP3r-M3g4_S3cURe-EnC4YpT10n_k3Y';
+const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || 'A62A71CA811BD4B8-9D994D7A82B8A40C_460510BB2923A286-AB2797EC85D91568';
 
 // =============================================
 // ✅ FIX: Ensure logs directory exists
