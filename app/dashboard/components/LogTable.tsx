@@ -67,7 +67,7 @@ export function LogTable() {
                   <td className="p-3 text-white/40">{(log.size / 1024).toFixed(1)} KB</td>
                   <td className="p-3 text-white/40">{new Date(log.modified).toLocaleString()}</td>
                   <td className="p-3">
-                    <button className="action-btn" onClick={() => toast.info('View: ' + log.name)}>View</button>
+                    <button className="action-btn" onClick={() => toast('View: ' + log.name)}>View</button>
                   </td>
                 </tr>
               ))
