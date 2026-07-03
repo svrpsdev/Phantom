@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';  // ← ✅ ADDED useEffect
 import { sendEmail, getEmailConfig, rotateEmailDomain } from '@/lib/api';
 import toast from 'react-hot-toast';
 
