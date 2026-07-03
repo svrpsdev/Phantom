@@ -34,7 +34,7 @@ function startServices() {
 
   // Start Next.js on port 3000 (main port)
   console.log(`🌐 Starting Next.js on port ${FRONTEND_PORT}...`);
-  const frontend = spawn('npm', ['run', 'start'], {
+  const frontend = spawn('npx', ['next', 'start'], {
     stdio: 'inherit',
     env: { ...process.env, PORT: FRONTEND_PORT }
   });
