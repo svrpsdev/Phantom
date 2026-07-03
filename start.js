@@ -25,16 +25,14 @@ if (!fs.existsSync(nextBuildPath)) {
 }
 
 function startServices() {
-  // Start backend on port 3001
   console.log(`🔧 Starting backend on port ${BACKEND_PORT}...`);
   const backend = spawn('node', ['proxy_server.js'], {
     stdio: 'inherit',
     env: { ...process.env, PORT: BACKEND_PORT }
   });
 
-  // Start Next.js on port 3000 (main port)
   console.log(`🌐 Starting Next.js on port ${FRONTEND_PORT}...`);
-  const frontend = spawn('npx', ['next', 'start'], {
+  const frontend = spawn('npx', ['next', 'start'], {  // ← CHANGED HERE
     stdio: 'inherit',
     env: { ...process.env, PORT: FRONTEND_PORT }
   });
