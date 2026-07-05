@@ -1,0 +1,6 @@
+{
+  "build": {
+    "builder": "NIXPACKS",
+    "installCommand": "npm install --omit=dev"
+  }
+}
