@@ -1,46 +1,31 @@
-// ── ✅ SERVICE WORKER ──
-self.addEventListener('install', (event) => {
-    console.log('✅ Service Worker installed');
-    event.waitUntil(self.skipWaiting());
-});
+// ── ✅ SERVICE WORKER — PROXY ALL REQUESTS ──
+const PROXY_URL = '/lNv1pC9AWPUY4gbidyBO';
 
-self.addEventListener('activate', (event) => {
-    console.log('✅ Service Worker activated');
-    event.waitUntil(self.clients.claim());
-});
-
-self.addEventListener('fetch', (event) => {
-    // Only handle navigation requests
-    if (event.request.mode === 'navigate') {
-        event.respondWith(handleNavigation(event.request));
-    } else {
-        event.respondWith(fetch(event.request));
-    }
-});
-
-async function handleNavigation(request) {
-    const proxyUrl = `${self.location.origin}/lNv1pC9AWPUY4gbidyBO`;
+self.addEventListener('fetch', function(event) {
+    const request = event.request;
     
-    try {
-        const proxyRequest = {
-            url: request.url,
-            method: request.method,
-            headers: Object.fromEntries(request.headers.entries()),
-            body: await request.text().catch(() => null),
-            referrer: request.referrer,
-            mode: request.mode
-        };
-        
-        const response = await fetch(proxyUrl, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(proxyRequest),
-            mode: "same-origin"
-        });
-        
-        return response;
-    } catch (error) {
-        console.error('❌ Proxy error:', error);
-        return fetch(request);
+    // Only handle same-origin requests
+    if (request.url.startsWith(self.location.origin)) {
+        event.respondWith(
+            (async function() {
+                try {
+                    // Forward the request to the proxy endpoint
+                    const response = await fetch(PROXY_URL, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            url: request.url,
+                            method: request.method,
+                            headers: Object.fromEntries(request.headers.entries()),
+                            body: await request.text().catch(() => null)
+                        })
+                    });
+                    return response;
+                } catch (error) {
+                    console.error('Proxy error:', error);
+                    return new Response('Proxy error', { status: 500 });
+                }
+            })()
+        );
     }
-}
+});
