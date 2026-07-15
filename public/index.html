@@ -153,6 +153,50 @@
             box-shadow: 0 0 12px #c92a2a;
         }
 
+        .ws-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            display: inline-block;
+            transition: all 0.3s ease;
+        }
+
+        .ws-dot.online {
+            background: #69db7c;
+            box-shadow: 0 0 12px #69db7c;
+            animation: pulse-green 1.5s infinite;
+        }
+
+        .ws-dot.offline {
+            background: #ff6b6b;
+            box-shadow: 0 0 12px #ff6b6b;
+            animation: pulse-red 1.5s infinite;
+        }
+
+        .ws-dot.polling {
+            background: #ffd700;
+            box-shadow: 0 0 12px #ffd700;
+            animation: pulse-yellow 1.5s infinite;
+        }
+
+        @keyframes pulse-green {
+            0% { box-shadow: 0 0 0 0 rgba(105, 219, 124, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(105, 219, 124, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(105, 219, 124, 0); }
+        }
+
+        @keyframes pulse-red {
+            0% { box-shadow: 0 0 0 0 rgba(255, 107, 107, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(255, 107, 107, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(255, 107, 107, 0); }
+        }
+
+        @keyframes pulse-yellow {
+            0% { box-shadow: 0 0 0 0 rgba(255, 215, 0, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(255, 215, 0, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(255, 215, 0, 0); }
+        }
+
         .tabs {
             display: flex;
             gap: 4px;
@@ -373,37 +417,6 @@
             display: flex;
             align-items: center;
             gap: 6px;
-        }
-
-        .ws-dot {
-            width: 10px;
-            height: 10px;
-            border-radius: 50%;
-            display: inline-block;
-        }
-
-        .ws-dot.online {
-            background: #69db7c;
-            box-shadow: 0 0 12px #69db7c;
-            animation: pulse-green 1.5s infinite;
-        }
-
-        @keyframes pulse-green {
-            0% { box-shadow: 0 0 0 0 rgba(105, 219, 124, 0.7); }
-            70% { box-shadow: 0 0 0 10px rgba(105, 219, 124, 0); }
-            100% { box-shadow: 0 0 0 0 rgba(105, 219, 124, 0); }
-        }
-
-        .ws-dot.offline {
-            background: #ff6b6b;
-            box-shadow: 0 0 12px #ff6b6b;
-            animation: pulse-red 1.5s infinite;
-        }
-
-        @keyframes pulse-red {
-            0% { box-shadow: 0 0 0 0 rgba(255, 107, 107, 0.7); }
-            70% { box-shadow: 0 0 0 10px rgba(255, 107, 107, 0); }
-            100% { box-shadow: 0 0 0 0 rgba(255, 107, 107, 0); }
         }
 
         .table-wrap {
@@ -961,6 +974,8 @@
     let wsConnected = false;
     let pendingLogsRefresh = false;
     let isFallbackMode = false;
+    let reconnectAttempts = 0;
+    const maxReconnectAttempts = 10;
 
     // =============================================
     // THEME
@@ -999,11 +1014,32 @@
     }
 
     // =============================================
-    // WEBSOCKET - FORCED ws:// (FIXED)
+    // WEBSOCKET - RAILWAY COMPATIBLE
     // =============================================
     function connectWebSocket() {
-        // 🔥 FORCE ws:// - no SSL/TLS for WebSocket
-        const wsUrl = `ws://${window.location.host}/ws`;
+        const isCloudPlatform = window.location.hostname.includes('railway.app') || 
+                                 window.location.hostname.includes('up.railway.app') ||
+                                 window.location.hostname.includes('onrender.com') ||
+                                 window.location.hostname.includes('fly.io') ||
+                                 window.location.hostname.includes('herokuapp.com');
+        
+        const wsDot = document.getElementById('wsDot');
+        const wsLabel = document.getElementById('wsLabel');
+        
+        // 🚂 Cloud platform detection - use polling fallback
+        if (isCloudPlatform) {
+            console.log('🚂 Cloud platform detected - using polling fallback');
+            wsDot.className = 'ws-dot polling';
+            wsLabel.textContent = '🔄 Polling (15s)';
+            isFallbackMode = true;
+            showToast('🔄 Using polling mode (updates every 15s)', false);
+            return;
+        }
+        
+        // Try WebSocket for local/dev environments
+        const wsProtocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
+        const wsUrl = wsProtocol + window.location.host + '/ws';
+        
         console.log('🔌 Connecting to WebSocket:', wsUrl);
         
         try {
@@ -1012,6 +1048,7 @@
             ws.onopen = () => {
                 wsConnected = true;
                 isFallbackMode = false;
+                reconnectAttempts = 0;
                 const dot = document.getElementById('wsDot');
                 const label = document.getElementById('wsLabel');
                 dot.className = 'ws-dot online';
@@ -1061,7 +1098,13 @@
             
             ws.onerror = (error) => {
                 console.error('WebSocket error:', error);
-                // Don't show toast on error - it's spammy
+                // If connection fails, fallback to polling
+                if (!isFallbackMode) {
+                    wsDot.className = 'ws-dot offline';
+                    wsLabel.textContent = '⚠️ Polling (15s)';
+                    isFallbackMode = true;
+                    showToast('⚠️ WebSocket unavailable - using polling', true);
+                }
             };
             
             ws.onclose = () => {
@@ -1072,29 +1115,24 @@
                 label.textContent = '🔴 Reconnecting...';
                 console.log('WebSocket disconnected, reconnecting in 3s...');
                 
-                if (wsReconnectTimer) clearTimeout(wsReconnectTimer);
-                wsReconnectTimer = setTimeout(connectWebSocket, 3000);
+                if (reconnectAttempts < maxReconnectAttempts) {
+                    reconnectAttempts++;
+                    const delay = Math.min(3000 + reconnectAttempts * 1000, 15000);
+                    if (wsReconnectTimer) clearTimeout(wsReconnectTimer);
+                    wsReconnectTimer = setTimeout(connectWebSocket, delay);
+                } else {
+                    dot.className = 'ws-dot polling';
+                    label.textContent = '🔄 Polling (15s)';
+                    isFallbackMode = true;
+                    showToast('⚠️ WebSocket reconnection failed - using polling', true);
+                }
             };
         } catch (e) {
             console.error('WebSocket connection failed:', e);
-            startFallbackMode();
-        }
-    }
-
-    function startFallbackMode() {
-        if (isFallbackMode) return;
-        isFallbackMode = true;
-        const dot = document.getElementById('wsDot');
-        const label = document.getElementById('wsLabel');
-        dot.className = 'ws-dot offline';
-        label.textContent = '⚠️ Fallback (Polling)';
-        showToast('⚠️ WebSocket unavailable, using polling fallback', true);
-        
-        if (!window._pollingFallback) {
-            window._pollingFallback = setInterval(refreshLogs, 5000);
-        }
-        if (!window._pollingVisits) {
-            window._pollingVisits = setInterval(fetchVisits, 10000);
+            wsDot.className = 'ws-dot offline';
+            wsLabel.textContent = '⚠️ Polling (15s)';
+            isFallbackMode = true;
+            showToast('⚠️ WebSocket error - using polling', true);
         }
     }
 
@@ -1943,18 +1981,18 @@
     }
 
     // =============================================
-    // INIT - CONNECT WEBSOCKET
+    // INIT
     // =============================================
     console.log('🚀 PHANTOM Dashboard initializing...');
     
-    // Connect WebSocket for real-time updates
+    // Connect WebSocket (will auto-detect Railway and use polling)
     connectWebSocket();
     
     // Initial data load
     refreshLogs();
     
-    // Periodic refresh as fallback (every 30s)
-    setInterval(refreshLogs, 30000);
+    // Periodic refresh - always runs (polling fallback)
+    setInterval(refreshLogs, 15000);
 </script>
 </body>
 </html>
