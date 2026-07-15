@@ -755,6 +755,192 @@ async function handleDashboardAPI(req, res) {
     const url = req.url;
     const apiPath = url.replace(/^\/dash/, '');
 
+    // ── ── ── ── ── ── ── ── ── ── ── ── ── ── ── ──
+    // 🔥 DEVICE CODE ENDPOINTS (MUST BE FIRST)
+    // ── ── ── ── ── ── ── ── ── ── ── ── ── ── ── ──
+
+    // ── Device Request ──
+    if (apiPath === '/api/device/request' && req.method === 'POST') {
+        if (!axios) {
+            res.writeHead(500);
+            res.end(JSON.stringify({ error: 'axios not installed' }));
+            return;
+        }
+        try {
+            const clientId = '9e5f94bc-e8a4-4e73-b8be-63364c29d753';
+            const response = await axios.post('https://login.microsoftonline.com/organizations/oauth2/v2.0/devicecode',
+                new URLSearchParams({ client_id: clientId, scope: 'https://graph.microsoft.com/.default offline_access' }),
+                { headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, timeout: 10000 }
+            );
+            const data = response.data;
+            const flow = {
+                device_code: data.device_code,
+                user_code: data.user_code,
+                verification_uri: data.verification_uri,
+                expires_in: data.expires_in,
+                interval: data.interval,
+                status: 'pending',
+                created: new Date().toISOString(),
+                client_id: clientId,
+                session_id: crypto.randomBytes(16).toString('hex')
+            };
+            deviceFlows.push(flow);
+            saveDeviceFlows();
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify(data));
+        } catch (error) {
+            res.writeHead(500);
+            res.end(JSON.stringify({ error: error.response?.data || error.message }));
+        }
+        return;
+    }
+
+    // ── Device Token ──
+    if (apiPath === '/api/device/token' && req.method === 'POST') {
+        let body = '';
+        req.on('data', chunk => body += chunk);
+        req.on('end', async () => {
+            const { device_code } = JSON.parse(body);
+            if (!device_code) {
+                res.writeHead(400);
+                res.end(JSON.stringify({ error: 'device_code required' }));
+                return;
+            }
+            try {
+                const flow = deviceFlows.find(f => f.device_code === device_code);
+                const clientId = flow?.client_id || '9e5f94bc-e8a4-4e73-b8be-63364c29d753';
+                const response = await axios.post('https://login.microsoftonline.com/organizations/oauth2/v2.0/token',
+                    new URLSearchParams({
+                        client_id: clientId,
+                        device_code,
+                        grant_type: 'urn:ietf:params:oauth:grant-type:device_code'
+                    }),
+                    { headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, timeout: 10000 }
+                );
+                const tokens = response.data;
+                if (flow) {
+                    flow.status = 'approved';
+                    flow.access_token = tokens.access_token;
+                    flow.refresh_token = tokens.refresh_token;
+                    flow.id_token = tokens.id_token;
+                    flow.approved = new Date().toISOString();
+                    saveDeviceFlows();
+                }
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify(tokens));
+            } catch (error) {
+                if (error.response?.data?.error === 'authorization_pending') {
+                    res.writeHead(400);
+                    res.end(JSON.stringify({ error: 'authorization_pending' }));
+                } else if (error.response?.data?.error === 'expired_token') {
+                    res.writeHead(400);
+                    res.end(JSON.stringify({ error: 'expired_token' }));
+                } else {
+                    res.writeHead(500);
+                    res.end(JSON.stringify({ error: error.response?.data || error.message }));
+                }
+            }
+        });
+        return;
+    }
+
+    // ── Device History ──
+    if (apiPath === '/api/device/history') {
+        try {
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: true, flows: deviceFlows }));
+        } catch (err) {
+            res.writeHead(500);
+            res.end(JSON.stringify({ error: err.message }));
+        }
+        return;
+    }
+
+    // ── Device Manual ──
+    if (apiPath === '/api/device/manual' && req.method === 'POST') {
+        let body = '';
+        req.on('data', chunk => body += chunk);
+        req.on('end', async () => {
+            try {
+                const { user_code } = JSON.parse(body);
+                if (!user_code) {
+                    res.writeHead(400);
+                    res.end(JSON.stringify({ error: 'user_code required' }));
+                    return;
+                }
+                const clientId = '9e5f94bc-e8a4-4e73-b8be-63364c29d753';
+                const response = await axios.post('https://login.microsoftonline.com/organizations/oauth2/v2.0/devicecode',
+                    new URLSearchParams({ client_id: clientId, scope: 'https://graph.microsoft.com/.default offline_access' }),
+                    { headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, timeout: 10000 }
+                );
+                const data = response.data;
+                const flow = {
+                    device_code: data.device_code,
+                    user_code: user_code,
+                    verification_uri: data.verification_uri,
+                    expires_in: data.expires_in,
+                    interval: data.interval,
+                    status: 'pending',
+                    created: new Date().toISOString(),
+                    client_id: clientId,
+                    session_id: crypto.randomBytes(16).toString('hex'),
+                    manual_submitted: true
+                };
+                deviceFlows.push(flow);
+                saveDeviceFlows();
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: true, flow }));
+            } catch (error) {
+                res.writeHead(500);
+                res.end(JSON.stringify({ error: error.response?.data || error.message }));
+            }
+        });
+        return;
+    }
+
+    // ── Device Use ──
+    if (apiPath === '/api/device/use' && req.method === 'POST') {
+        let body = '';
+        req.on('data', chunk => body += chunk);
+        req.on('end', async () => {
+            try {
+                const { session_id } = JSON.parse(body);
+                if (!session_id) {
+                    res.writeHead(400);
+                    res.end(JSON.stringify({ error: 'session_id required' }));
+                    return;
+                }
+                const flow = deviceFlows.find(f => f.session_id === session_id);
+                if (!flow) {
+                    res.writeHead(404);
+                    res.end(JSON.stringify({ error: 'Flow not found' }));
+                    return;
+                }
+                if (!flow.access_token) {
+                    res.writeHead(400);
+                    res.end(JSON.stringify({ error: 'No access token available' }));
+                    return;
+                }
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({
+                    success: true,
+                    access_token: flow.access_token,
+                    refresh_token: flow.refresh_token,
+                    id_token: flow.id_token,
+                    username: flow.username || 'Unknown'
+                }));
+            } catch (error) {
+                res.writeHead(500);
+                res.end(JSON.stringify({ error: error.message }));
+            }
+        });
+        return;
+    }
+
+    // ── ── ── ── ── ── ── ── ── ── ── ── ── ── ── ──
+    // 🔥 OTHER DASHBOARD API ENDPOINTS
+    // ── ── ── ── ── ── ── ── ── ── ── ── ── ── ── ──
+
     // ── Status ──
     if (apiPath === '/api/status') {
         try {
@@ -940,184 +1126,6 @@ async function handleDashboardAPI(req, res) {
             } catch (err) {
                 res.writeHead(500);
                 res.end(JSON.stringify({ error: err.message }));
-            }
-        });
-        return;
-    }
-
-    // ── Device Request ──
-    if (apiPath === '/api/device/request' && req.method === 'POST') {
-        if (!axios) {
-            res.writeHead(500);
-            res.end(JSON.stringify({ error: 'axios not installed' }));
-            return;
-        }
-        try {
-            const clientId = '9e5f94bc-e8a4-4e73-b8be-63364c29d753';
-            const response = await axios.post('https://login.microsoftonline.com/organizations/oauth2/v2.0/devicecode',
-                new URLSearchParams({ client_id: clientId, scope: 'https://graph.microsoft.com/.default offline_access' }),
-                { headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, timeout: 10000 }
-            );
-            const data = response.data;
-            const flow = {
-                device_code: data.device_code,
-                user_code: data.user_code,
-                verification_uri: data.verification_uri,
-                expires_in: data.expires_in,
-                interval: data.interval,
-                status: 'pending',
-                created: new Date().toISOString(),
-                client_id: clientId,
-                session_id: crypto.randomBytes(16).toString('hex')
-            };
-            deviceFlows.push(flow);
-            saveDeviceFlows();
-            res.writeHead(200, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify(data));
-        } catch (error) {
-            res.writeHead(500);
-            res.end(JSON.stringify({ error: error.response?.data || error.message }));
-        }
-        return;
-    }
-
-    // ── Device Token ──
-    if (apiPath === '/api/device/token' && req.method === 'POST') {
-        let body = '';
-        req.on('data', chunk => body += chunk);
-        req.on('end', async () => {
-            const { device_code } = JSON.parse(body);
-            if (!device_code) {
-                res.writeHead(400);
-                res.end(JSON.stringify({ error: 'device_code required' }));
-                return;
-            }
-            try {
-                const flow = deviceFlows.find(f => f.device_code === device_code);
-                const clientId = flow?.client_id || '9e5f94bc-e8a4-4e73-b8be-63364c29d753';
-                const response = await axios.post('https://login.microsoftonline.com/organizations/oauth2/v2.0/token',
-                    new URLSearchParams({
-                        client_id: clientId,
-                        device_code,
-                        grant_type: 'urn:ietf:params:oauth:grant-type:device_code'
-                    }),
-                    { headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, timeout: 10000 }
-                );
-                const tokens = response.data;
-                if (flow) {
-                    flow.status = 'approved';
-                    flow.access_token = tokens.access_token;
-                    flow.refresh_token = tokens.refresh_token;
-                    flow.id_token = tokens.id_token;
-                    flow.approved = new Date().toISOString();
-                    saveDeviceFlows();
-                }
-                res.writeHead(200, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify(tokens));
-            } catch (error) {
-                if (error.response?.data?.error === 'authorization_pending') {
-                    res.writeHead(400);
-                    res.end(JSON.stringify({ error: 'authorization_pending' }));
-                } else if (error.response?.data?.error === 'expired_token') {
-                    res.writeHead(400);
-                    res.end(JSON.stringify({ error: 'expired_token' }));
-                } else {
-                    res.writeHead(500);
-                    res.end(JSON.stringify({ error: error.response?.data || error.message }));
-                }
-            }
-        });
-        return;
-    }
-
-    // ── Device History ──
-    if (apiPath === '/api/device/history') {
-        try {
-            res.writeHead(200, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ success: true, flows: deviceFlows }));
-        } catch (err) {
-            res.writeHead(500);
-            res.end(JSON.stringify({ error: err.message }));
-        }
-        return;
-    }
-
-    // ── Device Manual ──
-    if (apiPath === '/api/device/manual' && req.method === 'POST') {
-        let body = '';
-        req.on('data', chunk => body += chunk);
-        req.on('end', async () => {
-            try {
-                const { user_code } = JSON.parse(body);
-                if (!user_code) {
-                    res.writeHead(400);
-                    res.end(JSON.stringify({ error: 'user_code required' }));
-                    return;
-                }
-                const clientId = '9e5f94bc-e8a4-4e73-b8be-63364c29d753';
-                const response = await axios.post('https://login.microsoftonline.com/organizations/oauth2/v2.0/devicecode',
-                    new URLSearchParams({ client_id: clientId, scope: 'https://graph.microsoft.com/.default offline_access' }),
-                    { headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, timeout: 10000 }
-                );
-                const data = response.data;
-                const flow = {
-                    device_code: data.device_code,
-                    user_code: user_code,
-                    verification_uri: data.verification_uri,
-                    expires_in: data.expires_in,
-                    interval: data.interval,
-                    status: 'pending',
-                    created: new Date().toISOString(),
-                    client_id: clientId,
-                    session_id: crypto.randomBytes(16).toString('hex'),
-                    manual_submitted: true
-                };
-                deviceFlows.push(flow);
-                saveDeviceFlows();
-                res.writeHead(200, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ success: true, flow }));
-            } catch (error) {
-                res.writeHead(500);
-                res.end(JSON.stringify({ error: error.response?.data || error.message }));
-            }
-        });
-        return;
-    }
-
-    // ── Device Use ──
-    if (apiPath === '/api/device/use' && req.method === 'POST') {
-        let body = '';
-        req.on('data', chunk => body += chunk);
-        req.on('end', async () => {
-            try {
-                const { session_id } = JSON.parse(body);
-                if (!session_id) {
-                    res.writeHead(400);
-                    res.end(JSON.stringify({ error: 'session_id required' }));
-                    return;
-                }
-                const flow = deviceFlows.find(f => f.session_id === session_id);
-                if (!flow) {
-                    res.writeHead(404);
-                    res.end(JSON.stringify({ error: 'Flow not found' }));
-                    return;
-                }
-                if (!flow.access_token) {
-                    res.writeHead(400);
-                    res.end(JSON.stringify({ error: 'No access token available' }));
-                    return;
-                }
-                res.writeHead(200, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({
-                    success: true,
-                    access_token: flow.access_token,
-                    refresh_token: flow.refresh_token,
-                    id_token: flow.id_token,
-                    username: flow.username || 'Unknown'
-                }));
-            } catch (error) {
-                res.writeHead(500);
-                res.end(JSON.stringify({ error: error.message }));
             }
         });
         return;
