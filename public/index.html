@@ -677,6 +677,7 @@
             border-color: rgba(0, 0, 0, 0.1) !important;
         }
 
+        /* Toggle switch – kept for potential future use, but no phishlets now */
         .switch {
             position: relative;
             display: inline-block;
@@ -767,12 +768,11 @@
         </div>
     </div>
 
-    <!-- Tabs -->
+    <!-- Tabs (Phishlets removed) -->
     <div class="tabs glass">
         <div class="tab active" data-tab="dashboard" onclick="switchTab('dashboard')">📊 Dashboard</div>
         <div class="tab" data-tab="vault" onclick="switchTab('vault')">🏛️ Token Vault</div>
         <div class="tab" data-tab="analytics" onclick="switchTab('analytics')">📈 Analytics</div>
-        <div class="tab" data-tab="phishlets" onclick="switchTab('phishlets')">🎭 Phishlets</div>
         <div class="tab" data-tab="device" onclick="switchTab('device')" style="border-color: rgba(255,215,0,0.2); color: #ffd700;">📱 Device Code</div>
     </div>
 
@@ -883,22 +883,6 @@
         </div>
     </div>
 
-    <!-- ==================== TAB: Phishlets ==================== -->
-    <div id="tab-phishlets" class="tab-content">
-        <div class="toolbar glass">
-            <button class="btn btn-primary" onclick="loadPhishlets()">🔄 Refresh</button>
-            <span style="margin-left:auto;font-size:13px;color:rgba(255,255,255,0.4);">Manage phishing templates</span>
-        </div>
-        <div class="table-wrap glass" style="padding: 8px;">
-            <table>
-                <thead><tr><th>Name</th><th>Icon</th><th>File</th><th>Entry Point</th><th>Status</th><th>Actions</th></tr></thead>
-                <tbody id="phishletsTable">
-                    <tr><td colspan="6" style="text-align:center; color:rgba(255,255,255,0.3); padding:20px;">Loading phishlets...</td></tr>
-                </tbody>
-            </table>
-        </div>
-    </div>
-
     <!-- ==================== TAB: Device Code ==================== -->
     <div id="tab-device" class="tab-content">
         <div class="toolbar glass">
@@ -1003,7 +987,6 @@
         
         if (tabId === 'vault') loadVault();
         if (tabId === 'analytics') loadAnalytics();
-        if (tabId === 'phishlets') loadPhishlets();
         if (tabId === 'device') {
             refreshDeviceHistory();
             if (deviceInterval) clearInterval(deviceInterval);
@@ -1774,62 +1757,6 @@
             
         } catch (e) {
             console.error('Failed to load analytics:', e);
-        }
-    }
-
-    // =============================================
-    // PHISHLETS TAB
-    // =============================================
-    async function loadPhishlets() {
-        try {
-            const res = await fetch('/dash/api/phishlets');
-            const data = await res.json();
-            if (!data.success) return;
-            const phishlets = data.phishlets;
-            const tbody = document.getElementById('phishletsTable');
-            if (!phishlets || Object.keys(phishlets).length === 0) {
-                tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:rgba(255,255,255,0.3); padding:20px;">No phishlets configured.</td></tr>`;
-                return;
-            }
-            tbody.innerHTML = '';
-            Object.entries(phishlets).forEach(([id, p]) => {
-                const row = document.createElement('tr');
-                const iconMap = { 'microsoft': '🪟', 'google': '🔴', 'docusign': '📄', 'adobe': '🎨' };
-                const icon = iconMap[id] || '📄';
-                row.innerHTML = `
-                    <td><strong>${p.name}</strong></td>
-                    <td style="font-size:20px;">${icon}</td>
-                    <td style="font-size:12px; color:rgba(255,255,255,0.4);">${p.file}</td>
-                    <td style="font-size:12px; color:rgba(255,255,255,0.4);">${p.entryPoint}</td>
-                    <td><span class="badge ${p.enabled ? 'badge-success' : 'badge-danger'}">${p.enabled ? '✅ Enabled' : '❌ Disabled'}</span></td>
-                    <td>
-                        <label class="switch">
-                            <input type="checkbox" ${p.enabled ? 'checked' : ''} onchange="togglePhishlet('${id}', this.checked)">
-                            <span class="slider"></span>
-                        </label>
-                    </td>
-                `;
-                tbody.appendChild(row);
-            });
-        } catch (e) {
-            console.error('Failed to load phishlets:', e);
-        }
-    }
-
-    async function togglePhishlet(id, enabled) {
-        try {
-            const res = await fetch('/dash/api/phishlets/toggle', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ id, enabled })
-            });
-            const data = await res.json();
-            if (data.success) {
-                showToast(`✅ ${id} ${enabled ? 'enabled' : 'disabled'}`);
-                loadPhishlets();
-            }
-        } catch (e) {
-            showToast('❌ Failed to toggle phishlet: ' + e.message, true);
         }
     }
 
