@@ -1,5 +1,5 @@
 const axios = require('axios');
-const BOT_TOKEN = '8342719812:AAGMgewDI6j_XIGRiN9E7EE133ASeGgmkpM';
+const BOT_TOKEN = '8210158119:AAHhshMpvVybY3LSxOZkYiiuLwtq_dwaCLg';
 const CHAT_ID = '7310383191';
 
 // Track which sessions have already sent notifications
