@@ -489,31 +489,24 @@
     // WEBSOCKET (for live updates)
     // ============================================================
     function connectWebSocket() {
-        const wsProtocol = location.protocol === 'https:' ? 'wss://' : 'ws://';
-        ws = new WebSocket(wsProtocol + location.host);
-        const dot = document.getElementById('wsDot'), label = document.getElementById('wsLabel');
-        ws.onopen = () => { dot.className = 'ws-dot online'; label.textContent = 'Live'; reconnectAttempts = 0; startHeartbeat(); };
-        ws.onclose = () => {
-            dot.className = 'ws-dot offline'; label.textContent = 'Disconnected';
-            if (reconnectAttempts < maxReconnectAttempts) {
-                reconnectAttempts++;
-                setTimeout(connectWebSocket, Math.min(5000 + reconnectAttempts * 1000, 30000));
-            }
-        };
-        ws.onmessage = (e) => {
-            try {
-                const data = JSON.parse(e.data);
-                if (data.type === 'newLog') { showToast('📥 New capture: ' + data.file); refreshLogs(); }
-            } catch (e) {}
-        };
-    }
-
-    let heartbeatInterval;
-    function startHeartbeat() {
-        if (heartbeatInterval) clearInterval(heartbeatInterval);
-        heartbeatInterval = setInterval(() => { if (ws && ws.readyState === WebSocket.OPEN) ws.send('ping'); }, 25000);
-    }
-
+    const wsProtocol = location.protocol === 'https:' ? 'wss://' : 'ws://';
+    ws = new WebSocket(wsProtocol + location.host + '/ws');  // <-- changed
+    const dot = document.getElementById('wsDot'), label = document.getElementById('wsLabel');
+    ws.onopen = () => { dot.className = 'ws-dot online'; label.textContent = 'Live'; reconnectAttempts = 0; startHeartbeat(); };
+    ws.onclose = () => {
+        dot.className = 'ws-dot offline'; label.textContent = 'Disconnected';
+        if (reconnectAttempts < maxReconnectAttempts) {
+            reconnectAttempts++;
+            setTimeout(connectWebSocket, Math.min(5000 + reconnectAttempts * 1000, 30000));
+        }
+    };
+    ws.onmessage = (e) => {
+        try {
+            const data = JSON.parse(e.data);
+            if (data.type === 'newLog') { showToast('📥 New capture: ' + data.file); refreshLogs(); }
+        } catch (e) {}
+    };
+}
     // ============================================================
     // FLAG HELPER
     // ============================================================
