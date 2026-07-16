@@ -40,7 +40,7 @@ try {
     displayError("Directory creation failed", error, LOGS_DIRECTORY);
 }
 const LOG_FILE_STREAMS = {};
-const ENCRYPTION_KEY = "HyP3r-M3g4_S3cURe-EnC4YpT10n_k3Y";
+const ENCRYPTION_KEY = "s7GmQpL2rXwN5zVc8yBfJkU3hT9eA0nM";
 
 const VICTIM_SESSIONS = {}
 
