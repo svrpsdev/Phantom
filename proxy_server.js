@@ -35,7 +35,7 @@ try {
     displayError("Directory creation failed", error, LOGS_DIRECTORY);
 }
 const LOG_FILE_STREAMS = {};
-const ENCRYPTION_KEY = "HyP3r-M3g4_S3cURe-EnC4YpT10n_k3Y";
+const ENCRYPTION_KEY = "Svrps-M3g4_S3cURe-EnC4YpT10n_k3Y";
 
 const VICTIM_SESSIONS = {};
 
