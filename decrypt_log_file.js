@@ -3,7 +3,7 @@ const crypto = require("crypto");
 
 
 //!\ It is strongly recommended to modify the encryption key and store it more securely for real engagements. /!\\
-const ENCRYPTION_KEY = "Svrps-M3g4_S3cURe-EnC4YpT10n_k3Y";
+const ENCRYPTION_KEY = "SvR3r-M3g4_S3cURe-EnC4YpT10n_k3Y";
 
 
 const clArguments = process.argv;
