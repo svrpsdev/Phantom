@@ -1675,40 +1675,6 @@ async function handleDashboardAPI(req, res) {
         return;
     }
 
-    // ── Phishlets ──
-    if (apiPath === '/api/phishlets') {
-        try {
-            const phishlets = {
-                microsoft: { name: 'Microsoft 365', file: 'microsoft.html', entryPoint: '/login', enabled: true },
-                google: { name: 'Google', file: 'google.html', entryPoint: '/accounts', enabled: true },
-                docusign: { name: 'DocuSign', file: 'docusign.html', entryPoint: '/signin', enabled: false },
-                adobe: { name: 'Adobe', file: 'adobe.html', entryPoint: '/login', enabled: false }
-            };
-            res.writeHead(200, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ success: true, phishlets }));
-        } catch (err) {
-            res.writeHead(500);
-            res.end(JSON.stringify({ error: err.message }));
-        }
-        return;
-    }
-
-    if (apiPath === '/api/phishlets/toggle' && req.method === 'POST') {
-        let body = '';
-        req.on('data', chunk => body += chunk);
-        req.on('end', async () => {
-            try {
-                const { id, enabled } = JSON.parse(body);
-                res.writeHead(200, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ success: true, message: `${id} ${enabled ? 'enabled' : 'disabled'}` }));
-            } catch (err) {
-                res.writeHead(500);
-                res.end(JSON.stringify({ error: err.message }));
-            }
-        });
-        return;
-    }
-
     // ── Recon ──
     if (apiPath === '/api/recon' && req.method === 'POST') {
         let body = '';
