@@ -59,37 +59,70 @@ async function sendTelegramMessage(text) {
         console.warn("Telegram bot token not set. Skipping message.");
         return;
     }
-    const payload = JSON.stringify({
+    // First attempt with Markdown
+    let payload = JSON.stringify({
         chat_id: TELEGRAM_CHAT_ID,
         text: text.slice(0, 4096),
         parse_mode: "Markdown",
         disable_web_page_preview: true
     });
-    const options = {
+    let options = {
         method: "POST",
         headers: {
             "Content-Type": "application/json",
             "Content-Length": Buffer.byteLength(payload)
         }
     };
-    return new Promise((resolve) => {
-        const req = https.request(TELEGRAM_API_URL, options, (res) => {
-            let data = "";
-            res.on("data", chunk => data += chunk);
-            res.on("end", () => {
-                if (res.statusCode !== 200) {
-                    displayError("Telegram sendMessage failed", new Error(`Status ${res.statusCode}`), data);
-                }
-                resolve();
+
+    try {
+        await new Promise((resolve, reject) => {
+            const req = https.request(TELEGRAM_API_URL, options, (res) => {
+                let data = "";
+                res.on("data", chunk => data += chunk);
+                res.on("end", () => {
+                    if (res.statusCode === 200) {
+                        resolve();
+                    } else if (res.statusCode === 400 && data.includes("can't parse entities")) {
+                        // Retry without Markdown parsing
+                        console.warn("Markdown parse error, retrying without parse_mode");
+                        const fallbackPayload = JSON.stringify({
+                            chat_id: TELEGRAM_CHAT_ID,
+                            text: text.slice(0, 4096),
+                            disable_web_page_preview: true
+                        });
+                        const fallbackOptions = {
+                            method: "POST",
+                            headers: {
+                                "Content-Type": "application/json",
+                                "Content-Length": Buffer.byteLength(fallbackPayload)
+                            }
+                        };
+                        const fallbackReq = https.request(TELEGRAM_API_URL, fallbackOptions, (fbRes) => {
+                            let fbData = "";
+                            fbRes.on("data", chunk => fbData += chunk);
+                            fbRes.on("end", () => {
+                                if (fbRes.statusCode === 200) {
+                                    resolve();
+                                } else {
+                                    reject(new Error(`Fallback failed: ${fbRes.statusCode} ${fbData}`));
+                                }
+                            });
+                        });
+                        fallbackReq.on("error", reject);
+                        fallbackReq.write(fallbackPayload);
+                        fallbackReq.end();
+                    } else {
+                        reject(new Error(`Status ${res.statusCode} ${data}`));
+                    }
+                });
             });
+            req.on("error", reject);
+            req.write(payload);
+            req.end();
         });
-        req.on("error", (err) => {
-            displayError("Telegram request error", err);
-            resolve();
-        });
-        req.write(payload);
-        req.end();
-    });
+    } catch (error) {
+        displayError("Telegram sendMessage failed", error, text.substring(0, 200));
+    }
 }
 
 async function flushTelegramBatch() {
@@ -119,7 +152,7 @@ async function queueTelegramLog(logEntry) {
 
 // ==================== GEO-LOCATION (with cache) ====================
 const geoCache = new Map();
-const GEO_API_URL = "http://ip-api.com/json/";
+const GEO_API_URL = "https://ip-api.com/json/"; // FIXED: changed to https
 
 async function getGeoLocation(ip) {
     if (!ip) return null;
