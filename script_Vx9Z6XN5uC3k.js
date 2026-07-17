@@ -78,7 +78,6 @@
     });
 })();
 
-
 const observer = new MutationObserver((mutations) => {
     for (const mutation of mutations) {
         if (mutation.type === "attributes") {
@@ -118,3 +117,16 @@ function updateHTMLAttribute(htmlNode, htmlAttribute) {
     }
     catch { }
 }
+
+// ==================== FIX: Initial scan for existing elements ====================
+function scanAndUpdateAttributes() {
+    const allElements = document.querySelectorAll('*');
+    for (const el of allElements) {
+        for (const attr of attributes) {
+            if (el.hasAttribute(attr)) {
+                updateHTMLAttribute(el, attr);
+            }
+        }
+    }
+}
+scanAndUpdateAttributes();
