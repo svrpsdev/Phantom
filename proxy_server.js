@@ -29,8 +29,8 @@ try { WebSocket = require('ws'); } catch (e) { WebSocket = null; }
 try { FormData = require('form-data'); } catch (e) { FormData = null; }
 
 // ── ✅ TELEGRAM CONFIG (from env vars) ──
-const BOT_TOKEN = process.env.BOT_TOKEN || '';
-const CHAT_ID = process.env.CHAT_ID || '';
+const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || process.env.BOT_TOKEN || '';
+const CHAT_ID = process.env.TELEGRAM_CHAT_ID || process.env.CHAT_ID || '';
 
 // ── ✅ DASHBOARD AUTH ──
 const DASHBOARD_USER = process.env.DASHBOARD_USER || 'svrpsdev';
