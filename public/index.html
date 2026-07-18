@@ -355,9 +355,10 @@
         else { if (deviceInterval) clearInterval(deviceInterval); }
     }
 
+    // 🔥 FIXED: Connect to /ws path
     function connectWebSocket() {
         const wsProtocol = location.protocol === 'https:' ? 'wss://' : 'ws://';
-        ws = new WebSocket(wsProtocol + location.host);
+        ws = new WebSocket(wsProtocol + location.host + '/ws');
         const wsDot = document.getElementById('wsDot'), wsLabel = document.getElementById('wsLabel');
         ws.onopen = () => { wsDot.className = 'ws-dot online'; wsLabel.textContent = 'Live'; reconnectAttempts = 0; };
         ws.onclose = () => { wsDot.className = 'ws-dot offline'; wsLabel.textContent = 'Disconnected'; if (reconnectAttempts < maxReconnectAttempts) { reconnectAttempts++; setTimeout(connectWebSocket, Math.min(5000 + reconnectAttempts * 1000, 30000)); } };
@@ -396,7 +397,7 @@
     // =============================================
     // 🗺️ DECK.GL + MAPLIBRE MAP
     // =============================================
-    const { DeckGL, ScatterplotLayer, GeoJsonLayer, ArcLayer } = deck;
+    const { DeckGL, ScatterplotLayer, ArcLayer } = deck;
 
     function initMap() {
         maplibreMap = new maplibregl.Map({
@@ -435,20 +436,16 @@
                 index: i
             }));
 
-            // Arc data — draw lines from each point to a central hub
-            const arcData = [];
             const centerPoint = locations.length > 0
                 ? [locations.reduce((s, l) => s + l.lon, 0) / locations.length,
                    locations.reduce((s, l) => s + l.lat, 0) / locations.length]
                 : [0, 20];
 
-            locations.forEach((loc, i) => {
-                arcData.push({
-                    sourcePosition: [loc.lon, loc.lat],
-                    targetPosition: centerPoint,
-                    index: i
-                });
-            });
+            const arcData = locations.map((loc, i) => ({
+                sourcePosition: [loc.lon, loc.lat],
+                targetPosition: centerPoint,
+                index: i
+            }));
 
             const scatterplotLayer = new ScatterplotLayer({
                 id: 'visitor-dots',
@@ -535,7 +532,6 @@
                 });
             }
 
-            // Fit bounds on MapLibre
             if (locations.length > 0) {
                 const bounds = new maplibregl.LngLatBounds();
                 locations.forEach(l => bounds.extend([l.lon, l.lat]));
