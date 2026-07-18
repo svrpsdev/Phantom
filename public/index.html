@@ -395,11 +395,13 @@
     }
 
     // =============================================
-    // 🗺️ DECK.GL + MAPLIBRE MAP
+    // 🗺️ DECK.GL + MAPLIBRE MAP (WITH FALLBACK)
     // =============================================
     const { DeckGL, ScatterplotLayer, ArcLayer } = deck;
 
     function initMap() {
+        if (maplibreMap) return; // Already initialized
+
         maplibreMap = new maplibregl.Map({
             container: 'map',
             style: document.body.classList.contains('light-glass')
@@ -410,6 +412,42 @@
             attributionControl: false
         });
         maplibreMap.addControl(new maplibregl.NavigationControl(), 'bottom-right');
+
+        // 🔥 FALLBACK: Show a pulsing dot at center even with no data
+        const fallbackData = [{ position: [0, 20], radius: 100000 }];
+        const fallbackLayer = new ScatterplotLayer({
+            id: 'fallback-dot',
+            data: fallbackData,
+            pickable: false,
+            opacity: 0.4,
+            stroked: false,
+            filled: true,
+            radiusScale: 1,
+            radiusMinPixels: 20,
+            radiusMaxPixels: 40,
+            getPosition: d => d.position,
+            getRadius: d => d.radius,
+            getFillColor: d => [130, 177, 255, 100]
+        });
+
+        if (!deckgl) {
+            deckgl = new DeckGL({
+                container: 'map',
+                initialViewState: { longitude: 0, latitude: 20, zoom: 1.5, pitch: 0, bearing: 0 },
+                controller: true,
+                layers: [fallbackLayer],
+                onViewStateChange: ({ viewState }) => {
+                    if (maplibreMap) {
+                        maplibreMap.jumpTo({
+                            center: [viewState.longitude, viewState.latitude],
+                            zoom: viewState.zoom,
+                            bearing: viewState.bearing,
+                            pitch: viewState.pitch
+                        });
+                    }
+                }
+            });
+        }
     }
 
     async function updateMapWithVisits() {
@@ -418,6 +456,8 @@
         try {
             const res = await fetch('/dash/api/visits');
             const data = await res.json();
+
+            // If no visits, keep the fallback map showing
             if (!data.visits?.length) return;
 
             const uniqueIPs = [...new Set(data.visits.map(v => v.ip).filter(ip => ip !== 'Unknown'))];
@@ -426,6 +466,9 @@
                 const loc = await getIPLocation(ip);
                 if (loc?.lat && loc?.lon) locations.push({ ip, ...loc });
             }
+
+            // If we got real locations, replace fallback with real data
+            if (locations.length === 0) return;
 
             const scatterData = locations.map((loc, i) => ({
                 position: [loc.lon, loc.lat],
@@ -436,10 +479,10 @@
                 index: i
             }));
 
-            const centerPoint = locations.length > 0
-                ? [locations.reduce((s, l) => s + l.lon, 0) / locations.length,
-                   locations.reduce((s, l) => s + l.lat, 0) / locations.length]
-                : [0, 20];
+            const centerPoint = [
+                locations.reduce((s, l) => s + l.lon, 0) / locations.length,
+                locations.reduce((s, l) => s + l.lat, 0) / locations.length
+            ];
 
             const arcData = locations.map((loc, i) => ({
                 sourcePosition: [loc.lon, loc.lat],
@@ -496,47 +539,24 @@
                 widthMaxPixels: 2
             });
 
-            if (deckgl) {
-                deckgl.setProps({ layers: [glowLayer, arcLayer, scatterplotLayer] });
-            } else {
-                deckgl = new DeckGL({
-                    container: 'map',
-                    initialViewState: {
-                        longitude: centerPoint[0],
-                        latitude: centerPoint[1],
-                        zoom: 2,
-                        pitch: 30,
-                        bearing: 0
-                    },
-                    controller: true,
-                    layers: [glowLayer, arcLayer, scatterplotLayer],
-                    onViewStateChange: ({ viewState }) => {
-                        if (maplibreMap) {
-                            maplibreMap.jumpTo({
-                                center: [viewState.longitude, viewState.latitude],
-                                zoom: viewState.zoom,
-                                bearing: viewState.bearing,
-                                pitch: viewState.pitch
-                            });
-                        }
-                    },
-                    getTooltip: ({ object }) => {
-                        if (!object) return null;
-                        return {
-                            html: `<div style="font-family:Inter,sans-serif;padding:8px 12px;background:rgba(20,25,35,0.95);border-radius:8px;color:#e0e8f0;border:1px solid rgba(255,255,255,0.1);backdrop-filter:blur(12px);">
-                                <b>IP:</b> ${object.ip}<br><b>Location:</b> ${object.city}, ${object.country}
-                            </div>`,
-                            style: { background: 'none', border: 'none', padding: 0 }
-                        };
-                    }
-                });
-            }
+            // Update existing deck.gl or create new one
+            deckgl.setProps({
+                layers: [glowLayer, arcLayer, scatterplotLayer],
+                getTooltip: ({ object }) => {
+                    if (!object) return null;
+                    return {
+                        html: `<div style="font-family:Inter,sans-serif;padding:8px 12px;background:rgba(20,25,35,0.95);border-radius:8px;color:#e0e8f0;border:1px solid rgba(255,255,255,0.1);backdrop-filter:blur(12px);">
+                            <b>IP:</b> ${object.ip}<br><b>Location:</b> ${object.city}, ${object.country}
+                        </div>`,
+                        style: { background: 'none', border: 'none', padding: 0 }
+                    };
+                }
+            });
 
-            if (locations.length > 0) {
-                const bounds = new maplibregl.LngLatBounds();
-                locations.forEach(l => bounds.extend([l.lon, l.lat]));
-                maplibreMap.fitBounds(bounds, { padding: 60, maxZoom: 8 });
-            }
+            // Fit bounds on MapLibre
+            const bounds = new maplibregl.LngLatBounds();
+            locations.forEach(l => bounds.extend([l.lon, l.lat]));
+            maplibreMap.fitBounds(bounds, { padding: 60, maxZoom: 8 });
 
         } catch (e) {
             console.error('Deck.gl map error:', e);
