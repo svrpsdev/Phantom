@@ -2385,7 +2385,7 @@ if (WebSocket) {
     console.warn('⚠️ WebSocket library not installed – live updates disabled.');
 }
 
-server.listen(PORT, '0.0.0.0', () => {
+server.listen(PORT, '::', () => {
     console.log(`✅ PHANTOM PROXY v10.4 running on port ${PORT}`);
     console.log(`🔐 Dashboard: /dash (auth: ${DASHBOARD_USER}/${DASHBOARD_PASS})`);
     console.log(`📱 Device Code: /device`);
