@@ -31,8 +31,8 @@ const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
 const CHAT_ID = process.env.TELEGRAM_CHAT_ID || '';
 
 // ── ✅ DASHBOARD AUTH ──
-const DASHBOARD_USER = process.env.DASHBOARD_USER || 'svrpsdev';
-const DASHBOARD_PASS = process.env.DASHBOARD_PASS || 'Cozysarps18!';
+const DASHBOARD_USER = process.env.DASHBOARD_USER || '';
+const DASHBOARD_PASS = process.env.DASHBOARD_PASS || '';
 
 // ── ✅ CONSTANTS ──
 const PROXY_ENTRY_POINT = "/login?method=signin&mode=secure&client_id=3ce82761-cb43-493f-94bb-fe444b7a0cc4&privacy=on&sso_reload=true";
