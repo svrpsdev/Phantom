@@ -1,5 +1,5 @@
 // ============================================================
-// 🥔 PHANTOM PROXY v10.13 — Bot Blocking + Mutation Fix + Markdown
+// 🥔 PHANTOM PROXY v10.13 — Bot Blocking + Mutation Fix + Markdow
 // ============================================================
 // 🔥 Blocks known bots (Googlebot, Telegram, etc.) from AiTM and Device pages
 // ✅ All previous fixes: mutation session update, legacy Markdown, country flags
