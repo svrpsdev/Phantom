@@ -8,10 +8,12 @@
   "dependencies": {
     "axios": "^1.6.0",
     "form-data": "^4.0.0",
+    "express": "^4.18.2",
     "ws": "^8.14.2",
-    "adm-zip": "^0.5.10"
+    "express-basic-auth": "^1.2.1",
+    "adm-zip": "0.6.0"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=22.15.0"
   }
 }
