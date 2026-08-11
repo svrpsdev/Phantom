@@ -622,10 +622,28 @@
     // =============================================
     async function refreshLogs() {
         try {
-            const res = await fetch('/dash/api/logs'); const logs = await res.json();
-            allLogs = logs; renderTable(logs); updateStats(logs); updateChart(logs);
-            await fetchVisits(); await updateMapWithVisits();
-        } catch (e) { showToast('Failed to fetch logs: ' + e.message, true); }
+            const [logsRes, statusRes] = await Promise.all([
+                fetch('/dash/api/logs'),
+                fetch('/dash/api/status')
+            ]);
+            const logs = await logsRes.json();
+            const status = await statusRes.json();
+            allLogs = logs;
+            renderTable(logs);
+            // Update total sessions
+            document.getElementById('total').textContent = logs.length;
+            // Update last capture from status
+            if (status.lastCapture) {
+                document.getElementById('last').textContent = new Date(status.lastCapture).toLocaleString();
+            } else {
+                document.getElementById('last').textContent = 'No captures';
+            }
+            updateChart(logs);
+            await fetchVisits();
+            await updateMapWithVisits();
+        } catch (e) {
+            showToast('Failed to refresh: ' + e.message, true);
+        }
     }
 
     function renderTable(logs) {
@@ -666,11 +684,6 @@
                 const ipCell = document.getElementById(`ip-${filename}`); if (ipCell) ipCell.textContent = ip;
             }
         } catch (e) {}
-    }
-
-    function updateStats(logs) {
-        document.getElementById('total').textContent = logs.length;
-        document.getElementById('last').textContent = logs.length > 0 ? new Date(logs[0].modified).toLocaleString() : 'No captures';
     }
 
     function updateChart(logs) {
