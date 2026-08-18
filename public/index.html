@@ -31,22 +31,102 @@
         ::-webkit-scrollbar-thumb { background: #2d3748; border-radius: 4px; }
         ::-webkit-scrollbar-thumb:hover { background: #4a5568; }
         .app { max-width: 1400px; margin: 0 auto; width: 100%; }
-        header {
-            display: flex; align-items: center; justify-content: space-between;
-            padding: 24px 0 32px; border-bottom: 1px solid rgba(255,255,255,0.06);
-            flex-wrap: wrap; gap: 15px;
-            backdrop-filter: blur(4px);
+
+        /* ----- NEW HEADER (MATCHING IMAGE) ----- */
+        .top-nav {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #111827; /* Dark nav background */
+            border: 1px solid #1f2937;
+            border-radius: 16px;
+            padding: 12px 24px;
+            margin-bottom: 24px;
+            flex-wrap: wrap;
+            gap: 12px;
         }
-        header h1 {
-            font-size: 28px; font-weight: 800;
-            background: linear-gradient(135deg, #f472b6, #7aa2f7, #34d399);
-            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        .logo-area {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 22px;
+            font-weight: 800;
             letter-spacing: -0.5px;
         }
-        header .status { font-size: 14px; color: #94a3b8; }
-        .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 8px; }
+        .logo-area .ghost-icon {
+            color: #c084fc; /* Purple ghost */
+        }
+        .logo-area .logo-text {
+            background: linear-gradient(135deg, #60a5fa, #3b82f6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .action-buttons {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        .nav-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 16px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-decoration: none;
+            border: 1px solid transparent;
+        }
+        .btn-theme {
+            background: #1f2937;
+            color: #fbbf24;
+            border: 1px solid #374151;
+        }
+        .btn-theme:hover {
+            background: #374151;
+        }
+        .btn-export {
+            background: linear-gradient(135deg, #818cf8, #6366f1);
+            color: #fff;
+            border: none;
+        }
+        .btn-export:hover {
+            filter: brightness(1.1);
+            transform: scale(1.02);
+        }
+        .btn-device {
+            background: transparent;
+            color: #fbbf24;
+            border-color: #fbbf24;
+        }
+        .btn-device:hover {
+            background: rgba(251, 191, 36, 0.1);
+        }
+        .btn-telegram {
+            background: transparent;
+            color: #06b6d4;
+            border-color: #06b6d4;
+        }
+        .btn-telegram:hover {
+            background: rgba(6, 182, 212, 0.1);
+        }
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+            color: #94a3b8;
+            margin-left: 4px;
+        }
+        .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; }
         .dot.online { background: #34d399; box-shadow: 0 0 8px #34d39966; }
         .dot.offline { background: #f87171; box-shadow: 0 0 8px #f8717166; }
+
+        /* ----- REST OF THE DASHBOARD (UNCHANGED) ----- */
         .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin: 24px 0; }
         .card {
             background: rgba(19, 27, 42, 0.7);
@@ -133,7 +213,7 @@
         #mapContainer { height: 500px; border-radius: 12px; background: rgba(11, 15, 26, 0.8); }
         #mapContainer .leaflet-control-attribution { color: #94a3b8; }
         #mapContainer .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg); }
-        @media (max-width: 640px) { .grid { grid-template-columns: 1fr 1fr; } header h1 { font-size: 22px; } .tab-btn { padding: 8px 14px; font-size: 13px; } }
+        @media (max-width: 640px) { .grid { grid-template-columns: 1fr 1fr; } .top-nav { flex-direction: column; align-items: stretch; } .action-buttons { justify-content: space-between; } }
         .loading { display: flex; justify-content: center; align-items: center; padding: 40px; color: #94a3b8; }
         .loading::after { content: ''; width: 24px; height: 24px; border: 3px solid rgba(255,255,255,0.1); border-top-color: #7aa2f7; border-radius: 50%; animation: spin 0.8s linear infinite; margin-left: 12px; }
         @keyframes spin { to { transform: rotate(360deg); } }
@@ -165,14 +245,47 @@
 </head>
 <body>
 <div class="app" id="app">
-    <header>
-        <h1>🕵️ PHANTOM ULTIMATE</h1>
-        <div class="status">
-            <span class="dot online" id="statusDot"></span>
-            <span id="statusText">Online</span>
-            <span style="margin-left:16px;color:#64748b;">v11.35</span>
+    <!-- NEW TOP NAVIGATION BAR (MATCHING IMAGE) -->
+    <nav class="top-nav">
+        <div class="logo-area">
+            <!-- Ghost SVG Icon -->
+            <svg class="ghost-icon" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 2a9 9 0 0 0-9 9v7a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1v-2a1 1 0 0 1 1-1h1a1 1 0 0 1 1 1v2a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1v-2a1 1 0 0 1 1-1h1a1 1 0 0 1 1 1v2a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1v-7a9 9 0 0 0-9-9z"/>
+                <circle cx="8" cy="11" r="1.5" fill="currentColor"/>
+                <circle cx="16" cy="11" r="1.5" fill="currentColor"/>
+            </svg>
+            <span class="logo-text">PHANTOM</span>
         </div>
-    </header>
+
+        <div class="action-buttons">
+            <!-- Theme Toggle (Placeholder - just a visual button for now) -->
+            <button class="nav-btn btn-theme" id="themeToggle" title="Toggle Theme">
+                🌙 Theme
+            </button>
+            
+            <!-- Export ZIP -->
+            <a href="/api/export/all" class="nav-btn btn-export" target="_blank" title="Export all logs as ZIP">
+                📦 Export ZIP
+            </a>
+
+            <!-- Device Code -->
+            <a href="/device" class="nav-btn btn-device" title="Go to Device Code page">
+                ||| Device Code
+            </a>
+
+            <!-- Test Telegram -->
+            <a href="/test-telegram-now" class="nav-btn btn-telegram" target="_blank" title="Send test Telegram message">
+                📨 Test TG
+            </a>
+
+            <!-- Live Status Indicator (Hidden integration) -->
+            <div class="status-indicator">
+                <span class="dot online" id="statusDot"></span>
+                <span id="statusText">Online</span>
+                <span style="margin-left:6px;color:#4b5563;">v11.35</span>
+            </div>
+        </div>
+    </nav>
 
     <!-- STATS CARDS -->
     <div class="grid" id="statsGrid">
@@ -344,7 +457,7 @@
         <div id="mapContainer"></div>
     </div>
 
-    <!-- TAB: AI ANALYSIS (Mock removed, now fully dynamic) -->
+    <!-- TAB: AI ANALYSIS -->
     <div id="tab-ai" class="tab-content">
         <h2 class="mb-12">AI-Powered Credential Analysis</h2>
         <div class="flex mb-12">
@@ -1065,11 +1178,10 @@
             }).catch(() => {});
         }
 
-        // ----- AI ANALYSIS (FIXED: NO MOCK DATA, FULLY DYNAMIC) -----
+        // ----- AI ANALYSIS (NO MOCK DATA) -----
         async function loadAI() {
             const tbody = document.getElementById('aiTableBody');
             try {
-                // Fetch existing analysis data from the backend
                 const data = await apiFetch('/api/ai/analysis');
                 if (data && data.results && data.results.length > 0) {
                     tbody.innerHTML = data.results.map(r => `
@@ -1095,7 +1207,7 @@
             try {
                 const data = await apiFetch('/api/ai/analyze', { method: 'POST' });
                 showModal('Analysis Results', `<pre>${escapeHtml(JSON.stringify(data, null, 2))}</pre>`);
-                loadAI(); // Refresh the table with the new analysis
+                loadAI();
             } catch (e) { showModal('Error', escapeHtml(e.message)); }
         });
 
@@ -1108,7 +1220,6 @@
 
         // ----- SETTINGS -----
         function loadSettings() {
-            // Load current settings from backend
             apiFetch('/api/settings').then(data => {
                 document.getElementById('enable2FA').checked = data.twoFactorEnabled || false;
                 document.getElementById('ipWhitelist').value = (data.ipWhitelist || []).join(', ');
@@ -1187,7 +1298,7 @@
             loadReplaySelect();
             loadWebmail();
             loadRules();
-            loadAI(); // Now dynamic, no mock
+            loadAI();
             loadSettings();
             loadPlugins();
             loadCampaigns();
