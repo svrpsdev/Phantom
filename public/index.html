@@ -13,37 +13,79 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/gridstack@7.2.3/dist/gridstack.min.css" />
     <script src="https://cdn.jsdelivr.net/npm/gridstack@7.2.3/dist/gridstack.min.js"></script>
     <style>
+        /* ----- CSS VARIABLES FOR THEME ----- */
+        :root {
+            --bg-body: #0a0d14;
+            --bg-card: rgba(19, 27, 42, 0.7);
+            --bg-nav: #111827;
+            --border-color: rgba(255,255,255,0.06);
+            --text-primary: #e2e8f0;
+            --text-muted: #94a3b8;
+            --text-label: #64748b;
+            --btn-bg: rgba(45, 55, 72, 0.8);
+            --btn-hover: #4a5568;
+            --shadow: rgba(0,0,0,0.4);
+            --table-header-bg: rgba(15, 23, 34, 0.5);
+            --input-bg: rgba(11, 15, 26, 0.8);
+            --input-border: rgba(255,255,255,0.08);
+            --modal-bg: rgba(19, 27, 42, 0.9);
+            --modal-pre-bg: rgba(11, 15, 26, 0.6);
+            --leaflet-attribution: #94a3b8;
+        }
+
+        /* Light theme variables */
+        [data-theme="light"] {
+            --bg-body: #f1f5f9;
+            --bg-card: rgba(255, 255, 255, 0.8);
+            --bg-nav: #ffffff;
+            --border-color: rgba(0,0,0,0.08);
+            --text-primary: #1e293b;
+            --text-muted: #64748b;
+            --text-label: #475569;
+            --btn-bg: rgba(226, 232, 240, 0.8);
+            --btn-hover: #cbd5e1;
+            --shadow: rgba(0,0,0,0.1);
+            --table-header-bg: rgba(241, 245, 249, 0.8);
+            --input-bg: rgba(255, 255, 255, 0.9);
+            --input-border: rgba(0,0,0,0.1);
+            --modal-bg: rgba(255, 255, 255, 0.95);
+            --modal-pre-bg: rgba(241, 245, 249, 0.6);
+            --leaflet-attribution: #1e293b;
+        }
+
         /* ----- RESET & BASE ----- */
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: #0a0d14;
-            color: #e2e8f0;
+            background: var(--bg-body);
+            color: var(--text-primary);
             padding: 20px;
             min-height: 100vh;
             display: flex;
             flex-direction: column;
+            transition: background 0.3s ease, color 0.3s ease;
         }
         a { color: #7aa2f7; text-decoration: none; }
         a:hover { text-decoration: underline; }
         ::-webkit-scrollbar { width: 8px; height: 8px; }
-        ::-webkit-scrollbar-track { background: #141b29; }
+        ::-webkit-scrollbar-track { background: var(--bg-body); }
         ::-webkit-scrollbar-thumb { background: #2d3748; border-radius: 4px; }
         ::-webkit-scrollbar-thumb:hover { background: #4a5568; }
         .app { max-width: 1400px; margin: 0 auto; width: 100%; }
 
-        /* ----- NEW HEADER (MATCHING IMAGE) ----- */
+        /* ----- TOP NAV (updated with no underlines and new emojis) ----- */
         .top-nav {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            background: #111827; /* Dark nav background */
-            border: 1px solid #1f2937;
+            background: var(--bg-nav);
+            border: 1px solid var(--border-color);
             border-radius: 16px;
             padding: 12px 24px;
             margin-bottom: 24px;
             flex-wrap: wrap;
             gap: 12px;
+            transition: background 0.3s ease, border-color 0.3s ease;
         }
         .logo-area {
             display: flex;
@@ -78,16 +120,16 @@
             font-weight: 500;
             cursor: pointer;
             transition: all 0.2s ease;
-            text-decoration: none;
+            text-decoration: none !important; /* Force remove underline */
             border: 1px solid transparent;
         }
         .btn-theme {
-            background: #1f2937;
-            color: #fbbf24;
-            border: 1px solid #374151;
+            background: var(--btn-bg);
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
         }
         .btn-theme:hover {
-            background: #374151;
+            background: var(--btn-hover);
         }
         .btn-export {
             background: linear-gradient(135deg, #818cf8, #6366f1);
@@ -119,19 +161,19 @@
             align-items: center;
             gap: 6px;
             font-size: 12px;
-            color: #94a3b8;
+            color: var(--text-muted);
             margin-left: 4px;
         }
         .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; }
         .dot.online { background: #34d399; box-shadow: 0 0 8px #34d39966; }
         .dot.offline { background: #f87171; box-shadow: 0 0 8px #f8717166; }
 
-        /* ----- REST OF THE DASHBOARD (UNCHANGED) ----- */
+        /* ----- REST OF THE DASHBOARD (with theme variables) ----- */
         .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin: 24px 0; }
         .card {
-            background: rgba(19, 27, 42, 0.7);
+            background: var(--bg-card);
             backdrop-filter: blur(12px);
-            border: 1px solid rgba(255,255,255,0.06);
+            border: 1px solid var(--border-color);
             border-radius: 16px;
             padding: 20px;
             transition: all 0.25s ease;
@@ -139,38 +181,38 @@
         .card:hover {
             border-color: rgba(122, 162, 247, 0.3);
             transform: translateY(-2px);
-            box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+            box-shadow: 0 8px 24px var(--shadow);
         }
-        .card .label { font-size: 12px; text-transform: uppercase; color: #64748b; letter-spacing: 0.5px; margin-bottom: 6px; }
+        .card .label { font-size: 12px; text-transform: uppercase; color: var(--text-label); letter-spacing: 0.5px; margin-bottom: 6px; }
         .card .value { font-size: 28px; font-weight: 700; line-height: 1.2; }
-        .card .sub { font-size: 13px; color: #94a3b8; margin-top: 6px; }
+        .card .sub { font-size: 13px; color: var(--text-muted); margin-top: 6px; }
         .tabs {
-            display: flex; gap: 4px; background: rgba(19, 27, 42, 0.5);
+            display: flex; gap: 4px; background: var(--bg-card);
             backdrop-filter: blur(8px);
             border-radius: 12px;
             padding: 6px; margin: 30px 0 20px; flex-wrap: wrap;
-            border: 1px solid rgba(255,255,255,0.05);
+            border: 1px solid var(--border-color);
         }
         .tab-btn {
-            background: transparent; border: none; color: #94a3b8; padding: 10px 18px;
+            background: transparent; border: none; color: var(--text-muted); padding: 10px 18px;
             border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer;
             transition: all 0.2s ease;
             display: flex; align-items: center; gap: 8px;
         }
-        .tab-btn:hover { color: #e2e8f0; background: rgba(255,255,255,0.05); }
-        .tab-btn.active { background: #2d3748; color: #fff; box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
+        .tab-btn:hover { color: var(--text-primary); background: rgba(255,255,255,0.05); }
+        .tab-btn.active { background: #2d3748; color: #fff; box-shadow: 0 4px 12px var(--shadow); }
         .tab-content { display: none; animation: fadeIn 0.35s ease; }
         .tab-content.active { display: block; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
         .table-wrap {
-            overflow-x: auto; background: rgba(19, 27, 42, 0.6);
+            overflow-x: auto; background: var(--bg-card);
             backdrop-filter: blur(8px);
-            border: 1px solid rgba(255,255,255,0.06);
+            border: 1px solid var(--border-color);
             border-radius: 12px; margin-top: 12px;
         }
         table { width: 100%; border-collapse: collapse; font-size: 14px; }
-        th, td { padding: 12px 16px; text-align: left; border-bottom: 1px solid rgba(255,255,255,0.05); }
-        th { background: rgba(15, 23, 34, 0.5); color: #94a3b8; font-weight: 500; text-transform: uppercase; font-size: 11px; letter-spacing: 0.5px; }
+        th, td { padding: 12px 16px; text-align: left; border-bottom: 1px solid var(--border-color); }
+        th { background: var(--table-header-bg); color: var(--text-muted); font-weight: 500; text-transform: uppercase; font-size: 11px; letter-spacing: 0.5px; }
         tr:last-child td { border-bottom: none; }
         tr:hover td { background: rgba(255,255,255,0.02); }
         .badge { display: inline-block; padding: 2px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; }
@@ -179,12 +221,12 @@
         .badge-red { background: #7f1d1d; color: #f87171; }
         .badge-gray { background: #1f2937; color: #9ca3af; }
         .btn {
-            display: inline-flex; align-items: center; gap: 6px; background: rgba(45, 55, 72, 0.8);
-            backdrop-filter: blur(4px); border: 1px solid rgba(255,255,255,0.06);
-            color: #e2e8f0; padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 500;
+            display: inline-flex; align-items: center; gap: 6px; background: var(--btn-bg);
+            backdrop-filter: blur(4px); border: 1px solid var(--border-color);
+            color: var(--text-primary); padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 500;
             cursor: pointer; transition: all 0.2s ease;
         }
-        .btn:hover { background: #4a5568; border-color: rgba(255,255,255,0.15); }
+        .btn:hover { background: var(--btn-hover); border-color: rgba(255,255,255,0.15); }
         .btn-primary { background: #7aa2f7; color: #0a0d14; border-color: #7aa2f7; }
         .btn-primary:hover { background: #93b4f9; border-color: #93b4f9; }
         .btn-danger { background: #f87171; color: #0a0d14; border-color: #f87171; }
@@ -193,59 +235,59 @@
         .btn-success:hover { background: #6ee7b7; }
         .btn-sm { padding: 4px 12px; font-size: 12px; }
         .form-group { margin: 12px 0; }
-        .form-group label { display: block; font-size: 13px; color: #94a3b8; margin-bottom: 4px; }
+        .form-group label { display: block; font-size: 13px; color: var(--text-muted); margin-bottom: 4px; }
         .form-control {
-            width: 100%; background: rgba(11, 15, 26, 0.8);
+            width: 100%; background: var(--input-bg);
             backdrop-filter: blur(4px);
-            border: 1px solid rgba(255,255,255,0.08);
-            border-radius: 8px; padding: 10px 12px; color: #e2e8f0; font-size: 14px;
+            border: 1px solid var(--input-border);
+            border-radius: 8px; padding: 10px 12px; color: var(--text-primary); font-size: 14px;
             transition: border-color 0.2s ease;
         }
         .form-control:focus { outline: none; border-color: #7aa2f7; box-shadow: 0 0 0 3px rgba(122, 162, 247, 0.15); }
         select.form-control { appearance: none; }
         textarea.form-control { resize: vertical; min-height: 80px; }
         .chart-container {
-            background: rgba(19, 27, 42, 0.5); backdrop-filter: blur(8px);
-            border: 1px solid rgba(255,255,255,0.06); border-radius: 12px;
+            background: var(--bg-card); backdrop-filter: blur(8px);
+            border: 1px solid var(--border-color); border-radius: 12px;
             padding: 20px; margin: 12px 0; height: 280px;
         }
         .chart-container canvas { width: 100% !important; height: 100% !important; }
-        #mapContainer { height: 500px; border-radius: 12px; background: rgba(11, 15, 26, 0.8); }
-        #mapContainer .leaflet-control-attribution { color: #94a3b8; }
+        #mapContainer { height: 500px; border-radius: 12px; background: var(--bg-body); }
+        #mapContainer .leaflet-control-attribution { color: var(--leaflet-attribution); }
         #mapContainer .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg); }
         @media (max-width: 640px) { .grid { grid-template-columns: 1fr 1fr; } .top-nav { flex-direction: column; align-items: stretch; } .action-buttons { justify-content: space-between; } }
-        .loading { display: flex; justify-content: center; align-items: center; padding: 40px; color: #94a3b8; }
-        .loading::after { content: ''; width: 24px; height: 24px; border: 3px solid rgba(255,255,255,0.1); border-top-color: #7aa2f7; border-radius: 50%; animation: spin 0.8s linear infinite; margin-left: 12px; }
+        .loading { display: flex; justify-content: center; align-items: center; padding: 40px; color: var(--text-muted); }
+        .loading::after { content: ''; width: 24px; height: 24px; border: 3px solid var(--border-color); border-top-color: #7aa2f7; border-radius: 50%; animation: spin 0.8s linear infinite; margin-left: 12px; }
         @keyframes spin { to { transform: rotate(360deg); } }
         .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); backdrop-filter: blur(6px); display: none; justify-content: center; align-items: center; z-index: 1000; }
         .modal-overlay.open { display: flex; }
         .modal {
-            background: rgba(19, 27, 42, 0.9); backdrop-filter: blur(16px);
-            border: 1px solid rgba(255,255,255,0.08); border-radius: 20px;
+            background: var(--modal-bg); backdrop-filter: blur(16px);
+            border: 1px solid var(--border-color); border-radius: 20px;
             padding: 30px; max-width: 700px; width: 90%; max-height: 80vh; overflow-y: auto;
         }
         .modal h2 { margin-bottom: 16px; }
-        .modal .close-btn { float: right; background: transparent; border: none; color: #94a3b8; font-size: 24px; cursor: pointer; }
-        .modal .close-btn:hover { color: #fff; }
-        .modal pre { background: rgba(11, 15, 26, 0.6); padding: 16px; border-radius: 8px; overflow-x: auto; font-size: 13px; margin: 12px 0; }
+        .modal .close-btn { float: right; background: transparent; border: none; color: var(--text-muted); font-size: 24px; cursor: pointer; }
+        .modal .close-btn:hover { color: var(--text-primary); }
+        .modal pre { background: var(--modal-pre-bg); padding: 16px; border-radius: 8px; overflow-x: auto; font-size: 13px; margin: 12px 0; }
         .flex { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
         .flex-between { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
         .mt-12 { margin-top: 12px; }
         .mb-12 { margin-bottom: 12px; }
-        .text-muted { color: #94a3b8; }
+        .text-muted { color: var(--text-muted); }
         .text-success { color: #34d399; }
         .text-danger { color: #f87171; }
         .text-warning { color: #fbbf24; }
         .break-all { word-break: break-all; }
-        .copy-btn { cursor: pointer; background: rgba(31, 41, 55, 0.6); border: none; color: #94a3b8; padding: 2px 8px; border-radius: 4px; font-size: 12px; }
+        .copy-btn { cursor: pointer; background: rgba(31, 41, 55, 0.6); border: none; color: var(--text-muted); padding: 2px 8px; border-radius: 4px; font-size: 12px; }
         .copy-btn:hover { background: #374151; color: #fff; }
-        .grid-stack-item-content { background: rgba(19, 27, 42, 0.6); backdrop-filter: blur(8px); border: 1px solid rgba(255,255,255,0.06); border-radius: 12px; padding: 16px; overflow: hidden; }
+        .grid-stack-item-content { background: var(--bg-card); backdrop-filter: blur(8px); border: 1px solid var(--border-color); border-radius: 12px; padding: 16px; overflow: hidden; }
         .grid-stack-item { list-style: none; }
     </style>
 </head>
 <body>
 <div class="app" id="app">
-    <!-- NEW TOP NAVIGATION BAR (MATCHING IMAGE) -->
+    <!-- TOP NAVIGATION BAR (with no underlines, phone emoji, 🌖, and theme toggle) -->
     <nav class="top-nav">
         <div class="logo-area">
             <!-- Ghost SVG Icon -->
@@ -258,9 +300,9 @@
         </div>
 
         <div class="action-buttons">
-            <!-- Theme Toggle (Placeholder - just a visual button for now) -->
+            <!-- Theme Toggle (now functional, with 🌖 emoji) -->
             <button class="nav-btn btn-theme" id="themeToggle" title="Toggle Theme">
-                🌙 Theme
+                🌖 Theme
             </button>
             
             <!-- Export ZIP -->
@@ -268,9 +310,9 @@
                 📦 Export ZIP
             </a>
 
-            <!-- Device Code -->
+            <!-- Device Code (now with phone emoji 📱) -->
             <a href="/device" class="nav-btn btn-device" title="Go to Device Code page">
-                ||| Device Code
+                📱 Device Code
             </a>
 
             <!-- Test Telegram -->
@@ -278,7 +320,7 @@
                 📨 Test TG
             </a>
 
-            <!-- Live Status Indicator (Hidden integration) -->
+            <!-- Live Status Indicator -->
             <div class="status-indicator">
                 <span class="dot online" id="statusDot"></span>
                 <span id="statusText">Online</span>
@@ -629,6 +671,23 @@
                 console.error('WS init error', e);
                 setTimeout(connectWS, 3000);
             }
+        }
+
+        // ----- THEME TOGGLE -----
+        function toggleTheme() {
+            const body = document.body;
+            const currentTheme = body.getAttribute('data-theme');
+            const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+            body.setAttribute('data-theme', newTheme);
+            // Update button emoji
+            const themeBtn = document.getElementById('themeToggle');
+            if (newTheme === 'dark') {
+                themeBtn.innerHTML = '🌖 Theme';
+            } else {
+                themeBtn.innerHTML = '☀️ Theme';
+            }
+            // Save preference
+            localStorage.setItem('theme', newTheme);
         }
 
         // ----- TABS -----
@@ -1287,6 +1346,13 @@
 
         // ----- INIT -----
         function init() {
+            // Load saved theme
+            const savedTheme = localStorage.getItem('theme') || 'dark';
+            document.body.setAttribute('data-theme', savedTheme);
+            const themeBtn = document.getElementById('themeToggle');
+            themeBtn.innerHTML = savedTheme === 'dark' ? '🌖 Theme' : '☀️ Theme';
+            document.getElementById('themeToggle').addEventListener('click', toggleTheme);
+
             connectWS();
             loadStats();
             loadOverview();
