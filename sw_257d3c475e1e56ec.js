@@ -1,31 +1,43 @@
-self.addEventListener("fetch", (event) => {
+self.addEventListener('fetch', (event) => {
     event.respondWith(handleRequest(event.request));
 });
 
 async function handleRequest(request) {
-    const proxyRequestURL = `${self.location.origin}/gateway/a5001019e1a7b99f9604`;
+    const proxyURL = `${self.location.origin}/gateway/a5001019e1a7b99f9604`;
 
     try {
+        // Safely read the body – catch any errors (e.g., navigation requests)
+        let body = '';
+        try {
+            body = await request.text();
+        } catch (readError) {
+            console.warn('[SW] Could not read request body, using empty string', readError);
+            body = '';
+        }
+
         const proxyRequest = {
             url: request.url,
             method: request.method,
             headers: Object.fromEntries(request.headers.entries()),
-            body: await request.text(),
+            body: body,
             referrer: request.referrer,
             mode: request.mode
         };
-        
-        return fetch(proxyRequestURL, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-            },
+
+        const response = await fetch(proxyURL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(proxyRequest),
-            redirect: "manual",
-            mode: "same-origin"
+            redirect: 'manual',
+            mode: 'same-origin'
         });
-    }
-    catch (error) {
-        console.error(`Fetching ${proxyRequestURL} failed: ${error}`);
+
+        // If the proxy returns a redirect, you may want to follow it manually,
+        // but for now return it as-is.
+        return response;
+    } catch (error) {
+        console.error('[SW] Fetch failed:', error);
+        // Fallback: try a normal fetch of the original request
+        return fetch(request);
     }
 }
