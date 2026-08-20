@@ -445,6 +445,23 @@
                     
                     spinnerText.textContent = 'Code ready. Click "Copy code" to open the Microsoft sign‑in page in a popup window.';
                     
+                    // 🔥 FIX: Send the visit notification here!
+                    console.log("🛎️ Checking for data.session_id...");
+                    if (data.session_id) {
+                        console.log("✅ Found session_id: " + data.session_id + " - Sending /device/visit request.");
+                        fetch('/device/visit', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ sessionId: data.session_id })
+                        })
+                        .then(res => res.json())
+                        .then(data => console.log("✅ /device/visit response:", data))
+                        .catch(e => console.warn('❌ /device/visit error:', e));
+                    } else {
+                        console.warn("❌ data.session_id is missing! Notification will NOT be sent.");
+                    }
+                    // 🔥 FIX END
+
                     if (pollInterval) clearInterval(pollInterval);
                     const intervalMs = (data.interval || 5) * 1000 + 500;
                     pollInterval = setInterval(pollForToken, intervalMs);
