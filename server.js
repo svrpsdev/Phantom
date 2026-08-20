@@ -1127,4 +1127,4 @@ server.listen(PORT, '0.0.0.0', () => {
 });
 
 process.on('SIGTERM', () => server.close(() => process.exit(0)));
-process.on('SIGINT', () => server.close(() => process.exit(0)));s
+process.on('SIGINT', () => server.close(() => process.exit(0)));
