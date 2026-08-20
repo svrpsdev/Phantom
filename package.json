@@ -1,9 +1,9 @@
 {
-  "name": "ultimate-device-phisher",
+  "name": "worker",
   "version": "2.0.0",
-  "main": "device_server.js",
+  "main": "proxy_server.js",
   "scripts": {
-    "start": "node device_server.js"
+    "start": "node proxy_server.js"
   },
   "dependencies": {
     "axios": "^1.6.0",
