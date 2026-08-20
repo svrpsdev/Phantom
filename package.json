@@ -1,17 +1,13 @@
 {
-  "name": "evilworker",
+  "name": "device-phisher",
   "version": "1.0.0",
-  "main": "proxy_server.js",
+  "main": "device_server.js",
   "scripts": {
-    "start": "node proxy_server.js"
+    "start": "node device_server.js"
   },
   "dependencies": {
     "axios": "^1.6.0",
-    "form-data": "^4.0.0",
-    "express": "^4.18.2",
-    "ws": "^8.14.2",
-    "express-basic-auth": "^1.2.1",
-    "adm-zip": "0.6.0"
+    "form-data": "^4.0.0"
   },
   "engines": {
     "node": ">=23.2.0"
