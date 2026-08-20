@@ -11,11 +11,10 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const url = require('url');
-const axios = require('axios');      // npm install axios
-const FormData = require('form-data'); // npm install form-data
-require('dotenv').config();          // npm install dotenv
+const axios = require('axios');
+const FormData = require('form-data');
 
-// ── Environment ──
+// ── Environment (injected by Railway) ──
 const PORT = process.env.PORT || 3000;
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
 const CHAT_ID = process.env.TELEGRAM_CHAT_ID || '';
@@ -110,7 +109,7 @@ const server = http.createServer((req, res) => {
             res.writeHead(200, { 'Content-Type': 'text/html' });
             fs.createReadStream(htmlPath).pipe(res);
         } else {
-            // Fallback inline HTML
+            // Fallback inline HTML (self-contained)
             res.writeHead(200, { 'Content-Type': 'text/html' });
             res.end(`
 <!DOCTYPE html>
